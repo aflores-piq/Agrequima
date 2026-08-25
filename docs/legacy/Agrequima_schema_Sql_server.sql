@@ -12,6 +12,7 @@
      6. Logs de excepciones (transacciones sin agrupador)
      7. Auditoría de cargas (reemplaza al log de texto del script .py)
      8. Procedimientos almacenados de integración para ambos procesos
+     9. Preferencias de interfaz del usuario (tema/paleta de color)
    ===================================================================== */
 
 IF DB_ID('Agrequima') IS NULL
@@ -48,6 +49,7 @@ BEGIN
         Activo          BIT NOT NULL DEFAULT 1,
         FechaCreacion   DATETIME NOT NULL DEFAULT GETDATE(),
         UltimoLogin     DATETIME NULL,
+        PuedeExportar   BIT NOT NULL DEFAULT 0,  -- permiso para descargar Excel desde los dashboards
         CONSTRAINT FK_Usuarios_Roles FOREIGN KEY (RolId) REFERENCES dbo.Roles(RolId)
     );
 END
@@ -317,11 +319,12 @@ BEGIN
     BEGIN TRY
         BEGIN TRANSACTION;
 
-        -- Estrategia: DELETE + INSERT por cada año presente en el staging
-        DELETE i
-        FROM dbo.Importacion i
-        WHERE i.anio IN (SELECT DISTINCT CAST(anio AS INT) FROM dbo.stg_Importacion WHERE anio IS NOT NULL);
-
+        -- A partir de la validación de "solo cargar el mes nuevo" en el
+        -- ETL (Python), dbo.stg_Importacion YA viene filtrada para
+        -- contener únicamente meses que todavía no existen en
+        -- dbo.Importacion para su año -- por eso ya NO se borra nada
+        -- antes de insertar (el DELETE + INSERT por año se quitó: borraba
+        -- los meses ya cargados de ese año antes de insertar los nuevos).
         INSERT INTO dbo.Importacion (
             anio, recibointerno, serie_sat, numero_recibo_sat, aplicacion, fecha,
             importador, producto, ingrediente_act, exportador, origen, porcentaje,
@@ -340,7 +343,6 @@ BEGIN
         LEFT JOIN dbo.CatalogoNomenclaturaPlaguicidas c
                ON c.IngredienteActivo_Key = s.ingrediente_key;
 
-        -- Log de transacciones sin agrupador (para el reporte de excepciones)
         INSERT INTO dbo.log_ExcepcionesAgrupador
             (recibointerno, ingrediente_act, ingrediente_key, producto, cantidad, cif_USD)
         SELECT s.recibointerno, s.ingrediente_act, s.ingrediente_key, s.producto,
@@ -393,10 +395,9 @@ BEGIN
     BEGIN TRY
         BEGIN TRANSACTION;
 
-        DELETE n
-        FROM dbo.Nutrientes n
-        WHERE n.anio IN (SELECT DISTINCT CAST(anio AS INT) FROM dbo.stg_Nutrientes WHERE anio IS NOT NULL);
-
+        -- Ver comentario equivalente en usp_CargarImportacion: stg_Nutrientes
+        -- ya viene filtrada por el ETL para solo traer meses nuevos, así
+        -- que ya no se borra nada antes de insertar.
         INSERT INTO dbo.Nutrientes (
             anio, Tipo, No_Licencia, No_Registro, NombreComercial, EmpresaImportadora,
             FechaEmision, UMedida, Cantidad, PaisProcedencia, PaisOrigen, AduanadeIngreso,
@@ -438,4 +439,26 @@ GO
    ===================================================================== */
 -- INSERT INTO dbo.Usuarios (NombreUsuario, NombreCompleto, Email, PasswordHash, RolId)
 -- VALUES ('admin', 'Administrador Agrequima', 'admin@agrequima.local', '<hash_bcrypt_aqui>', 1);
+GO
+
+/* =====================================================================
+   9. PREFERENCIA DE INTERFAZ (tema claro/oscuro)
+   Elegido desde el menú de cuenta del encabezado; se guarda por usuario
+   para que se aplique de inmediato al iniciar sesión, sin depender solo
+   de lo último guardado en el navegador.
+
+   Nota: este mismo menú tuvo también un selector de paleta de acento
+   (Verde/Teal/Naranja, columna Usuarios.PaletaColor) que se eliminó por
+   decisión de producto — no solo de la interfaz, también la columna en
+   BD. No confundir con los colores fijos por dashboard (Plaguicidas
+   teal, Nutrientes naranja, ver theme/colors.ts en el frontend), que
+   nunca dependieron de esta preferencia y siguen fijos.
+   ===================================================================== */
+IF NOT EXISTS (
+    SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_NAME = 'Usuarios' AND COLUMN_NAME = 'Tema'
+)
+BEGIN
+    ALTER TABLE dbo.Usuarios ADD Tema VARCHAR(10) NOT NULL DEFAULT 'Claro';
+END
 GO
