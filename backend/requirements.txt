@@ -1,0 +1,10 @@
+sqlalchemy
+pyodbc
+python-dotenv
+bcrypt
+fastapi
+uvicorn[standard]
+python-jose[cryptography]
+pandas
+openpyxl
+python-multipart
