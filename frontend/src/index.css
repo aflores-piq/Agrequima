@@ -1,0 +1,65 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+/* =====================================================================
+   Tokens de tema (claro/oscuro), aplicados en <html> como clase "dark"
+   — ver ThemeContext. Estos tokens alimentan las clases semánticas
+   definidas en tailwind.config.ts (bg-app, bg-surface, text-ink,
+   bg-accent, etc.) que reemplazan los colores bg-slate y text-slate
+   fijos que tenía la app antes de tener tema.
+
+   El acento general (bg-accent/-emphasis/-subtle) es un verde fijo, no
+   una paleta elegible por el usuario — esa opción (Verde/Teal/Naranja)
+   se probó y se eliminó por decisión de producto.
+
+   IMPORTANTE: esto NO afecta los colores propios de cada dashboard
+   (teal en Plaguicidas, naranja en Nutrientes, ver theme/colors.ts y
+   components/filters/PowerBiFilter.tsx) — esos siguen fijos sin importar
+   el tema, y nunca dependieron de este acento general.
+   ===================================================================== */
+:root {
+  /* Modo claro */
+  --color-bg-app: 248 250 252; /* slate-50 */
+  --color-bg-surface: 255 255 255; /* white */
+  --color-bg-surface-hover: 241 245 249; /* slate-100 */
+  --color-line: 226 232 240; /* slate-200 */
+  --color-line-strong: 148 163 184; /* slate-400 */
+  --color-ink: 15 23 42; /* slate-900 */
+  --color-ink-muted: 71 85 105; /* slate-600 */
+  --color-ink-faint: 100 116 139; /* slate-500 */
+  --color-danger-surface: 254 242 242; /* red-50 */
+  --color-danger-text: 185 28 28; /* red-700 */
+
+  --color-accent: 22 163 74; /* green-600 */
+  --color-accent-emphasis: 21 128 61; /* green-700 */
+  --color-accent-subtle: 220 252 231; /* green-100 */
+}
+
+.dark {
+  /* Modo oscuro — mismos valores que tenía la app fija antes de esto. */
+  --color-bg-app: 2 6 23; /* slate-950 */
+  --color-bg-surface: 15 23 42; /* slate-900 */
+  --color-bg-surface-hover: 30 41 59; /* slate-800 */
+  --color-line: 30 41 59; /* slate-800 */
+  --color-line-strong: 100 116 139; /* slate-500 */
+  --color-ink: 241 245 249; /* slate-100 */
+  --color-ink-muted: 148 163 184; /* slate-400 */
+  --color-ink-faint: 100 116 139; /* slate-500 */
+  --color-danger-surface: 69 10 10; /* red-950 */
+  --color-danger-text: 252 165 165; /* red-300 */
+
+  --color-accent: 74 222 128; /* green-400 */
+  --color-accent-emphasis: 34 197 94; /* green-500 */
+  --color-accent-subtle: 20 83 45; /* green-900 */
+}
+
+body {
+  @apply bg-app text-ink;
+}

@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Agrequima | Importaciones</title>
+    <script>
+      // Aplica el tema ANTES de pintar, leyendo el último valor cacheado
+      // en localStorage (ver theme/ThemeContext.tsx) — evita un parpadeo
+      // del tema por defecto antes de que React monte. Esto es solo un
+      // adelanto visual para la carga inicial de la página completa; en
+      // el login/logout dentro de la SPA, quien manda es la respuesta de
+      // /auth/login (ver AuthContext.iniciarSesion).
+      (function () {
+        try {
+          if (localStorage.getItem("agrequima_tema") === "Oscuro") {
+            document.documentElement.classList.add("dark");
+          }
+        } catch (e) {}
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
