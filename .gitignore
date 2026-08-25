@@ -2,3 +2,9 @@
 **/.env
 __pycache__/
 node_modules/
+.venv/
+**/.venv/
+*.pyc
+frontend/dist/
+.pytest_cache/
+db/_schema_test_tmp.sql
