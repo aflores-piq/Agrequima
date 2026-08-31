@@ -1,0 +1,382 @@
+====================================================================
+ PIQ_IA - Instrucciones de instalacion en este servidor
+====================================================================
+
+Esta carpeta trae todo lo necesario para instalar, en ESTE servidor,
+la base de datos PIQ_IA y su sincronizacion nocturna, sin necesitar
+ayuda tecnica en vivo. Segui los pasos EN ORDEN. Cada paso dice
+exactamente que click hacer.
+
+Archivos que vas a usar:
+  01_crear_base_piq_ia.sql     -> lo abris en SQL Server Management Studio (SSMS)
+  02_seed_roles_y_admin.sql    -> lo abris tambien en SSMS, despues del anterior
+  generar_hash_password.py     -> genera el valor que necesita 02_seed_roles_y_admin.sql
+  sync_piq_ia.py                -> el programa que trae los datos cada noche
+  .env.ejemplo                  -> plantilla de configuracion (la vas a copiar y completar)
+  requirements.txt               -> lista de librerias de Python que hace falta instalar
+
+No hace falta editar sync_piq_ia.py en ningun paso -- toda la
+configuracion va en el archivo ".env" que vas a crear en el Paso 4.
+
+
+====================================================================
+ PASO 0 -- Que necesita tener este servidor
+====================================================================
+
+- SQL Server Management Studio (SSMS): para los Pasos 1 y 2.
+- Python 3.10 o mas nuevo: para el Paso 2 en adelante (generar el hash
+  de la contraseña ya necesita Python).
+  Para revisar si ya esta instalado: abrir el Simbolo del sistema
+  (Inicio > escribir "cmd" > Enter) y escribir:
+        python --version
+  Si responde con un numero (ej. "Python 3.12.4"), ya esta instalado,
+  segui al Paso 1. Si dice "no se reconoce el comando" o similar, no
+  esta instalado -- lo instalas asi:
+    1. Ir a https://www.python.org/downloads/
+    2. Descargar la version para Windows (el boton amarillo grande).
+    3. Ejecutar el instalador. IMPORTANTE: en la primera pantalla del
+       instalador, marcar el check "Add python.exe to PATH" (abajo de
+       todo) ANTES de darle a "Install Now".
+    4. Cuando termine, cerrar y volver a abrir el Simbolo del sistema,
+       y repetir "python --version" para confirmar que ahora si
+       responde.
+
+- El driver "ODBC Driver 17 for SQL Server" (o 18): para revisar si ya
+  esta instalado, abrir "Orígenes de datos ODBC (64 bits)" (buscarlo en
+  el menu Inicio) y fijarse en la pestaña "Controladores" si aparece
+  "ODBC Driver 17 for SQL Server" o "ODBC Driver 18 for SQL Server" en
+  la lista. Si no aparece ninguno de los dos, descargarlo de:
+        https://learn.microsoft.com/sql/connect/odbc/download-odbc-driver-for-sql-server
+  (Si instalas la version 18 en vez de la 17, avisá -- hay que ajustar
+  un valor en el .env, ver Paso 4.)
+
+
+====================================================================
+ PASO 1 -- Crear la base de datos PIQ_IA (con SSMS)
+====================================================================
+
+1. Abrir SQL Server Management Studio.
+2. En la ventana de conexion, poner el nombre del servidor de SQL
+   Server de ESTA maquina (si no lo sabés, normalmente es el nombre de
+   la PC, o "localhost", o "localhost\SQLEXPRESS" si es una instancia
+   con nombre) y conectarse (autenticacion de Windows o SQL, la que
+   uses normalmente en este servidor).
+3. Menu "Archivo" > "Abrir" > "Archivo..." y elegir el archivo
+   "01_crear_base_piq_ia.sql" de esta carpeta.
+   (Alternativa: arrastrar el archivo directo a la ventana de SSMS.)
+4. Con el script abierto, presionar la tecla F5 (o el botón
+   "¡ Ejecutar" con el triangulito verde, arriba a la izquierda).
+5. Esperar a que termine (unos segundos). Abajo, en la pestaña
+   "Mensajes", revisar que:
+   - No haya ninguna linea en color ROJO (eso indicaria un error).
+   - Al final aparezcan dos tablas de resultados: una con 13 filas
+     (los nombres de las tablas creadas, todas con 0 en la columna
+     "filas" -- es normal, todavia no hay datos) y otra con 4 filas
+     (los nombres de los stored procedures creados).
+   - La ultima linea debe decir:
+     "=== Script de creacion de PIQ_IA finalizado. Revisa que no haya
+     errores en rojo arriba. ==="
+
+Si algo salio mal: es seguro volver a correr el script las veces que
+haga falta (esta escrito para no duplicar ni borrar nada si algo ya
+existe). Si el error persiste, copiar el mensaje en rojo exacto para
+poder diagnosticarlo.
+
+Listo -- la base PIQ_IA ya existe, con su estructura completa, pero
+sin datos ni usuarios todavia (eso lo traen el Paso 2 y el Paso 6).
+
+
+====================================================================
+ PASO 2 -- Crear los roles y el usuario administrador (con SSMS)
+====================================================================
+
+Este paso deja PIQ_IA lista para poder iniciar sesión en la app apenas
+esté instalada -- crea los 3 roles del sistema y UN usuario
+administrador de producción.
+
+1. Generar el hash de la contraseña (nunca se escribe la contraseña
+   real en ningún archivo, solo el resultado de este paso):
+   a. Abrir el Simbolo del sistema (Inicio > escribir "cmd" > Enter).
+   b. Escribir:
+        cd "C:\ruta\donde\copiaste\esta\carpeta"
+        pip install bcrypt
+        python generar_hash_password.py
+   c. Va a pedir la contraseña dos veces (no se ve en pantalla
+      mientras se escribe, es normal). Escribir la contraseña real que
+      va a usar el administrador de producción.
+   d. Va a mostrar una línea larga que empieza con algo como
+      '$2b$12$...' -- ese es el hash. Seleccionarlo y copiarlo
+      completo (con las comillas simples incluidas).
+
+2. Abrir "02_seed_roles_y_admin.sql" (de esta carpeta) en SSMS, igual
+   que en el Paso 1 (Archivo > Abrir, o arrastrarlo a la ventana).
+
+3. Buscar, cerca del principio del archivo, estas tres líneas (usar
+   Ctrl+B o Ctrl+F para buscar "PONÉ ACÁ" si cuesta encontrarlas):
+
+        DECLARE @NombreUsuario VARCHAR(100) = '[PONÉ ACÁ EL NOMBRE DE USUARIO PARA INICIAR SESIÓN, ej. admin]';
+        DECLARE @Email         VARCHAR(200) = '[PONÉ ACÁ TU CORREO PARA PRODUCCIÓN]';
+        DECLARE @PasswordHash  VARCHAR(255) = '[PEGÁ ACÁ EL HASH QUE TE DIO generar_hash_password.py]';
+
+   Reemplazar el texto entre comillas de las tres líneas:
+   - @NombreUsuario: el nombre con el que se va a iniciar sesión (no
+     tiene que ser el correo, ej. "admin").
+   - @Email: el correo real de esa cuenta.
+   - @PasswordHash: pegar ahí el hash completo que copiaste en el
+     paso 1.d (reemplazando todo el texto "[PEGÁ ACÁ ...]", comillas
+     simples incluidas al principio y al final).
+
+4. Presionar F5 (o "¡ Ejecutar") con la conexión a PIQ_IA activa
+   (fijarse arriba en SSMS que la barra de "Base de datos disponible"
+   diga "PIQ_IA" y no "master" ni otra).
+
+5. En la pestaña "Mensajes", confirmar:
+   - Una tabla con los 3 roles (Administrador, Usuario, Administrador
+     de Usuarios).
+   - El mensaje "Usuario administrador creado: <el nombre que
+     pusiste>".
+   - Una segunda tabla mostrando esa cuenta recién creada, con
+     Activo=1 y PuedeExportar=1.
+
+   Si en cambio aparece "FALTA COMPLETAR LOS VALORES DE ARRIBA...", es
+   que alguna de las 3 líneas del paso 3 se quedó con el texto
+   "[PONÉ ACÁ...]" / "[PEGÁ ACÁ...]" sin reemplazar -- revisar y volver
+   a correr el script.
+
+   Si aparece "Ya existe un usuario con ese NombreUsuario...", ya
+   habías corrido este paso antes con ese mismo nombre de usuario --
+   es seguro, no se duplica ni se pisa la cuenta existente.
+
+Con la contraseña que usaste en el paso 1.c ya podés iniciar sesión en
+la app (una vez que esté instalada y corriendo) con el usuario que
+elegiste.
+
+
+====================================================================
+ PASO 3 -- Instalar las librerias de Python
+====================================================================
+
+1. Abrir el Simbolo del sistema (Inicio > escribir "cmd" > Enter).
+2. Escribir el siguiente comando y presionar Enter (reemplazando la
+   ruta si copiaste esta carpeta a otro lugar):
+
+        cd "C:\ruta\donde\copiaste\esta\carpeta"
+
+3. Escribir y ejecutar:
+
+        pip install -r requirements.txt
+
+4. Esperar a que termine de instalar (puede tardar uno o dos minutos).
+   Si al final no aparece ningun mensaje en rojo que diga "ERROR", ya
+   quedo instalado.
+
+(Si ya instalaste "bcrypt" a mano en el Paso 2, no pasa nada -- este
+comando también lo instala, y si ya está no lo reinstala.)
+
+
+====================================================================
+ PASO 4 -- Configurar la conexion (el archivo .env)
+====================================================================
+
+1. En esta misma carpeta, hacer una copia del archivo ".env.ejemplo"
+   y renombrarla a ".env" (sin ".ejemplo", y sin ".txt" al final --
+   Windows a veces agrega ".txt" solo, hay que sacarlo).
+
+2. Abrir el archivo ".env" (recien creado) con el Bloc de notas
+   (click derecho > Abrir con > Bloc de notas) y completar estos
+   valores:
+
+   SYNC_ORIGEN_DB_SERVER   -> la direccion del servidor de donde vienen
+                              los datos. Hoy la unica direccion real
+                              que tenemos del cliente es "10.10.0.6,65280"
+                              -- OJO: todavia no se confirmo que se
+                              pueda llegar a esa direccion desde este
+                              servidor, ni que la base tenga las mismas
+                              tablas. Si no hay conexion o las tablas
+                              son distintas, avisar antes de usar esto
+                              en produccion.
+   SYNC_ORIGEN_DB_NAME     -> el nombre de la base de datos ahi (sin
+                              confirmar todavia cual es en el servidor
+                              real del cliente).
+   SYNC_ORIGEN_DB_USER     -> usuario de SQL Server para conectarse ahi.
+   SYNC_ORIGEN_DB_PASSWORD -> contraseña de ese usuario.
+
+   SYNC_DESTINO_DB_SERVER  -> el servidor de SQL Server de ESTE mismo
+                              servidor (normalmente "localhost").
+   SYNC_DESTINO_DB_NAME    -> dejar "PIQ_IA" (ya se llama asi, Paso 1).
+   SYNC_DESTINO_DB_USER    -> usuario de SQL Server de este servidor.
+   SYNC_DESTINO_DB_PASSWORD-> su contraseña.
+
+   ODBC_DRIVER             -> dejar "ODBC Driver 17 for SQL Server" tal
+                              cual, SALVO que en el Paso 0 hayas
+                              instalado la version 18 -- en ese caso,
+                              cambiar esta linea a:
+                              ODBC_DRIVER=ODBC Driver 18 for SQL Server
+
+   SYNC_TABLAS             -> dejar tal cual viene (ya trae las 4
+                              tablas correctas). Solo se toca si en el
+                              futuro se agregan tablas de otros
+                              proyectos (Financiero, Indicadores).
+
+3. Guardar el archivo (Ctrl+S) y cerrarlo.
+
+Esta es la UNICA seccion que va a cambiar mas adelante, cuando se
+confirme el acceso real al cliente: los 4 valores de
+"SYNC_ORIGEN_DB_*". Todo lo demas se configura una sola vez.
+
+
+====================================================================
+ PASO 5 -- Probar el script de sincronizacion a mano (antes de programarlo)
+====================================================================
+
+1. En el mismo Simbolo del sistema del Paso 3 (con la carpeta ya
+   seleccionada con "cd"), escribir:
+
+        python sync_piq_ia.py
+
+2. Deberia aparecer algo asi (los numeros de filas van a ser distintos):
+
+        === Iniciando sincronización PIQ_IA (4 tablas configuradas) ===
+        OK   Importacion                              #### filas
+        OK   Nutrientes                                #### filas
+        OK   CatalogoNomenclaturaPlaguicidas            ### filas
+        OK   CatalogoAgrupadorNutrientes                ### filas
+        === Sincronización PIQ_IA finalizada (OK) ===
+
+   Si en cambio aparece un mensaje que empieza con "ERROR" o
+   "Traceback", algo fallo -- ver la seccion de PROBLEMAS FRECUENTES
+   mas abajo, o copiar el mensaje completo para diagnosticarlo.
+
+3. Verificacion en SSMS: conectarse a la base PIQ_IA y correr:
+
+        SELECT COUNT(*) FROM dbo.Importacion;
+        SELECT COUNT(*) FROM dbo.Nutrientes;
+        SELECT * FROM dbo.SyncLog ORDER BY LogId DESC;
+
+   Las dos primeras deben devolver un numero mayor a cero. La tercera
+   muestra el historial de corridas (fecha, tabla, filas copiadas,
+   estado) -- debe tener 4 filas nuevas con Estado = 'OK'.
+
+Una vez que esto funciona a mano, segui al Paso 6 para programarlo.
+
+
+====================================================================
+ PASO 6 -- Crear la tarea programada de Windows (corre sola cada noche)
+====================================================================
+
+Esto usa el "Programador de tareas" de Windows (no SQL Server Agent).
+
+1. Inicio > escribir "Programador de tareas" > Enter (o "Task
+   Scheduler" si Windows esta en ingles).
+2. En el panel de la derecha, click en "Crear tarea..." (NO "Crear
+   tarea basica", esa version tiene menos opciones).
+3. Pestaña "General":
+   - "Nombre": escribir "PIQ_IA_Sync_Nocturno".
+   - Mas abajo, marcar el circulo "Ejecutar tanto si el usuario inició
+     sesión como si no" (esto es importante: así corre aunque nadie
+     haya iniciado sesión en el servidor a esa hora).
+   - Si esta disponible, tildar tambien "Ejecutar con los privilegios
+     más altos".
+   - Click en "Cambiar usuario o grupo..." y escribir "SYSTEM" (o
+     "SISTEMA" en español) si querés que corra con la cuenta del
+     sistema (no pide contraseña y siempre esta disponible). Si
+     preferís que corra con tu propio usuario, dejalo como está, pero
+     al guardar la tarea Windows te va a pedir tu contraseña de
+     Windows una sola vez -- ingresarla ahi.
+4. Pestaña "Desencadenadores" (Triggers):
+   - Click "Nuevo...".
+   - "Iniciar la tarea": elegir "Según una programación".
+   - Elegir "Diariamente".
+   - En "Inicio", poner la hora deseada (sugerido: 02:00, dos de la
+     madrugada).
+   - Dejar "Repetir cada: 1 días".
+   - Click "Aceptar".
+5. Pestaña "Acciones":
+   - Click "Nueva...".
+   - "Acción": dejar "Iniciar un programa".
+   - "Programa o script": buscar y elegir el archivo python.exe. Si no
+     sabés la ruta exacta, en el Simbolo del sistema escribir:
+        where python
+     y copiar la ruta completa que aparece (algo como
+     "C:\Python312\python.exe" o similar).
+   - "Agregar argumentos (opcional)": escribir
+        sync_piq_ia.py
+   - "Iniciar en (opcional)": escribir la ruta completa de ESTA
+     carpeta (donde está sync_piq_ia.py), por ejemplo:
+        C:\ruta\donde\copiaste\esta\carpeta
+     (Este campo es importante -- si se deja vacío, el script no va a
+     encontrar el archivo ".env" ni va a poder escribir el log.)
+   - Click "Aceptar".
+6. Pestaña "Condiciones": revisar que NO esté marcado "Iniciar la
+   tarea solo si el equipo está conectado a la corriente alterna" (si
+   es un servidor, no aplica, pero por las dudas destildarlo).
+7. Pestaña "Configuración": tildar "Ejecutar la tarea lo antes posible
+   si se perdió un inicio programado" (por si el servidor estaba
+   apagado a la hora programada).
+8. Click "Aceptar" al final. Si elegiste correr con tu propio usuario
+   (no SYSTEM), va a pedir la contraseña de Windows de ese usuario --
+   ingresarla y confirmar.
+
+La tarea ya deberia aparecer en la lista principal del Programador de
+tareas, con Estado "Listo".
+
+
+====================================================================
+ PASO 7 -- Probar que la tarea programada funciona de verdad
+====================================================================
+
+No hace falta esperar a la noche para confirmar que quedo bien armada:
+
+1. En el Programador de tareas, click derecho sobre
+   "PIQ_IA_Sync_Nocturno" > "Ejecutar".
+2. Esperar unos segundos (puede tardar hasta un minuto), despues
+   presionar F5 (Actualizar) en la ventana del Programador.
+3. Mirar la columna "Resultado de la última ejecución": debe decir
+   "La operación se completó correctamente (0x0)". Si dice otra cosa
+   (un numero distinto de 0x0), algo fallo al correr desde la tarea
+   (aunque haya funcionado a mano en el Paso 5) -- revisar que la ruta
+   de "Iniciar en" del Paso 6 sea exactamente la de esta carpeta.
+4. Confirmar en SSMS que `dbo.SyncLog` tiene filas nuevas con una
+   fecha/hora reciente (la consulta del Paso 5, punto 3).
+
+Con esto, PIQ_IA queda funcionando sola, actualizándose cada noche,
+sin necesitar que nadie la corra a mano.
+
+
+====================================================================
+ PROBLEMAS FRECUENTES
+====================================================================
+
+"No module named 'pandas'" (o sqlalchemy, pyodbc, dotenv, bcrypt)
+  -> El Paso 3 no se completo. Volver a correr:
+        pip install -r requirements.txt
+
+"Faltan variables de entorno SYNC_..._DB_{...} en el .env"
+  -> El archivo ".env" no existe o le falta completar algun valor.
+     Revisar el Paso 4 (¿se llama exactamente ".env", no
+     ".env.ejemplo" ni ".env.txt"?).
+
+"Login failed for user ..." / "No se puede abrir la base de datos..."
+  -> El usuario o la contraseña de SYNC_ORIGEN_DB_* o
+     SYNC_DESTINO_DB_* está mal, o ese usuario no tiene permiso sobre
+     esa base. Confirmar las credenciales.
+
+"No route to host" / el script se queda "colgado" mucho tiempo y
+despues falla
+  -> No hay conectividad de red hacia SYNC_ORIGEN_DB_SERVER (por
+     ejemplo, si todavía no está armada la VPN hacia el cliente).
+     Mientras tanto, usar Desarrollo-2/AGREQUIMA como origen de
+     prueba (ver Paso 4).
+
+El script funciona a mano (Paso 5) pero la tarea programada falla
+(Paso 7)
+  -> Casi siempre es que falta o está mal el campo "Iniciar en" de la
+     pestaña "Acciones" (Paso 6) -- tiene que ser la ruta completa de
+     esta carpeta, exactamente donde está el archivo ".env".
+
+No me acuerdo la contraseña que puse en el Paso 2 / la quiero cambiar
+  -> Una vez que la app esté instalada y corriendo, se puede cambiar
+     la contraseña desde la pantalla de Usuarios dentro de la propia
+     app (con la cuenta de administrador). Volver a correr
+     02_seed_roles_y_admin.sql NO cambia la contraseña de una cuenta
+     que ya existe (por diseño, para no pisarla por accidente).
