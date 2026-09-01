@@ -8,22 +8,23 @@ ayuda tecnica en vivo. Segui los pasos EN ORDEN. Cada paso dice
 exactamente que click hacer.
 
 Archivos que vas a usar:
-  01_crear_base_piq_ia.sql     -> lo abris en SQL Server Management Studio (SSMS)
-  02_seed_roles_y_admin.sql    -> lo abris tambien en SSMS, despues del anterior
-  generar_hash_password.py     -> genera el valor que necesita 02_seed_roles_y_admin.sql
-  sync_piq_ia.py                -> el programa que trae los datos cada noche
-  .env.ejemplo                  -> plantilla de configuracion (la vas a copiar y completar)
-  requirements.txt               -> lista de librerias de Python que hace falta instalar
+  01_crear_base_piq_ia.sql       -> lo abris en SQL Server Management Studio (SSMS)
+  02_seed_roles_y_admin.sql      -> lo abris tambien en SSMS, despues del anterior
+  03_cargar_datos_iniciales.sql  -> lo abris tambien en SSMS, despues del anterior
+  generar_hash_password.py       -> genera el valor que necesita 02_seed_roles_y_admin.sql
+  sync_piq_ia.py                 -> el programa que trae los datos cada noche
+  .env.ejemplo                   -> plantilla de configuracion (la vas a copiar y completar)
+  requirements.txt                -> lista de librerias de Python que hace falta instalar
 
 No hace falta editar sync_piq_ia.py en ningun paso -- toda la
-configuracion va en el archivo ".env" que vas a crear en el Paso 4.
+configuracion va en el archivo ".env" que vas a crear en el Paso 5.
 
 
 ====================================================================
  PASO 0 -- Que necesita tener este servidor
 ====================================================================
 
-- SQL Server Management Studio (SSMS): para los Pasos 1 y 2.
+- SQL Server Management Studio (SSMS): para los Pasos 1, 2 y 3.
 - Python 3.10 o mas nuevo: para el Paso 2 en adelante (generar el hash
   de la contraseña ya necesita Python).
   Para revisar si ya esta instalado: abrir el Simbolo del sistema
@@ -48,7 +49,7 @@ configuracion va en el archivo ".env" que vas a crear en el Paso 4.
   la lista. Si no aparece ninguno de los dos, descargarlo de:
         https://learn.microsoft.com/sql/connect/odbc/download-odbc-driver-for-sql-server
   (Si instalas la version 18 en vez de la 17, avisá -- hay que ajustar
-  un valor en el .env, ver Paso 4.)
+  un valor en el .env, ver Paso 5.)
 
 
 ====================================================================
@@ -83,7 +84,8 @@ existe). Si el error persiste, copiar el mensaje en rojo exacto para
 poder diagnosticarlo.
 
 Listo -- la base PIQ_IA ya existe, con su estructura completa, pero
-sin datos ni usuarios todavia (eso lo traen el Paso 2 y el Paso 6).
+sin datos ni usuarios todavia (eso lo traen el Paso 2, el Paso 3 y el
+Paso 7).
 
 
 ====================================================================
@@ -153,7 +155,47 @@ elegiste.
 
 
 ====================================================================
- PASO 3 -- Instalar las librerias de Python
+ PASO 3 -- Cargar los datos iniciales (Importacion, Nutrientes,
+ catálogos) -- con SSMS
+====================================================================
+
+Este paso trae, en un solo archivo, TODOS los datos reales que ya
+estaban cargados en la base de origen (Importacion, Nutrientes, y los
+2 catálogos de agrupación) -- para que PIQ_IA arranque con información
+real desde el primer día, sin esperar a la primera corrida nocturna de
+sincronización.
+
+1. Abrir "03_cargar_datos_iniciales.sql" (de esta carpeta) en SSMS,
+   igual que los dos pasos anteriores (Archivo > Abrir, o arrastrarlo
+   a la ventana) -- es un archivo grande (~10 MB), puede tardar unos
+   segundos en abrir.
+
+2. Presionar F5 (o "¡ Ejecutar") con la conexión a PIQ_IA activa
+   (igual que en el Paso 2, fijarse que diga "PIQ_IA" arriba, no
+   "master"). Esto puede tardar uno o dos minutos -- es normal, son
+   más de 30,000 filas.
+
+3. En la pestaña "Mensajes", confirmar 4 líneas "OK: <tabla> cargada
+   (### filas)" -- una por cada tabla (Importacion, Nutrientes,
+   CatalogoNomenclaturaPlaguicidas, CatalogoAgrupadorNutrientes) -- y,
+   al final, una tabla de resultados con el conteo final de cada una.
+
+   Si en cambio aparece "ERROR al cargar <tabla>: ...", anotar el
+   mensaje completo -- ese texto dice exactamente qué salió mal en esa
+   tabla puntual. Las demás tablas no se ven afectadas por el error de
+   una sola (cada una se carga por separado).
+
+Es seguro volver a correr este script las veces que haga falta: cada
+tabla se vacía (TRUNCATE) antes de volver a insertar sus datos, así
+que nunca duplica filas -- si algo salió mal a mitad de camino, correr
+de nuevo el archivo completo lo deja bien.
+
+Este script NO toca Roles ni Usuarios -- eso ya quedó bien en el Paso
+2 y no se pisa acá.
+
+
+====================================================================
+ PASO 4 -- Instalar las librerias de Python
 ====================================================================
 
 1. Abrir el Simbolo del sistema (Inicio > escribir "cmd" > Enter).
@@ -175,7 +217,7 @@ comando también lo instala, y si ya está no lo reinstala.)
 
 
 ====================================================================
- PASO 4 -- Configurar la conexion (el archivo .env)
+ PASO 5 -- Configurar la conexion (el archivo .env)
 ====================================================================
 
 1. En esta misma carpeta, hacer una copia del archivo ".env.ejemplo"
@@ -224,12 +266,16 @@ Esta es la UNICA seccion que va a cambiar mas adelante, cuando se
 confirme el acceso real al cliente: los 4 valores de
 "SYNC_ORIGEN_DB_*". Todo lo demas se configura una sola vez.
 
+Nota: el Paso 3 ya cargó los datos iniciales una vez -- este script de
+sincronización (una vez programado en el Paso 7) es el que los va a
+mantener actualizados noche a noche después.
+
 
 ====================================================================
- PASO 5 -- Probar el script de sincronizacion a mano (antes de programarlo)
+ PASO 6 -- Probar el script de sincronizacion a mano (antes de programarlo)
 ====================================================================
 
-1. En el mismo Simbolo del sistema del Paso 3 (con la carpeta ya
+1. En el mismo Simbolo del sistema del Paso 4 (con la carpeta ya
    seleccionada con "cd"), escribir:
 
         python sync_piq_ia.py
@@ -257,11 +303,11 @@ confirme el acceso real al cliente: los 4 valores de
    muestra el historial de corridas (fecha, tabla, filas copiadas,
    estado) -- debe tener 4 filas nuevas con Estado = 'OK'.
 
-Una vez que esto funciona a mano, segui al Paso 6 para programarlo.
+Una vez que esto funciona a mano, segui al Paso 7 para programarlo.
 
 
 ====================================================================
- PASO 6 -- Crear la tarea programada de Windows (corre sola cada noche)
+ PASO 7 -- Crear la tarea programada de Windows (corre sola cada noche)
 ====================================================================
 
 Esto usa el "Programador de tareas" de Windows (no SQL Server Agent).
@@ -322,7 +368,7 @@ tareas, con Estado "Listo".
 
 
 ====================================================================
- PASO 7 -- Probar que la tarea programada funciona de verdad
+ PASO 8 -- Probar que la tarea programada funciona de verdad
 ====================================================================
 
 No hace falta esperar a la noche para confirmar que quedo bien armada:
@@ -334,10 +380,10 @@ No hace falta esperar a la noche para confirmar que quedo bien armada:
 3. Mirar la columna "Resultado de la última ejecución": debe decir
    "La operación se completó correctamente (0x0)". Si dice otra cosa
    (un numero distinto de 0x0), algo fallo al correr desde la tarea
-   (aunque haya funcionado a mano en el Paso 5) -- revisar que la ruta
-   de "Iniciar en" del Paso 6 sea exactamente la de esta carpeta.
+   (aunque haya funcionado a mano en el Paso 6) -- revisar que la ruta
+   de "Iniciar en" del Paso 7 sea exactamente la de esta carpeta.
 4. Confirmar en SSMS que `dbo.SyncLog` tiene filas nuevas con una
-   fecha/hora reciente (la consulta del Paso 5, punto 3).
+   fecha/hora reciente (la consulta del Paso 6, punto 3).
 
 Con esto, PIQ_IA queda funcionando sola, actualizándose cada noche,
 sin necesitar que nadie la corra a mano.
@@ -348,12 +394,12 @@ sin necesitar que nadie la corra a mano.
 ====================================================================
 
 "No module named 'pandas'" (o sqlalchemy, pyodbc, dotenv, bcrypt)
-  -> El Paso 3 no se completo. Volver a correr:
+  -> El Paso 4 no se completo. Volver a correr:
         pip install -r requirements.txt
 
 "Faltan variables de entorno SYNC_..._DB_{...} en el .env"
   -> El archivo ".env" no existe o le falta completar algun valor.
-     Revisar el Paso 4 (¿se llama exactamente ".env", no
+     Revisar el Paso 5 (¿se llama exactamente ".env", no
      ".env.ejemplo" ni ".env.txt"?).
 
 "Login failed for user ..." / "No se puede abrir la base de datos..."
@@ -366,12 +412,12 @@ despues falla
   -> No hay conectividad de red hacia SYNC_ORIGEN_DB_SERVER (por
      ejemplo, si todavía no está armada la VPN hacia el cliente).
      Mientras tanto, usar Desarrollo-2/AGREQUIMA como origen de
-     prueba (ver Paso 4).
+     prueba (ver Paso 5).
 
-El script funciona a mano (Paso 5) pero la tarea programada falla
-(Paso 7)
+El script funciona a mano (Paso 6) pero la tarea programada falla
+(Paso 8)
   -> Casi siempre es que falta o está mal el campo "Iniciar en" de la
-     pestaña "Acciones" (Paso 6) -- tiene que ser la ruta completa de
+     pestaña "Acciones" (Paso 7) -- tiene que ser la ruta completa de
      esta carpeta, exactamente donde está el archivo ".env".
 
 No me acuerdo la contraseña que puse en el Paso 2 / la quiero cambiar
@@ -380,3 +426,10 @@ No me acuerdo la contraseña que puse en el Paso 2 / la quiero cambiar
      app (con la cuenta de administrador). Volver a correr
      02_seed_roles_y_admin.sql NO cambia la contraseña de una cuenta
      que ya existe (por diseño, para no pisarla por accidente).
+
+"ERROR al cargar <tabla>: ..." al correr 03_cargar_datos_iniciales.sql
+  -> El mensaje después de "ERROR al cargar" dice la causa exacta
+     (viene de ERROR_MESSAGE() de SQL Server). Es seguro volver a
+     correr el script completo de nuevo -- cada tabla se vacía antes
+     de reintentar, no duplica nada. Si el error persiste en la misma
+     tabla, copiar el mensaje completo para poder diagnosticarlo.
