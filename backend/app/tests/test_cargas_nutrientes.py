@@ -115,6 +115,66 @@ def test_carga_nutrientes_happy_path_xlsx(client, admin_headers):
     assert float(cif_bd) == 1500.0
 
 
+def test_carga_nutrientes_xlsx_fecha_como_texto_no_invierte_dia_mes(client, admin_headers):
+    """Reproduce el bug real (carga del 2026-08-27, CargaId 19, 260 filas
+    con fecha invertida): un .xlsx puede traer la celda de FechaEmision
+    como texto "DD/MM/YYYY" aunque la columna se vea formateada como
+    Fecha en Excel — si se deja que pandas adivine el formato, interpreta
+    MM/DD/YYYY e invierte día/mes (12/05 -> 5 de diciembre en vez de 12
+    de mayo). No debe pasar."""
+    anio = 2088
+    limpiar_nutrientes_anio(anio)
+    contenido = construir_excel_nutrientes(
+        [
+            {
+                "Tipo": "LICENCIAS", "No_Licencia": "500-88", "No_Registro": "REG-1",
+                "NombreComercial": "PRODUCTO FECHA TEXTO", "EmpresaImportadora": "IMPORTADORA PRUEBA",
+                "FechaEmision": f"12/05/{anio}", "UMedida": "Kilogramos", "Cantidad": 100,
+                "PaisProcedencia": "Testlandia", "PaisOrigen": "Testlandia",
+                "AduanadeIngreso": "Puerto Prueba", " CIF_dolares ": 1000.0,
+                " CIF_Q ": 7700.0, " TimbresQ ": 10.0, "Exportador": "Exportador Prueba",
+                "Concentraciones": "46-0-0", "Componentes": "N", "VENTANILLA": "MAGA",
+            },
+            {
+                "Tipo": "LICENCIAS", "No_Licencia": "501-88", "No_Registro": "REG-2",
+                "NombreComercial": "PRODUCTO FECHA TEXTO DIA31", "EmpresaImportadora": "IMPORTADORA PRUEBA",
+                "FechaEmision": f"31/01/{anio}", "UMedida": "Litros", "Cantidad": 50,
+                "PaisProcedencia": "Testlandia", "PaisOrigen": "Testlandia",
+                "AduanadeIngreso": "Puerto Prueba", " CIF_dolares ": 500.0,
+                " CIF_Q ": 3850.0, " TimbresQ ": 5.0, "Exportador": "Exportador Prueba",
+                "Concentraciones": "10-10-10", "Componentes": "NPK", "VENTANILLA": "MAGA",
+            },
+        ],
+        fecha_como_texto=True,
+    )
+
+    r = client.post(
+        "/api/admin/cargas/nutrientes",
+        headers=admin_headers,
+        files={
+            "archivo_nutrientes": (
+                "test_fecha_texto.xlsx", contenido,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+
+    assert r.status_code == 200, r.text
+    assert r.json()["filas_cargadas"] == 2
+
+    with engine.connect() as conn:
+        filas = conn.execute(
+            text(
+                "SELECT NombreComercial, FechaEmision FROM dbo.Nutrientes "
+                "WHERE anio = :anio ORDER BY NombreComercial"
+            ),
+            {"anio": anio},
+        ).all()
+    por_nombre = {f.NombreComercial: f.FechaEmision for f in filas}
+    assert por_nombre["PRODUCTO FECHA TEXTO"].isoformat() == f"{anio}-05-12"
+    assert por_nombre["PRODUCTO FECHA TEXTO DIA31"].isoformat() == f"{anio}-01-31"
+
+
 def test_carga_nutrientes_titulo_extra_arriba_del_encabezado_csv(client, admin_headers):
     """Reproduce el bug real: el archivo trae una fila de título (y filas
     en blanco) antes del encabezado real, ej. "Consolidado Licencias de

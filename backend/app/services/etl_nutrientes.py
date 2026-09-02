@@ -7,6 +7,7 @@ no por ingrediente activo, según el diccionario "Agrupador de
 Fertilizantes Importaciones.xlsx" (hoja "Diccionario Productos").
 """
 
+import datetime
 import logging
 from io import BytesIO
 
@@ -161,9 +162,26 @@ def _cargar_nutrientes(contenido: bytes, es_csv: bool = True) -> tuple[pd.DataFr
         # DD/MM/YYYY en texto plano, como llega en el CSV.
         fecha_emision = pd.to_datetime(df["FechaEmision"], format="%d/%m/%Y", errors="coerce")
     else:
-        # En un Excel la celda de fecha ya llega tipada (datetime), no
-        # como texto "DD/MM/YYYY".
-        fecha_emision = pd.to_datetime(df["FechaEmision"], errors="coerce")
+        # En un .xlsx la celda de fecha normalmente ya llega tipada
+        # (datetime nativo). Pero se confirmó en producción (carga del
+        # 2026-08-27, 260 filas con día/mes invertido) que un mismo
+        # archivo puede traer un bloque de filas con la celda en TEXTO
+        # "DD/MM/YYYY" aunque la columna se vea formateada como Fecha en
+        # Excel — el formato de celda y el tipo de valor real son cosas
+        # independientes en el .xlsx (confirmado con ISNUMERO=FALSO sobre
+        # la celda real). Si se deja pd.to_datetime() adivinar el formato
+        # de ese texto, asume MM/DD/YYYY e invierte día/mes. Por eso se
+        # resuelve celda por celda: la que ya es datetime se deja tal
+        # cual (no se reinterpreta), la que es texto se parsea con
+        # day-first explícito, igual que el CSV.
+        def _fecha_celda_excel(valor):
+            if pd.isna(valor):
+                return pd.NaT
+            if isinstance(valor, datetime.date):
+                return pd.Timestamp(valor)
+            return pd.to_datetime(valor, format="%d/%m/%Y", errors="coerce")
+
+        fecha_emision = pd.to_datetime(df["FechaEmision"].apply(_fecha_celda_excel))
 
     salida = pd.DataFrame({
         "Tipo": df["Tipo"],

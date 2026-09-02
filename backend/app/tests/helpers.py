@@ -119,15 +119,23 @@ def construir_csv_nutrientes(filas: list[dict], titulo: str | None = None) -> by
 
 
 def construir_excel_nutrientes(
-    filas: list[dict], hoja: str = "Licencias", titulo: str | None = None
+    filas: list[dict], hoja: str = "Licencias", titulo: str | None = None,
+    fecha_como_texto: bool = False,
 ) -> bytes:
     """Igual que construir_csv_nutrientes, pero como .xlsx con las celdas
     ya tipadas (fecha real, montos como número) en vez de texto crudo —
     así se prueba el mismo camino que un archivo .xlsx real, distinto del
     parseo de texto que usa el .csv (encoding, formato de fecha, símbolos
-    de moneda). `titulo`: ver construir_excel_importaciones."""
+    de moneda). `titulo`: ver construir_excel_importaciones.
+
+    `fecha_como_texto=True`: deja "FechaEmision" como texto "DD/MM/YYYY"
+    en vez de convertirla a datetime nativo — reproduce el caso real
+    donde la celda del .xlsx llega como texto aunque la columna se vea
+    formateada como Fecha (bug confirmado en producción, carga del
+    2026-08-27)."""
     df = pd.DataFrame(filas, columns=COLUMNAS_NUTRIENTES)
-    df["FechaEmision"] = pd.to_datetime(df["FechaEmision"], dayfirst=True)
+    if not fecha_como_texto:
+        df["FechaEmision"] = pd.to_datetime(df["FechaEmision"], dayfirst=True)
     buffer = BytesIO()
     startrow = 3 if titulo else 0
     with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
