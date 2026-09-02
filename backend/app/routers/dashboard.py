@@ -57,13 +57,14 @@ def dashboard_nutrientes(
     nombre_comercial: list[str] | None = Query(None),
     origen: list[str] | None = Query(None),
     componente: list[str] | None = Query(None),
+    nombre_comercial_raw: list[str] | None = Query(None),
     pagina: int = Query(1, ge=1),
     tamano_pagina: int = Query(50, ge=1, le=200),
     db: Session = Depends(get_db),
     _usuario: UsuarioToken = Depends(get_current_user),
 ) -> DashboardNutrientesResponse:
     return obtener_dashboard_nutrientes(
-        db, anio, mes, nombre_comercial, origen, componente, pagina, tamano_pagina
+        db, anio, mes, nombre_comercial, origen, componente, pagina, tamano_pagina, nombre_comercial_raw
     )
 
 
@@ -129,13 +130,14 @@ def exportar_nutrientes_elemento(
     nombre_comercial: list[str] | None = Query(None),
     origen: list[str] | None = Query(None),
     componente: list[str] | None = Query(None),
+    nombre_comercial_raw: list[str] | None = Query(None),
     db: Session = Depends(get_db),
     _usuario: UsuarioToken = Depends(require_export_permission),
 ) -> Response:
     registro = export_service.NUTRIENTES_ELEMENTOS.get(elemento)
     if registro is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Elemento de exportación desconocido: {elemento}")
-    ctx = construir_contexto_nutrientes(db, anio, mes, nombre_comercial, origen, componente)
+    ctx = construir_contexto_nutrientes(db, anio, mes, nombre_comercial, origen, componente, nombre_comercial_raw)
     contenido = export_service.generar_excel_elemento(ctx, registro)
     nombre_archivo = f"nutrientes_{elemento.replace('-', '_')}_{ctx.anio_actual}.xlsx"
     return _respuesta_xlsx(contenido, nombre_archivo)
@@ -148,10 +150,11 @@ def exportar_nutrientes_todo(
     nombre_comercial: list[str] | None = Query(None),
     origen: list[str] | None = Query(None),
     componente: list[str] | None = Query(None),
+    nombre_comercial_raw: list[str] | None = Query(None),
     db: Session = Depends(get_db),
     _usuario: UsuarioToken = Depends(require_export_permission),
 ) -> Response:
-    ctx = construir_contexto_nutrientes(db, anio, mes, nombre_comercial, origen, componente)
+    ctx = construir_contexto_nutrientes(db, anio, mes, nombre_comercial, origen, componente, nombre_comercial_raw)
     contenido = export_service.generar_excel_todo(ctx, export_service.NUTRIENTES_ELEMENTOS)
     nombre_archivo = f"nutrientes_completo_{ctx.anio_actual}.xlsx"
     return _respuesta_xlsx(contenido, nombre_archivo)

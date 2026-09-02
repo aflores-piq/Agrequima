@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Title, Text } from "@tremor/react";
+import { ProgressBar, Title, Text } from "@tremor/react";
 import { obtenerDashboardNutrientes, obtenerOpcionesNutrientes } from "../../api/dashboard";
 import { mensajeError } from "../../api/client";
 import { FilterMultiCombobox, FilterYearMonth } from "../../components/filters/PowerBiFilter";
@@ -8,7 +8,6 @@ import { ChartCard } from "../../components/ChartCard";
 import { BotonExportarExcel } from "../../components/BotonExportarExcel";
 import { SimpleDataTable } from "../../components/SimpleDataTable";
 import { ScrollDataTable } from "../../components/ScrollDataTable";
-import { ResumenTable } from "../../components/ResumenTable";
 import { RankingTable } from "../../components/RankingTable";
 import { ComparativeBarChart } from "../../components/charts/ComparativeBarChart";
 import { MultiAnnualLineChart } from "../../components/charts/MultiAnnualLineChart";
@@ -31,6 +30,7 @@ export function DashboardNutrientesPage() {
   const [mes, setMes] = useState("");
   const [origen, setOrigen] = useState<string[]>([]);
   const [nombreComercial, setNombreComercial] = useState<string[]>([]);
+  const [nombreComercialRaw, setNombreComercialRaw] = useState<string[]>([]);
   const [componente, setComponente] = useState<string[]>([]);
 
   const [data, setData] = useState<DashboardNutrientesResponse | null>(null);
@@ -53,6 +53,7 @@ export function DashboardNutrientesPage() {
       mes: mes ? Number(mes) : undefined,
       origen,
       nombreComercial,
+      nombreComercialRaw,
       componente,
       pagina: 1,
       tamanoPagina: TAMANO_BLOQUE_DETALLE,
@@ -79,7 +80,7 @@ export function DashboardNutrientesPage() {
       cancelado = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [anio, mes, origen, nombreComercial, componente]);
+  }, [anio, mes, origen, nombreComercial, nombreComercialRaw, componente]);
 
   function cargarMasFilasDetalle() {
     setCargandoMasFilas(true);
@@ -89,6 +90,7 @@ export function DashboardNutrientesPage() {
       mes: mes ? Number(mes) : undefined,
       origen,
       nombreComercial,
+      nombreComercialRaw,
       componente,
       pagina: siguienteBloque,
       tamanoPagina: TAMANO_BLOQUE_DETALLE,
@@ -104,6 +106,7 @@ export function DashboardNutrientesPage() {
   function limpiarFiltros() {
     setOrigen([]);
     setNombreComercial([]);
+    setNombreComercialRaw([]);
     setComponente([]);
   }
 
@@ -118,6 +121,7 @@ export function DashboardNutrientesPage() {
     anio: anio ? Number(anio) : undefined,
     mes: mes ? Number(mes) : undefined,
     nombre_comercial: nombreComercial.length ? nombreComercial : undefined,
+    nombre_comercial_raw: nombreComercialRaw.length ? nombreComercialRaw : undefined,
     origen: origen.length ? origen : undefined,
     componente: componente.length ? componente : undefined,
   };
@@ -158,7 +162,7 @@ export function DashboardNutrientesPage() {
       </div>
 
       <div className="rounded-tremor-default bg-surface p-4 ring-1 ring-line">
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
           <FilterYearMonth
             anio={anio}
             mes={mes}
@@ -179,10 +183,17 @@ export function DashboardNutrientesPage() {
             theme="orange"
           />
           <FilterMultiCombobox
-            label="Nombre comercial"
+            label="Nombre comercial (agrupado)"
             values={nombreComercial}
             onChange={setNombreComercial}
             options={opciones?.nombres_comerciales ?? []}
+            theme="orange"
+          />
+          <FilterMultiCombobox
+            label="Nombre comercial"
+            values={nombreComercialRaw}
+            onChange={setNombreComercialRaw}
+            options={opciones?.nombres_comerciales_raw ?? []}
             theme="orange"
           />
           <FilterMultiCombobox
@@ -238,12 +249,13 @@ export function DashboardNutrientesPage() {
               <ComparativeBarChart
                 data={dataComparacionAcumulada}
                 index="mes"
-                categories={[`${anioActual}`, `${anioAnterior}`]}
-                colors={[ACCENT.tremor, "slate"]}
+                categories={[`${anioAnterior}`, `${anioActual}`]}
+                colors={["slate", ACCENT.tremor]}
               />
             }
             table={
               <SimpleDataTable
+                sinLimiteAltura
                 columnas={[
                   { header: "Mes", accessor: (r: any) => r.mes },
                   { header: `CIF USD ${anioActual}`, accessor: (r: any) => formatUSDAbrev(r[`${anioActual}`]), align: "right" },
@@ -271,12 +283,13 @@ export function DashboardNutrientesPage() {
               <ComparativeBarChart
                 data={dataComparacionMensual}
                 index="mes"
-                categories={[`${anioActual}`, `${anioAnterior}`]}
-                colors={[ACCENT.tremor, "slate"]}
+                categories={[`${anioAnterior}`, `${anioActual}`]}
+                colors={["slate", ACCENT.tremor]}
               />
             }
             table={
               <SimpleDataTable
+                sinLimiteAltura
                 columnas={[
                   { header: "Mes", accessor: (r: any) => r.mes },
                   { header: `CIF USD ${anioActual}`, accessor: (r: any) => formatUSDAbrev(r[`${anioActual}`]), align: "right" },
@@ -303,6 +316,7 @@ export function DashboardNutrientesPage() {
             chart={<MultiAnnualLineChart theme="nutrientes" series={serieMultianual} />}
             table={
               <SimpleDataTable
+                sinLimiteAltura
                 columnas={[
                   { header: "Mes", accessor: (r: any) => r.mes },
                   ...serieMultianual.map((serie) => ({
@@ -319,7 +333,7 @@ export function DashboardNutrientesPage() {
 
           <ChartCard
             theme="nutrientes"
-            title="Top fórmulas químicas"
+            title={`Top ${data.top_formulas.length} fórmulas químicas`}
             subtitle="Por CIF USD"
             exportar={
               <BotonExportarExcel
@@ -332,6 +346,8 @@ export function DashboardNutrientesPage() {
             chart={<RankingBarChart theme="nutrientes" data={data.top_formulas} />}
             table={
               <SimpleDataTable
+                sinLimiteAltura
+                compacto="px-1 py-1 text-xs"
                 columnas={[
                   { header: "Fórmula", accessor: (r) => r.etiqueta },
                   { header: "CIF USD", accessor: (r) => formatUSDAbrev(r.cif_usd), align: "right" },
@@ -344,13 +360,13 @@ export function DashboardNutrientesPage() {
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <div className="rounded-tremor-default bg-surface p-4 ring-1 ring-line">
-              <Title className="mb-3 text-ink">Top países de origen</Title>
+              <Title className="mb-3 text-ink">{`Top ${data.top_paises_origen.length} países de origen`}</Title>
               <RankingTable filas={data.top_paises_origen} etiquetaColumna="País" etiquetaConteo="Licencias" />
             </div>
 
             <ChartCard
               theme="nutrientes"
-              title="Top aduanas de ingreso"
+              title={`Top ${data.top_aduanas.length} aduanas de ingreso`}
               subtitle="Por CIF USD"
               exportar={
                 <BotonExportarExcel
@@ -363,6 +379,8 @@ export function DashboardNutrientesPage() {
               chart={<RankingBarChart theme="nutrientes" data={data.top_aduanas} />}
               table={
                 <SimpleDataTable
+                  sinLimiteAltura
+                  compacto="px-1 py-1 text-xs"
                   columnas={[
                     { header: "Aduana", accessor: (r) => r.etiqueta },
                     { header: "CIF USD", accessor: (r) => formatUSDAbrev(r.cif_usd), align: "right" },
@@ -376,7 +394,7 @@ export function DashboardNutrientesPage() {
 
           <div className="rounded-tremor-default bg-surface p-4 ring-1 ring-line">
             <div className="mb-3 flex items-center justify-between gap-3">
-              <Title className="text-ink">Fórmulas/componentes — transacciones y CIF</Title>
+              <Title className="text-ink">Fórmulas/Componentes ordenado por CIF USD</Title>
               <BotonExportarExcel
                 theme="nutrientes"
                 endpoint="/dashboard/nutrientes/export/formulas-componentes"
@@ -384,7 +402,35 @@ export function DashboardNutrientesPage() {
                 nombreArchivoPorDefecto={`nutrientes_formulas_componentes_${sufijoArchivo}.xlsx`}
               />
             </div>
-            <ResumenTable filas={data.tabla_resumen_formulas} etiquetaColumna="Fórmula" accentColor={ACCENT.tremor} />
+            <SimpleDataTable
+              sinLimiteAltura
+              compacto
+              columnas={[
+                { header: "#", accessor: (_r, i = 0) => i + 1, align: "right" },
+                { header: "Fórmula/Componente", accessor: (r) => r.componente, ancho: "max-w-[170px]" },
+                {
+                  header: "Proporción",
+                  accessor: (r) => (
+                    <div className="flex items-center gap-2">
+                      <ProgressBar value={r.porcentaje_del_total} color={ACCENT.tremor} className="w-24" />
+                      <span className="w-12 text-xs text-ink-muted">{r.porcentaje_del_total.toFixed(1)}%</span>
+                    </div>
+                  ),
+                },
+                {
+                  header: "Concentración principal",
+                  accessor: (r) => r.concentracion_principal ?? "SIN INFORMACIÓN",
+                  ancho: "max-w-[200px]",
+                },
+                { header: "Cantidad", accessor: (r) => formatNumber(r.cantidad), align: "right" },
+                { header: "Unidad", accessor: (r) => r.unidad ?? "SIN INFORMACIÓN", ancho: "max-w-[100px]" },
+                { header: "CIF USD", accessor: (r) => formatUSDAbrev(r.cif_usd), align: "right" },
+                { header: "CIF Q", accessor: (r) => formatQAbrev(r.cif_q), align: "right" },
+              ]}
+              filas={data.tabla_formulas_componentes.slice(0, 10)}
+              getKey={(r) => r.componente}
+            />
+            <p className="mt-2 text-xs text-ink-faint">Mostrando las 10 fórmulas o componentes con mayor CIF USD.</p>
           </div>
 
           <div className="rounded-tremor-default bg-surface p-4 ring-1 ring-line">

@@ -8,13 +8,13 @@ la pantalla) como por `services/export.py` (descarga en Excel), así lo
 exportado es siempre idéntico a lo que se ve en pantalla.
 """
 
-from collections import defaultdict
+from collections import Counter, defaultdict
 from dataclasses import dataclass
 from typing import Any
 
 import pandas as pd
-from sqlalchemy import extract, func, or_
-from sqlalchemy.orm import Query, Session
+from sqlalchemy import and_, extract, func, or_
+from sqlalchemy.orm import Query, Session, aliased
 
 from app.models.nutriente import Nutriente
 from app.schemas.dashboard import (
@@ -22,6 +22,7 @@ from app.schemas.dashboard import (
     ComparacionMensual,
     DashboardNutrientesResponse,
     DetalleLicenciaNutriente,
+    FormulaComponenteItem,
     KpisNutrientes,
     OpcionesFiltroNutrientes,
     PaginaDetalleNutrientes,
@@ -31,8 +32,57 @@ from app.schemas.dashboard import (
 from app.services.clasificacion import normalizar_aduana
 from app.services.df_utils import series_multianual_desde_df, sin_nan
 
-_TOP_N = 10
+_TOP_N_FORMULAS = 20
+_TOP_N_ADUANAS = 12
+_TOP_N_PAISES = 20
 _TABLA_RESUMEN_MAX = 50
+
+# "PLAGUICIDA" es un registro que no pertenece a esta tabla (1 fila) —
+# se excluye de TODO el dashboard (KPIs y los 3 rankings). Tipo="."
+# (542 filas auditadas) NO se excluye: no sabemos qué significa ese
+# valor y no nos corresponde decidir que es basura — eso lo define el
+# cliente, no el código (revertido a pedido explícito).
+_TIPOS_INVALIDOS = ["PLAGUICIDA"]
+
+# Columnas que identifican una fila real: dos filas iguales en las 6 son
+# la MISMA transacción capturada dos veces, no dos transacciones
+# distintas (39 grupos duplicados exactos auditados contra la base).
+_COLUMNAS_IDENTIDAD_FILA = (
+    Nutriente.No_Licencia,
+    Nutriente.No_Registro,
+    Nutriente.FechaEmision,
+    Nutriente.EmpresaImportadora,
+    Nutriente.NombreComercial,
+    Nutriente.CIF_dolares,
+)
+
+
+def _filtro_no_duplicado_exacto(db: Session, query: Query) -> Query:
+    """Excluye filas EXTRA dentro de cada grupo de duplicados exactos —
+    se conserva el nutrienteid más bajo de cada grupo, se excluyen los
+    demás. No filtra por Tipo (eso se aplica aparte en `_base`).
+
+    Reescrito con NOT EXISTS correlacionado en vez de
+    NOT IN (SELECT ... ROW_NUMBER() OVER toda la tabla): ese patrón
+    generaba un plan de ejecución muy costoso en SQL Server (~30s y
+    ~900k lecturas lógicas tras la recarga masiva de 2026-08-28) — un
+    NOT EXISTS por fila es sargable y usa los índices normalmente. Los
+    IDs excluidos son exactamente los mismos (verificado antes/después
+    del cambio); las comparaciones son NULL-safe (a = b OR ambos NULL)
+    para reproducir el mismo agrupamiento que hacía PARTITION BY, que
+    trata NULL = NULL como iguales dentro de una partición."""
+    otra = aliased(Nutriente)
+    condiciones_igualdad = [
+        or_(getattr(otra, col.key) == col, and_(getattr(otra, col.key).is_(None), col.is_(None)))
+        for col in _COLUMNAS_IDENTIDAD_FILA
+    ]
+    existe_duplicado_con_id_mas_bajo = (
+        db.query(otra.nutrienteid)
+        .filter(otra.nutrienteid < Nutriente.nutrienteid)
+        .filter(*condiciones_igualdad)
+        .exists()
+    )
+    return query.filter(~existe_duplicado_con_id_mas_bajo)
 
 # Ver comentario equivalente en dashboard_plaguicidas.py: valor especial
 # del filtro de "Nombre comercial" (que filtra por
@@ -60,10 +110,16 @@ def _filtro_producto_agrupado(query, valores: list[str] | None):
 def _aplicar_filtros(
     query,
     nombre_comercial: list[str] | None,
+    nombre_comercial_raw: list[str] | None,
     origen: list[str] | None,
     componente: list[str] | None,
 ):
     query = _filtro_producto_agrupado(query, nombre_comercial)
+    # "Nombre comercial" (crudo): filtra directo sobre NombreComercial tal
+    # como viene del archivo original, sin pasar por el catálogo de
+    # agrupación — independiente del filtro de arriba (ProductoAgrupado).
+    if nombre_comercial_raw:
+        query = query.filter(Nutriente.NombreComercial.in_(nombre_comercial_raw))
     if origen:
         query = query.filter(Nutriente.PaisOrigen.in_(origen))
     if componente:
@@ -87,11 +143,15 @@ def obtener_opciones_filtro_nutrientes(db: Session) -> OpcionesFiltroNutrientes:
     nombres_comerciales = sorted({g for (g,) in grupos_presentes if g})
     if any(g is None for (g,) in grupos_presentes):
         nombres_comerciales.append(SIN_AGRUPADOR)
+    nombres_comerciales_raw = sorted(
+        {n for (n,) in db.query(Nutriente.NombreComercial).distinct().all() if n}
+    )
     return OpcionesFiltroNutrientes(
         anios=anios,
         paises_origen=paises_origen,
         componentes=componentes,
         nombres_comerciales=nombres_comerciales,
+        nombres_comerciales_raw=nombres_comerciales_raw,
     )
 
 
@@ -132,6 +192,7 @@ def construir_contexto_nutrientes(
     nombre_comercial: list[str] | None,
     origen: list[str] | None,
     componente: list[str] | None,
+    nombre_comercial_raw: list[str] | None,
 ) -> ContextoNutrientes:
     anio_actual = anio or _anio_default(db)
     anio_anterior = anio_actual - 1
@@ -141,9 +202,14 @@ def construir_contexto_nutrientes(
     mes_expr = extract("month", Nutriente.FechaEmision)
 
     def _base(anio_query: int):
+        query = _filtro_no_duplicado_exacto(
+            db,
+            db.query(Nutriente)
+            .filter(Nutriente.anio == anio_query)
+            .filter(Nutriente.Tipo.notin_(_TIPOS_INVALIDOS)),
+        )
         query = _aplicar_filtros(
-            db.query(Nutriente).filter(Nutriente.anio == anio_query),
-            nombre_comercial, origen, componente,
+            query, nombre_comercial, nombre_comercial_raw, origen, componente,
         )
         # El selector "hasta el mes" acota TODO el dashboard a
         # Enero..mes_seleccionado, en ambos años que se comparan.
@@ -253,7 +319,7 @@ def df_top_formulas(ctx: ContextoNutrientes) -> pd.DataFrame:
         .filter(Nutriente.ProductoAgrupado.isnot(None))
         .group_by(Nutriente.ProductoAgrupado)
         .order_by(func.sum(Nutriente.CIF_dolares).desc())
-        .limit(_TOP_N)
+        .limit(_TOP_N_FORMULAS)
         .all()
     )
     return pd.DataFrame(
@@ -278,7 +344,7 @@ def df_top_aduanas(ctx: ContextoNutrientes) -> pd.DataFrame:
 
     filas = [
         (aduana, cif_por_aduana[aduana])
-        for aduana in sorted(cif_por_aduana, key=lambda a: -cif_por_aduana[a])[:_TOP_N]
+        for aduana in sorted(cif_por_aduana, key=lambda a: -cif_por_aduana[a])[:_TOP_N_ADUANAS]
     ]
     return pd.DataFrame(filas, columns=["etiqueta", "cif_usd"])
 
@@ -295,7 +361,7 @@ def df_top_paises_origen(ctx: ContextoNutrientes) -> pd.DataFrame:
         .filter(Nutriente.PaisOrigen.isnot(None))
         .group_by(Nutriente.PaisOrigen)
         .order_by(func.sum(Nutriente.CIF_dolares).desc())
-        .limit(_TOP_N)
+        .limit(_TOP_N_PAISES)
         .all()
     )
     return pd.DataFrame(
@@ -308,26 +374,65 @@ def df_top_paises_origen(ctx: ContextoNutrientes) -> pd.DataFrame:
 
 
 def df_formulas_componentes(ctx: ContextoNutrientes) -> pd.DataFrame:
-    """Tabla resumen: fórmulas/componentes (transacciones, CIF, % del total)."""
-    filas = (
+    """Tabla: fórmulas/componentes, ordenado por CIF USD (spec de Power BI:
+    "FÓRMULAS/COMPONENTES - ORDENADO POR CIF USD", columnas Proporción,
+    Concentración principal, Cantidad, Unidad, CIF USD, CIF Q).
+
+    Mismo patrón que df_grupo en dashboard_plaguicidas.py: SQL Server no
+    tiene MODE() nativo, se trae (Componentes, Concentraciones, UMedida)
+    ya sumado por combinación, y la "concentración principal"/"unidad" de
+    cada Componentes se resuelve en Python como la combinación con más
+    transacciones dentro de ese Componentes.
+
+    Nota: agrupa por `Componentes` (fórmula química, ej. "N", "K2O, N,
+    P2O5"), NO por `ProductoAgrupado` (nombre comercial agrupado, ej.
+    "Urea", "DAP") — verificado contra la captura real de Power BI, los
+    valores de esa columna vienen de Componentes."""
+    filas_detalle = (
         ctx.base_actual.with_entities(
-            Nutriente.ProductoAgrupado,
+            Nutriente.Componentes,
+            Nutriente.Concentraciones,
+            Nutriente.UMedida,
             func.count(Nutriente.nutrienteid),
+            func.sum(Nutriente.Cantidad),
             func.sum(Nutriente.CIF_dolares),
+            func.sum(Nutriente.CIF_Q),
         )
-        .filter(Nutriente.ProductoAgrupado.isnot(None))
-        .group_by(Nutriente.ProductoAgrupado)
-        .order_by(func.sum(Nutriente.CIF_dolares).desc())
-        .limit(_TABLA_RESUMEN_MAX)
+        .filter(Nutriente.Componentes.isnot(None))
+        .group_by(Nutriente.Componentes, Nutriente.Concentraciones, Nutriente.UMedida)
         .all()
     )
-    return pd.DataFrame(
-        [
-            (f[0], int(f[1]), float(f[2] or 0), round(float(f[2] or 0) / ctx.cif_total * 100, 2))
-            for f in filas
+    agregados: dict[str, dict[str, Any]] = {}
+    for componente, concentracion, unidad, transacciones, cantidad, cif_usd_fila, cif_q_fila in filas_detalle:
+        acc = agregados.setdefault(
+            componente,
+            {"cantidad": 0.0, "cif_usd": 0.0, "cif_q": 0.0, "concentraciones": Counter(), "unidades": Counter()},
+        )
+        acc["cantidad"] += float(cantidad or 0)
+        acc["cif_usd"] += float(cif_usd_fila or 0)
+        acc["cif_q"] += float(cif_q_fila or 0)
+        acc["concentraciones"][concentracion] += transacciones
+        acc["unidades"][unidad] += transacciones
+
+    filas = [
+        (
+            componente,
+            round(datos["cif_usd"] / ctx.cif_total * 100, 2),
+            datos["concentraciones"].most_common(1)[0][0] if datos["concentraciones"] else None,
+            datos["cantidad"],
+            datos["unidades"].most_common(1)[0][0] if datos["unidades"] else None,
+            datos["cif_usd"],
+            datos["cif_q"],
+        )
+        for componente, datos in sorted(agregados.items(), key=lambda kv: -kv[1]["cif_usd"])[:_TABLA_RESUMEN_MAX]
+    ]
+    return sin_nan(pd.DataFrame(
+        filas,
+        columns=[
+            "componente", "porcentaje_del_total", "concentracion_principal",
+            "cantidad", "unidad", "cif_usd", "cif_q",
         ],
-        columns=["etiqueta", "transacciones", "cif_usd", "porcentaje_del_total"],
-    )
+    ))
 
 
 def df_detalle(ctx: ContextoNutrientes) -> pd.DataFrame:
@@ -360,8 +465,11 @@ def obtener_dashboard_nutrientes(
     componente: list[str] | None,
     pagina: int,
     tamano_pagina: int,
+    nombre_comercial_raw: list[str] | None = None,
 ) -> DashboardNutrientesResponse:
-    ctx = construir_contexto_nutrientes(db, anio, mes, nombre_comercial, origen, componente)
+    ctx = construir_contexto_nutrientes(
+        db, anio, mes, nombre_comercial, origen, componente, nombre_comercial_raw
+    )
 
     kpis = _kpis_nutrientes(ctx)
 
@@ -375,8 +483,8 @@ def obtener_dashboard_nutrientes(
     top_formulas = [RankingItem(**fila) for fila in df_top_formulas(ctx).to_dict("records")]
     top_aduanas = [RankingItem(**fila) for fila in df_top_aduanas(ctx).to_dict("records")]
     top_paises_origen = [ResumenItem(**fila) for fila in df_top_paises_origen(ctx).to_dict("records")]
-    tabla_resumen_formulas = [
-        ResumenItem(**fila) for fila in df_formulas_componentes(ctx).to_dict("records")
+    tabla_formulas_componentes = [
+        FormulaComponenteItem(**fila) for fila in df_formulas_componentes(ctx).to_dict("records")
     ]
 
     # --- Tabla detalle paginada (SQL-side OFFSET/LIMIT, independiente de
@@ -418,6 +526,6 @@ def obtener_dashboard_nutrientes(
         top_formulas=top_formulas,
         top_paises_origen=top_paises_origen,
         top_aduanas=top_aduanas,
-        tabla_resumen_formulas=tabla_resumen_formulas,
+        tabla_formulas_componentes=tabla_formulas_componentes,
         detalle=detalle,
     )

@@ -44,6 +44,7 @@ export async function obtenerDashboardNutrientes(
       anio: filtros.anio,
       mes: filtros.mes,
       nombre_comercial: filtros.nombreComercial?.length ? filtros.nombreComercial : undefined,
+      nombre_comercial_raw: filtros.nombreComercialRaw?.length ? filtros.nombreComercialRaw : undefined,
       origen: filtros.origen?.length ? filtros.origen : undefined,
       componente: filtros.componente?.length ? filtros.componente : undefined,
       pagina: filtros.pagina ?? 1,

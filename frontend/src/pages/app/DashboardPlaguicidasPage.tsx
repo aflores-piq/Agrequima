@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Title, Text } from "@tremor/react";
+import { ProgressBar, Title, Text } from "@tremor/react";
 import { obtenerDashboardPlaguicidas, obtenerOpcionesPlaguicidas } from "../../api/dashboard";
 import { mensajeError } from "../../api/client";
 import { FilterMultiCombobox, FilterYearMonth } from "../../components/filters/PowerBiFilter";
@@ -8,14 +8,13 @@ import { ChartCard } from "../../components/ChartCard";
 import { BotonExportarExcel } from "../../components/BotonExportarExcel";
 import { SimpleDataTable } from "../../components/SimpleDataTable";
 import { ScrollDataTable } from "../../components/ScrollDataTable";
-import { ResumenTable } from "../../components/ResumenTable";
 import { RankingTable } from "../../components/RankingTable";
 import { CategoricalDonut } from "../../components/charts/CategoricalDonut";
 import { ComparativeBarChart } from "../../components/charts/ComparativeBarChart";
 import { MultiAnnualLineChart } from "../../components/charts/MultiAnnualLineChart";
 import { RankingBarChart } from "../../components/charts/RankingBarChart";
 import { formatNumber, formatQAbrev, formatUSDAbrev, MESES, MESES_LARGOS } from "../../utils/format";
-import { dashboardAccent } from "../../theme/colors";
+import { claseBadgeCategoria, dashboardAccent } from "../../theme/colors";
 import type {
   DashboardPlaguicidasResponse,
   DetalleTransaccionPlaguicida,
@@ -24,6 +23,22 @@ import type {
 
 const ACCENT = dashboardAccent.plaguicidas;
 const TAMANO_BLOQUE_DETALLE = 50;
+
+/** Badge de categoría de aplicación (Herbicida/Insecticida/Fungicida/...):
+ * mismo color fijo por categoría en toda la app (ver APLICACION_COLOR en
+ * theme/colors.ts). "SIN CLASIFICAR" cuando la transacción de origen no
+ * trae ningún valor de aplicación (no es lo mismo que "Otros", que sí es
+ * una categoría real con datos que no encajan en las demás). */
+function BadgeCategoria({ valorOriginal, categoria }: { valorOriginal: string | null; categoria: string }) {
+  if (!valorOriginal) {
+    return <span className="text-ink-faint">SIN CLASIFICAR</span>;
+  }
+  return (
+    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${claseBadgeCategoria(categoria)}`}>
+      {categoria}
+    </span>
+  );
+}
 
 export function DashboardPlaguicidasPage() {
   const [opciones, setOpciones] = useState<OpcionesFiltroPlaguicidas | null>(null);
@@ -181,12 +196,6 @@ export function DashboardPlaguicidasPage() {
             }))}
           />
           <FilterMultiCombobox
-            label="Origen"
-            values={origen}
-            onChange={setOrigen}
-            options={opciones?.origenes ?? []}
-          />
-          <FilterMultiCombobox
             label="Ingrediente activo"
             values={ingredienteAct}
             onChange={setIngredienteAct}
@@ -203,6 +212,12 @@ export function DashboardPlaguicidasPage() {
             values={producto}
             onChange={setProducto}
             options={opciones?.productos ?? []}
+          />
+          <FilterMultiCombobox
+            label="País de origen"
+            values={origen}
+            onChange={setOrigen}
+            options={opciones?.origenes ?? []}
           />
         </div>
         <div className="mt-3 flex items-center justify-between gap-3">
@@ -254,12 +269,13 @@ export function DashboardPlaguicidasPage() {
               <ComparativeBarChart
                 data={dataComparacionAcumulada}
                 index="mes"
-                categories={[`${anioActual}`, `${anioAnterior}`]}
-                colors={[ACCENT.tremor, "slate"]}
+                categories={[`${anioAnterior}`, `${anioActual}`]}
+                colors={["slate", ACCENT.tremor]}
               />
             }
             table={
               <SimpleDataTable
+                sinLimiteAltura
                 columnas={[
                   { header: "Mes", accessor: (r: any) => r.mes },
                   { header: `CIF USD ${anioActual}`, accessor: (r: any) => formatUSDAbrev(r[`${anioActual}`]), align: "right" },
@@ -287,12 +303,13 @@ export function DashboardPlaguicidasPage() {
               <ComparativeBarChart
                 data={dataComparacionMensual}
                 index="mes"
-                categories={[`${anioActual}`, `${anioAnterior}`]}
-                colors={[ACCENT.tremor, "slate"]}
+                categories={[`${anioAnterior}`, `${anioActual}`]}
+                colors={["slate", ACCENT.tremor]}
               />
             }
             table={
               <SimpleDataTable
+                sinLimiteAltura
                 columnas={[
                   { header: "Mes", accessor: (r: any) => r.mes },
                   { header: `CIF USD ${anioActual}`, accessor: (r: any) => formatUSDAbrev(r[`${anioActual}`]), align: "right" },
@@ -319,6 +336,7 @@ export function DashboardPlaguicidasPage() {
             chart={<MultiAnnualLineChart theme="plaguicidas" series={serieMultianual} />}
             table={
               <SimpleDataTable
+                sinLimiteAltura
                 columnas={[
                   { header: "Mes", accessor: (r: any) => r.mes },
                   ...serieMultianual.map((serie) => ({
@@ -336,7 +354,7 @@ export function DashboardPlaguicidasPage() {
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <ChartCard
               theme="plaguicidas"
-              title="Diversificación por tipo de aplicación"
+              title="Top 5 tipos de aplicación"
               subtitle={`Año ${anioActual}`}
               exportar={
                 <BotonExportarExcel
@@ -346,9 +364,11 @@ export function DashboardPlaguicidasPage() {
                   nombreArchivoPorDefecto={`plaguicidas_por_aplicacion_${sufijoArchivo}.xlsx`}
                 />
               }
-              chart={<CategoricalDonut data={data.diversificacion_aplicacion} />}
+              chart={<CategoricalDonut data={data.diversificacion_aplicacion} totalReal={data.kpis.cif_total_usd} />}
               table={
                 <SimpleDataTable
+                  sinLimiteAltura
+                  compacto="px-1 py-1 text-xs"
                   columnas={[
                     { header: "Tipo de aplicación", accessor: (r) => r.etiqueta },
                     { header: "CIF USD", accessor: (r) => formatUSDAbrev(r.cif_usd), align: "right" },
@@ -361,7 +381,7 @@ export function DashboardPlaguicidasPage() {
 
             <ChartCard
               theme="plaguicidas"
-              title="Top ingredientes activos"
+              title="Top 20 moléculas plaguicidas"
               subtitle="Por CIF USD"
               exportar={
                 <BotonExportarExcel
@@ -374,6 +394,8 @@ export function DashboardPlaguicidasPage() {
               chart={<RankingBarChart theme="plaguicidas" data={data.top_ingredientes} />}
               table={
                 <SimpleDataTable
+                  sinLimiteAltura
+                  compacto="px-1 py-1 text-xs"
                   columnas={[
                     { header: "Ingrediente activo", accessor: (r) => r.etiqueta },
                     { header: "CIF USD", accessor: (r) => formatUSDAbrev(r.cif_usd), align: "right" },
@@ -389,7 +411,7 @@ export function DashboardPlaguicidasPage() {
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <ChartCard
               theme="plaguicidas"
-              title="Top importadores"
+              title={`Top ${data.top_importadores.length} importadores`}
               subtitle="Por CIF USD"
               exportar={
                 <BotonExportarExcel
@@ -402,6 +424,8 @@ export function DashboardPlaguicidasPage() {
               chart={<RankingBarChart theme="plaguicidas" data={data.top_importadores} />}
               table={
                 <SimpleDataTable
+                  sinLimiteAltura
+                  compacto="px-1 py-1 text-xs"
                   columnas={[
                     { header: "Importador", accessor: (r) => r.etiqueta },
                     { header: "CIF USD", accessor: (r) => formatUSDAbrev(r.cif_usd), align: "right" },
@@ -412,9 +436,9 @@ export function DashboardPlaguicidasPage() {
               }
             />
 
-            <div className="rounded-tremor-default bg-surface p-4 ring-1 ring-line">
+            <div className="flex h-full flex-col rounded-tremor-default bg-surface p-4 ring-1 ring-line">
               <div className="mb-3 flex items-center justify-between gap-3">
-                <Title className="text-ink">Top países de origen</Title>
+                <Title className="text-ink">{`Top ${data.top_origenes.length} países de origen`}</Title>
                 <BotonExportarExcel
                   theme="plaguicidas"
                   endpoint="/dashboard/plaguicidas/export/top-paises"
@@ -422,13 +446,10 @@ export function DashboardPlaguicidasPage() {
                   nombreArchivoPorDefecto={`plaguicidas_top_paises_${sufijoArchivo}.xlsx`}
                 />
               </div>
-              <RankingTable filas={data.top_origenes} etiquetaColumna="País" etiquetaConteo="Transacciones" />
+              <div className="min-h-0 flex-1">
+                <RankingTable filas={data.top_origenes} etiquetaColumna="País" etiquetaConteo="Transacciones" />
+              </div>
             </div>
-          </div>
-
-          <div className="rounded-tremor-default bg-surface p-4 ring-1 ring-line">
-            <Title className="mb-3 text-ink">Importadores — transacciones y CIF</Title>
-            <ResumenTable filas={data.tabla_resumen_importadores} etiquetaColumna="Importador" accentColor={ACCENT.tremor} />
           </div>
 
           <div className="rounded-tremor-default bg-surface p-4 ring-1 ring-line">
@@ -442,25 +463,33 @@ export function DashboardPlaguicidasPage() {
               />
             </div>
             <SimpleDataTable
+              sinLimiteAltura
+              compacto="px-0.5 py-1.5 text-xs"
               columnas={[
-                { header: "Producto", accessor: (r) => r.producto },
-                { header: "Grupo", accessor: (r) => r.grupo ?? "—" },
-                { header: "Aplicación", accessor: (r) => r.aplicacion ?? "—" },
-                { header: "Importador", accessor: (r) => r.importador ?? "—" },
-                { header: "Origen", accessor: (r) => r.origen ?? "—" },
+                { header: "#", accessor: (_r, i = 0) => i + 1, align: "right" },
+                { header: "Producto", accessor: (r) => r.producto, ancho: "max-w-[240px]" },
+                { header: "Grupo", accessor: (r) => r.grupo ?? "SIN CLASIFICAR", ancho: "max-w-[175px]" },
+                {
+                  header: "Aplicación",
+                  accessor: (r) => <BadgeCategoria valorOriginal={r.aplicacion} categoria={r.categoria_aplicacion} />,
+                  ancho: "max-w-[195px]",
+                },
+                { header: "Importador", accessor: (r) => r.importador ?? "SIN INFORMACIÓN", ancho: "max-w-[200px]" },
+                { header: "Origen", accessor: (r) => r.origen ?? "SIN INFORMACIÓN", ancho: "max-w-[180px]" },
                 { header: "Cantidad", accessor: (r) => formatNumber(r.cantidad), align: "right" },
-                { header: "Unidad", accessor: (r) => r.unidad_medida ?? "—" },
+                { header: "Unidad", accessor: (r) => r.unidad_medida ?? "SIN INFORMACIÓN", ancho: "max-w-[100px]" },
                 { header: "CIF USD", accessor: (r) => formatUSDAbrev(r.cif_usd), align: "right" },
                 { header: "CIF Q", accessor: (r) => formatQAbrev(r.cif_q), align: "right" },
               ]}
-              filas={data.tabla_nombres_comerciales}
+              filas={data.tabla_nombres_comerciales.slice(0, 10)}
               getKey={(r, i) => `${r.producto}-${i}`}
             />
+            <p className="mt-2 text-xs text-ink-faint">Mostrando los 10 nombres comerciales con mayor CIF USD.</p>
           </div>
 
           <div className="rounded-tremor-default bg-surface p-4 ring-1 ring-line">
             <div className="mb-3 flex items-center justify-between gap-3">
-              <Title className="text-ink">Grupo — ordenado por CIF USD</Title>
+              <Title className="text-ink">Ingrediente activo ordenado por CIF USD</Title>
               <BotonExportarExcel
                 theme="plaguicidas"
                 endpoint="/dashboard/plaguicidas/export/grupo"
@@ -469,18 +498,36 @@ export function DashboardPlaguicidasPage() {
               />
             </div>
             <SimpleDataTable
+              sinLimiteAltura
+              compacto
               columnas={[
-                { header: "Grupo", accessor: (r) => r.grupo },
-                { header: "% del total", accessor: (r) => `${r.porcentaje_del_total.toFixed(1)}%`, align: "right" },
-                { header: "Aplicación principal", accessor: (r) => r.aplicacion_principal ?? "—" },
+                { header: "#", accessor: (_r, i = 0) => i + 1, align: "right" },
+                { header: "Ingrediente activo", accessor: (r) => r.grupo, ancho: "max-w-[170px]" },
+                {
+                  header: "Proporción",
+                  accessor: (r) => (
+                    <div className="flex items-center gap-2">
+                      <ProgressBar value={r.porcentaje_del_total} color={ACCENT.tremor} className="w-24" />
+                      <span className="w-12 text-xs text-ink-muted">{r.porcentaje_del_total.toFixed(1)}%</span>
+                    </div>
+                  ),
+                },
+                {
+                  header: "Aplicación principal",
+                  accessor: (r) => (
+                    <BadgeCategoria valorOriginal={r.aplicacion_principal} categoria={r.categoria_aplicacion} />
+                  ),
+                  ancho: "max-w-[200px]",
+                },
                 { header: "Cantidad", accessor: (r) => formatNumber(r.cantidad), align: "right" },
-                { header: "Unidad", accessor: (r) => r.unidad_medida ?? "—" },
+                { header: "Unidad", accessor: (r) => r.unidad_medida ?? "SIN INFORMACIÓN", ancho: "max-w-[100px]" },
                 { header: "CIF USD", accessor: (r) => formatUSDAbrev(r.cif_usd), align: "right" },
                 { header: "CIF Q", accessor: (r) => formatQAbrev(r.cif_q), align: "right" },
               ]}
-              filas={data.tabla_grupos}
+              filas={data.tabla_grupos.slice(0, 10)}
               getKey={(r) => r.grupo}
             />
+            <p className="mt-2 text-xs text-ink-faint">Mostrando los 10 ingredientes activos con mayor CIF USD.</p>
           </div>
 
           <div className="rounded-tremor-default bg-surface p-4 ring-1 ring-line">
@@ -495,15 +542,27 @@ export function DashboardPlaguicidasPage() {
             </div>
             <ScrollDataTable
               columnas={[
+                { header: "Año", accessor: (r) => r.anio ?? "—" },
                 { header: "Fecha", accessor: (r) => r.fecha ?? "—" },
-                { header: "Recibo", accessor: (r) => r.recibointerno ?? "—" },
+                { header: "Recibo interno", accessor: (r) => r.recibointerno ?? "—" },
+                { header: "Serie SAT", accessor: (r) => r.serie_sat ?? "—" },
+                { header: "Número recibo SAT", accessor: (r) => r.numero_recibo_sat ?? "—" },
                 { header: "Aplicación", accessor: (r) => r.aplicacion ?? "—" },
-                { header: "Importador", accessor: (r) => r.importador ?? "—" },
-                { header: "Producto", accessor: (r) => r.producto ?? "—" },
+                { header: "Empresa importadora", accessor: (r) => r.importador ?? "—" },
+                { header: "Nombre comercial", accessor: (r) => r.producto ?? "—" },
                 { header: "Ingrediente activo", accessor: (r) => r.ingrediente_act ?? "—" },
+                { header: "Cantidad", accessor: (r) => (r.cantidad != null ? formatNumber(r.cantidad) : "—"), align: "right" },
+                { header: "Unidad", accessor: (r) => r.unidad_medida ?? "—" },
+                { header: "CIF USD", accessor: (r) => (r.cif_usd != null ? formatUSDAbrev(r.cif_usd) : "—"), align: "right" },
+                { header: "CIF Q", accessor: (r) => (r.cif_q != null ? formatQAbrev(r.cif_q) : "—"), align: "right" },
+                { header: "Porcentaje", accessor: (r) => (r.porcentaje != null ? `${r.porcentaje}%` : "—"), align: "right" },
                 { header: "Exportador", accessor: (r) => r.exportador ?? "—" },
                 { header: "Origen", accessor: (r) => r.origen ?? "—" },
+                { header: "Tipo de cambio", accessor: (r) => r.tipo_cambio ?? "—" },
                 { header: "Institución", accessor: (r) => r.institucion ?? "—" },
+                { header: "UMSP", accessor: (r) => r.umsp ?? "—", align: "right" },
+                { header: "Grupo", accessor: (r) => r.grupo ?? "—" },
+                { header: "Código agrupador", accessor: (r) => r.codigo_agrupador ?? "—" },
               ]}
               filas={filasDetalle}
               total={data.detalle.total}

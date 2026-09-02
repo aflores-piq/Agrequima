@@ -40,7 +40,7 @@ from app.schemas.dashboard import (
 from app.services.clasificacion import CATEGORIAS_APLICACION_ORDEN, clasificar_aplicacion
 from app.services.df_utils import series_multianual_desde_df, sin_nan
 
-_TOP_N = 10
+_TOP_N = 20
 _TABLA_RESUMEN_MAX = 50
 
 # Valor especial del filtro de "Ingrediente activo" (que en realidad
@@ -282,13 +282,18 @@ def df_acumulado_multianual_ancho(ctx: ContextoPlaguicidas) -> pd.DataFrame:
     return ancho
 
 
+_TOP_N_APLICACION = 5
+
+
 def df_por_aplicacion(ctx: ContextoPlaguicidas) -> pd.DataFrame:
-    """Gráfico 3: dona de diversificación por tipo de aplicación.
+    """Gráfico 3: dona de distribución por tipo de aplicación — Top 5 por
+    CIF USD, descendente (spec exacto de Power BI: rank <= 5 sobre CIF
+    USD ordenado desc, no las categorías fijas completas). El color ya
+    NO es fijo por categoría para este gráfico puntual: se asigna por
+    posición de rank (ver CategoricalDonut.tsx), igual que el original.
 
     aplicacion trae >60 variantes de texto crudo; se normaliza a un
-    conjunto fijo y pequeño de categorías antes de agrupar (orden y
-    color de cada categoría son fijos, ver theme/colors.ts en el
-    frontend)."""
+    conjunto fijo de categorías antes de agrupar y sumar."""
     cif_por_categoria: dict[str, float] = defaultdict(float)
     for aplicacion_raw, cif_usd in ctx.base_actual.with_entities(
         Importacion.aplicacion, func.sum(Importacion.cif_USD)
@@ -296,9 +301,7 @@ def df_por_aplicacion(ctx: ContextoPlaguicidas) -> pd.DataFrame:
         categoria = clasificar_aplicacion(aplicacion_raw)
         cif_por_categoria[categoria] += float(cif_usd or 0)
 
-    filas = [
-        (c, cif_por_categoria[c]) for c in CATEGORIAS_APLICACION_ORDEN if c in cif_por_categoria
-    ]
+    filas = sorted(cif_por_categoria.items(), key=lambda kv: -kv[1])[:_TOP_N_APLICACION]
     return pd.DataFrame(filas, columns=["etiqueta", "cif_usd"])
 
 
@@ -317,8 +320,15 @@ def _df_ranking(query: Query, columna, limite: int) -> pd.DataFrame:
 
 
 def df_top_moleculas(ctx: ContextoPlaguicidas) -> pd.DataFrame:
-    """Gráfico 4: top ingredientes activos (moléculas) por CIF USD."""
-    return _df_ranking(ctx.base_actual, Importacion.ingrediente_act, _TOP_N)
+    """Gráfico 4: top ingredientes activos (moléculas) por CIF USD.
+
+    Agrupa por Grupo (ya normalizado por el catálogo), no por
+    ingrediente_act crudo — mismo campo que usan el filtro "Ingrediente
+    activo" y la tabla "Grupo", para que los montos coincidan entre las
+    tres vistas (antes había una diferencia leve por texto sin
+    normalizar, ej. variantes de capitalización/espacios de la misma
+    molécula contadas por separado)."""
+    return _df_ranking(ctx.base_actual, Importacion.Grupo, _TOP_N)
 
 
 def df_top_importadores(ctx: ContextoPlaguicidas) -> pd.DataFrame:
@@ -354,13 +364,6 @@ def df_top_paises(ctx: ContextoPlaguicidas) -> pd.DataFrame:
     return _df_resumen(ctx.base_actual, Importacion.origen, ctx.cif_total, _TOP_N)
 
 
-def df_resumen_importadores(ctx: ContextoPlaguicidas) -> pd.DataFrame:
-    """Tabla: importadores — transacciones y CIF (no forma parte de los
-    elementos exportables pedidos, pero se deja disponible por si se
-    necesita más adelante)."""
-    return _df_resumen(ctx.base_actual, Importacion.importador, ctx.cif_total, _TABLA_RESUMEN_MAX)
-
-
 def df_nombres_comerciales(ctx: ContextoPlaguicidas) -> pd.DataFrame:
     """Tabla: nombres comerciales, ordenado por CIF USD."""
     filas = (
@@ -393,12 +396,13 @@ def df_nombres_comerciales(ctx: ContextoPlaguicidas) -> pd.DataFrame:
             (
                 f[0], f[1], f[2], f[3], f[4],
                 float(f[5] or 0), f[6], float(f[7] or 0), float(f[8] or 0),
+                clasificar_aplicacion(f[2]),
             )
             for f in filas
         ],
         columns=[
             "producto", "grupo", "aplicacion", "importador", "origen",
-            "cantidad", "unidad_medida", "cif_usd", "cif_q",
+            "cantidad", "unidad_medida", "cif_usd", "cif_q", "categoria_aplicacion",
         ],
     ))
 
@@ -436,21 +440,25 @@ def df_grupo(ctx: ContextoPlaguicidas) -> pd.DataFrame:
         acc["aplicaciones"][aplicacion_fila] += transacciones
         acc["unidades"][unidad] += transacciones
 
-    filas = [
-        (
+    filas = []
+    for grupo, datos in sorted(agregados.items(), key=lambda kv: -kv[1]["cif_usd"])[:_TABLA_RESUMEN_MAX]:
+        aplicacion_principal = datos["aplicaciones"].most_common(1)[0][0] if datos["aplicaciones"] else None
+        filas.append((
             grupo,
             round(datos["cif_usd"] / ctx.cif_total * 100, 2),
-            datos["aplicaciones"].most_common(1)[0][0] if datos["aplicaciones"] else None,
+            aplicacion_principal,
             datos["cantidad"],
             datos["unidades"].most_common(1)[0][0] if datos["unidades"] else None,
             datos["cif_usd"],
             datos["cif_q"],
-        )
-        for grupo, datos in sorted(agregados.items(), key=lambda kv: -kv[1]["cif_usd"])[:_TABLA_RESUMEN_MAX]
-    ]
+            clasificar_aplicacion(aplicacion_principal),
+        ))
     return sin_nan(pd.DataFrame(
         filas,
-        columns=["grupo", "porcentaje_del_total", "aplicacion_principal", "cantidad", "unidad_medida", "cif_usd", "cif_q"],
+        columns=[
+            "grupo", "porcentaje_del_total", "aplicacion_principal", "cantidad",
+            "unidad_medida", "cif_usd", "cif_q", "categoria_aplicacion",
+        ],
     ))
 
 
@@ -466,14 +474,25 @@ def df_detalle(ctx: ContextoPlaguicidas) -> pd.DataFrame:
     return sin_nan(pd.DataFrame(
         [
             (
-                f.fecha, f.recibointerno, f.aplicacion, f.importador, f.producto,
-                f.ingrediente_act, f.exportador, f.origen, f.institucion,
+                f.anio, f.fecha, f.recibointerno, f.serie_sat, f.numero_recibo_sat,
+                f.aplicacion, f.importador, f.producto, f.ingrediente_act,
+                float(f.cantidad) if f.cantidad is not None else None, f.unidad_medida,
+                float(f.cif_USD) if f.cif_USD is not None else None,
+                float(f.cif_Q) if f.cif_Q is not None else None,
+                float(f.porcentaje) if f.porcentaje is not None else None,
+                f.exportador, f.origen,
+                f.tipo_cambio, f.institucion,
+                float(f.umsp) if f.umsp is not None else None,
+                f.Grupo, f.CodigoAgrupador,
             )
             for f in filas
         ],
         columns=[
-            "fecha", "recibointerno", "aplicacion", "importador", "producto",
-            "ingrediente_act", "exportador", "origen", "institucion",
+            "anio", "fecha", "recibointerno", "serie_sat", "numero_recibo_sat",
+            "aplicacion", "importador", "producto", "ingrediente_act",
+            "cantidad", "unidad_medida", "cif_usd", "cif_q", "porcentaje",
+            "exportador", "origen", "tipo_cambio", "institucion", "umsp",
+            "grupo", "codigo_agrupador",
         ],
     ))
 
@@ -504,9 +523,6 @@ def obtener_dashboard_plaguicidas(
     top_ingredientes = [RankingItem(**fila) for fila in df_top_moleculas(ctx).to_dict("records")]
     top_importadores = [RankingItem(**fila) for fila in df_top_importadores(ctx).to_dict("records")]
     top_origenes = [ResumenItem(**fila) for fila in df_top_paises(ctx).to_dict("records")]
-    tabla_resumen_importadores = [
-        ResumenItem(**fila) for fila in df_resumen_importadores(ctx).to_dict("records")
-    ]
     tabla_nombres_comerciales = [
         NombreComercialItem(**fila) for fila in df_nombres_comerciales(ctx).to_dict("records")
     ]
@@ -527,15 +543,27 @@ def obtener_dashboard_plaguicidas(
         tamano_pagina=tamano_pagina,
         filas=[
             DetalleTransaccionPlaguicida(
+                anio=fila.anio,
                 fecha=fila.fecha,
                 recibointerno=fila.recibointerno,
+                serie_sat=fila.serie_sat,
+                numero_recibo_sat=fila.numero_recibo_sat,
                 aplicacion=fila.aplicacion,
                 importador=fila.importador,
                 producto=fila.producto,
                 ingrediente_act=fila.ingrediente_act,
                 exportador=fila.exportador,
                 origen=fila.origen,
+                porcentaje=float(fila.porcentaje) if fila.porcentaje is not None else None,
+                cantidad=float(fila.cantidad) if fila.cantidad is not None else None,
+                unidad_medida=fila.unidad_medida,
+                cif_usd=float(fila.cif_USD) if fila.cif_USD is not None else None,
+                cif_q=float(fila.cif_Q) if fila.cif_Q is not None else None,
+                tipo_cambio=fila.tipo_cambio,
                 institucion=fila.institucion,
+                umsp=float(fila.umsp) if fila.umsp is not None else None,
+                grupo=fila.Grupo,
+                codigo_agrupador=fila.CodigoAgrupador,
             )
             for fila in filas_detalle
         ],
@@ -554,7 +582,6 @@ def obtener_dashboard_plaguicidas(
         top_ingredientes=top_ingredientes,
         top_importadores=top_importadores,
         top_origenes=top_origenes,
-        tabla_resumen_importadores=tabla_resumen_importadores,
         tabla_nombres_comerciales=tabla_nombres_comerciales,
         tabla_grupos=tabla_grupos,
         detalle=detalle,

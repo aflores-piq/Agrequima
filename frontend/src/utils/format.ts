@@ -48,6 +48,16 @@ export function formatQAbrev(v: number): string {
   return `Q${abreviarNumero(v)}`;
 }
 
+/** "$43.6M" / "$633.4K" — un decimal, con abreviatura de una letra (M/K)
+ * en vez de "mil"/"mill": formato corto calcado del spec de Power BI,
+ * usado en la dona de aplicación y en las etiquetas de valor por barra
+ * de RankingBarChart — mucho más angosto que formatUSDAbrev, necesario
+ * porque ahí compite por espacio horizontal con el nombre y la barra. */
+export function formatUSDCorto(valor: number): string {
+  if (valor >= 1_000_000) return `$${(valor / 1_000_000).toFixed(1)}M`;
+  return `$${(valor / 1_000).toFixed(1)}K`;
+}
+
 export const MESES = [
   "Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic",
 ];

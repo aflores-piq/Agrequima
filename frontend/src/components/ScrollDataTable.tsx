@@ -40,8 +40,20 @@ export function ScrollDataTable<T>({
 
   return (
     <div>
+      {/* overflow-visible en <Table>: Tremor envuelve internamente la tabla
+          en su PROPIO div con overflow-auto (hardcodeado en su código
+          fuente) — eso crea un SEGUNDO contenedor de scroll anidado
+          dentro de este. Con altura fija + scroll vertical aquí afuera,
+          la tabla interna mide su alto TOTAL sin recortar (todas las
+          filas), así que la barra de scroll horizontal de Tremor queda
+          pegada al fondo de ese alto completo — muy por debajo de la
+          ventana visible de 500px, nunca alcanzable sin antes scrollear
+          verticalmente hasta el final. overflow-visible anula ese
+          segundo contenedor para que el único que scrollea (en ambos
+          ejes a la vez) sea este de afuera, con su barra horizontal
+          siempre pegada al borde inferior de la ventana visible. */}
       <div className="overflow-x-auto overflow-y-auto" style={{ maxHeight: altura }} onScroll={onScroll}>
-        <Table>
+        <Table className="overflow-visible">
           <TableHead>
             <TableRow>
               {columnas.map((c) => (

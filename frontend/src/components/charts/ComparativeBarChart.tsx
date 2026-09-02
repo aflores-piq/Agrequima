@@ -31,9 +31,12 @@ export function ComparativeBarChart({
 }: {
   data: Record<string, string | number>[];
   index: string;
+  /** Orden de las barras/leyenda, de izquierda a derecha (Plaguicidas:
+   * año anterior primero, como en Power BI; ver DashboardPlaguicidasPage). */
   categories: [string, string];
-  /** [color año actual, color año anterior] — año actual usa el acento
-   * del dashboard, año anterior siempre queda en gris neutro. */
+  /** Un color por posición en `categories` (no por año fijo) — el año
+   * anterior siempre queda en gris neutro, el actual usa el acento del
+   * dashboard, en la posición que le corresponda según `categories`. */
   colors: [string, string];
 }) {
   if (data.length === 0) {

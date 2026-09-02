@@ -46,15 +46,32 @@ class KpisPlaguicidas(BaseModel):
 
 
 class DetalleTransaccionPlaguicida(BaseModel):
+    # Todas las columnas reales de dbo.Importacion / el archivo fuente
+    # (sección 7 de la guía: "y más columnas al hacer scroll horizontal"),
+    # salvo fechamod/userid (metadata interna de auditoría de carga, no
+    # es un dato de la transacción en sí — no se muestra en ninguna otra
+    # tabla/exportación de la app tampoco).
+    anio: int | None
     fecha: str | None
     recibointerno: str | None
+    serie_sat: str | None
+    numero_recibo_sat: str | None
     aplicacion: str | None
     importador: str | None
     producto: str | None
     ingrediente_act: str | None
     exportador: str | None
     origen: str | None
+    porcentaje: float | None
+    cantidad: float | None
+    unidad_medida: str | None
+    cif_usd: float | None
+    cif_q: float | None
+    tipo_cambio: str | None
     institucion: str | None
+    umsp: float | None
+    grupo: str | None
+    codigo_agrupador: str | None
 
 
 class PaginaDetallePlaguicidas(BaseModel):
@@ -74,6 +91,7 @@ class NombreComercialItem(BaseModel):
     unidad_medida: str | None
     cif_usd: float
     cif_q: float
+    categoria_aplicacion: str
 
 
 class GrupoItem(BaseModel):
@@ -84,6 +102,7 @@ class GrupoItem(BaseModel):
     unidad_medida: str | None
     cif_usd: float
     cif_q: float
+    categoria_aplicacion: str
 
 
 class DashboardPlaguicidasResponse(BaseModel):
@@ -99,7 +118,6 @@ class DashboardPlaguicidasResponse(BaseModel):
     top_ingredientes: list[RankingItem]
     top_importadores: list[RankingItem]
     top_origenes: list[ResumenItem]
-    tabla_resumen_importadores: list[ResumenItem]
     tabla_nombres_comerciales: list[NombreComercialItem]
     tabla_grupos: list[GrupoItem]
     detalle: PaginaDetallePlaguicidas
@@ -132,6 +150,16 @@ class PaginaDetalleNutrientes(BaseModel):
     filas: list[DetalleLicenciaNutriente]
 
 
+class FormulaComponenteItem(BaseModel):
+    componente: str
+    porcentaje_del_total: float
+    concentracion_principal: str | None
+    cantidad: float
+    unidad: str | None
+    cif_usd: float
+    cif_q: float
+
+
 class DashboardNutrientesResponse(BaseModel):
     anio_actual: int
     anio_anterior: int
@@ -144,7 +172,7 @@ class DashboardNutrientesResponse(BaseModel):
     top_formulas: list[RankingItem]
     top_paises_origen: list[ResumenItem]
     top_aduanas: list[RankingItem]
-    tabla_resumen_formulas: list[ResumenItem]
+    tabla_formulas_componentes: list[FormulaComponenteItem]
     detalle: PaginaDetalleNutrientes
 
 
@@ -164,3 +192,4 @@ class OpcionesFiltroNutrientes(BaseModel):
     paises_origen: list[str]
     componentes: list[str]
     nombres_comerciales: list[str]
+    nombres_comerciales_raw: list[str]

@@ -40,15 +40,27 @@ export interface KpisPlaguicidas {
 }
 
 export interface DetalleTransaccionPlaguicida {
+  anio: number | null;
   fecha: string | null;
   recibointerno: string | null;
+  serie_sat: string | null;
+  numero_recibo_sat: string | null;
   aplicacion: string | null;
   importador: string | null;
   producto: string | null;
   ingrediente_act: string | null;
   exportador: string | null;
   origen: string | null;
+  porcentaje: number | null;
+  cantidad: number | null;
+  unidad_medida: string | null;
+  cif_usd: number | null;
+  cif_q: number | null;
+  tipo_cambio: string | null;
   institucion: string | null;
+  umsp: number | null;
+  grupo: string | null;
+  codigo_agrupador: string | null;
 }
 
 export interface PaginaDetallePlaguicidas {
@@ -68,6 +80,7 @@ export interface NombreComercialItem {
   unidad_medida: string | null;
   cif_usd: number;
   cif_q: number;
+  categoria_aplicacion: string;
 }
 
 export interface GrupoItem {
@@ -78,6 +91,7 @@ export interface GrupoItem {
   unidad_medida: string | null;
   cif_usd: number;
   cif_q: number;
+  categoria_aplicacion: string;
 }
 
 export interface DashboardPlaguicidasResponse {
@@ -93,7 +107,6 @@ export interface DashboardPlaguicidasResponse {
   top_ingredientes: RankingItem[];
   top_importadores: RankingItem[];
   top_origenes: ResumenItem[];
-  tabla_resumen_importadores: ResumenItem[];
   tabla_nombres_comerciales: NombreComercialItem[];
   tabla_grupos: GrupoItem[];
   detalle: PaginaDetallePlaguicidas;
@@ -123,6 +136,16 @@ export interface PaginaDetalleNutrientes {
   filas: DetalleLicenciaNutriente[];
 }
 
+export interface FormulaComponenteItem {
+  componente: string;
+  porcentaje_del_total: number;
+  concentracion_principal: string | null;
+  cantidad: number;
+  unidad: string | null;
+  cif_usd: number;
+  cif_q: number;
+}
+
 export interface DashboardNutrientesResponse {
   anio_actual: number;
   anio_anterior: number;
@@ -135,7 +158,7 @@ export interface DashboardNutrientesResponse {
   top_formulas: RankingItem[];
   top_paises_origen: ResumenItem[];
   top_aduanas: RankingItem[];
-  tabla_resumen_formulas: ResumenItem[];
+  tabla_formulas_componentes: FormulaComponenteItem[];
   detalle: PaginaDetalleNutrientes;
 }
 
@@ -154,6 +177,7 @@ export interface DashboardFiltrosNutrientes {
   anio?: number;
   mes?: number;
   nombreComercial?: string[];
+  nombreComercialRaw?: string[];
   origen?: string[];
   componente?: string[];
   pagina?: number;
@@ -173,4 +197,5 @@ export interface OpcionesFiltroNutrientes {
   paises_origen: string[];
   componentes: string[];
   nombres_comerciales: string[];
+  nombres_comerciales_raw: string[];
 }

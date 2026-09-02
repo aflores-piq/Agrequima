@@ -136,7 +136,9 @@ def test_exportar_plaguicidas_detalle_coincide_con_lo_cargado(client, admin_head
 
     df = _leer_hoja(r.content)
     assert len(df) == 2
-    assert set(df["Importador"]) == {IMPORTADOR_MARCADOR}
+    # "Empresa importadora" (no "Importador"): encabezado alineado con el
+    # nombre que usa Power BI para esta columna en el detalle.
+    assert set(df["Empresa importadora"]) == {IMPORTADOR_MARCADOR}
     assert "Ingrediente activo" in df.columns  # encabezado en español, no el nombre interno
 
 

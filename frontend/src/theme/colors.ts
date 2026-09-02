@@ -1,12 +1,14 @@
 // Paleta fija por dashboard: verde/teal para Plaguicidas, naranja para
 // Nutrientes. NUNCA se reasigna dinámicamente según el filtro activo.
 
+import type { Color } from "@tremor/react";
+
 export type DashboardTheme = "plaguicidas" | "nutrientes";
 
 export const dashboardAccent: Record<
   DashboardTheme,
   {
-    tremor: string; // nombre de color Tremor (Card, ProgressBar, BarChart)
+    tremor: Color; // nombre de color Tremor (Card, ProgressBar, BarChart)
     text: string; // clase tailwind para texto de acento
     ring: string; // clase tailwind para bordes/focus de acento
     chip: string; // clase tailwind para chips/badges
@@ -74,6 +76,31 @@ export function ordenarCategorias(categorias: string[]): string[] {
 
 export function colorParaCategoria(categoria: string): string {
   return APLICACION_COLOR[categoria.toUpperCase()] ?? APLICACION_COLOR_OTROS;
+}
+
+// Clases completas y literales (no interpoladas): Tailwind genera CSS
+// solo a partir de nombres de clase que aparecen tal cual en el código
+// fuente — una clase armada con un string dinámico ("bg-" + color +
+// "-500/10") nunca se generaría. Un color por cada valor posible de
+// APLICACION_COLOR.
+const BADGE_CLASE_POR_COLOR: Record<string, string> = {
+  emerald: "bg-emerald-500/10 text-emerald-300 ring-1 ring-emerald-500/30",
+  amber: "bg-amber-500/10 text-amber-300 ring-1 ring-amber-500/30",
+  violet: "bg-violet-500/10 text-violet-300 ring-1 ring-violet-500/30",
+  cyan: "bg-cyan-500/10 text-cyan-300 ring-1 ring-cyan-500/30",
+  pink: "bg-pink-500/10 text-pink-300 ring-1 ring-pink-500/30",
+  lime: "bg-lime-500/10 text-lime-300 ring-1 ring-lime-500/30",
+  fuchsia: "bg-fuchsia-500/10 text-fuchsia-300 ring-1 ring-fuchsia-500/30",
+  indigo: "bg-indigo-500/10 text-indigo-300 ring-1 ring-indigo-500/30",
+  stone: "bg-stone-500/10 text-stone-300 ring-1 ring-stone-500/30",
+  slate: "bg-slate-500/10 text-slate-300 ring-1 ring-slate-500/30",
+};
+
+/** Clases Tailwind del badge de una categoría de aplicación (plaguicidas):
+ * mismo color fijo por categoría en toda la app, ver APLICACION_COLOR. */
+export function claseBadgeCategoria(categoria: string): string {
+  const color = colorParaCategoria(categoria);
+  return BADGE_CLASE_POR_COLOR[color] ?? BADGE_CLASE_POR_COLOR.slate;
 }
 
 function hexToRgb(hex: string): [number, number, number] {

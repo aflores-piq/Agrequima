@@ -8,14 +8,22 @@ import { useEffect, useRef, useState, type ChangeEvent } from "react";
  * compartían el mismo teal en la fila de filtros). */
 export type FilterTheme = "teal" | "orange";
 
+// En modo claro, el chip de cabecera usa un tono más suave (500 en vez
+// de 900): el 900 original se veía demasiado fuerte/oscuro sobre el
+// fondo claro de la página. A 500 el fondo ya es demasiado claro para
+// texto blanco (contraste ~2.5:1, insuficiente para texto pequeño), así
+// que el texto en modo claro pasa a un tono oscuro del mismo hue en vez
+// de blanco. En modo oscuro se deja exactamente igual que antes
+// (900/300), porque ahí sí combina bien con el resto de la interfaz
+// oscura.
 const TEMAS: Record<FilterTheme, { wrapper: string; header: string }> = {
   teal: {
-    wrapper: "overflow-hidden rounded-sm bg-teal-900",
-    header: "px-2 pt-1 pb-1 text-[10px] font-semibold uppercase tracking-wide text-teal-300",
+    wrapper: "overflow-hidden rounded-sm bg-teal-500 dark:bg-teal-900",
+    header: "px-2 pt-1 pb-1 text-[10px] font-semibold uppercase tracking-wide text-teal-950 dark:text-teal-300",
   },
   orange: {
-    wrapper: "overflow-hidden rounded-sm bg-orange-900",
-    header: "px-2 pt-1 pb-1 text-[10px] font-semibold uppercase tracking-wide text-orange-300",
+    wrapper: "overflow-hidden rounded-sm bg-orange-500 dark:bg-orange-900",
+    header: "px-2 pt-1 pb-1 text-[10px] font-semibold uppercase tracking-wide text-orange-950 dark:text-orange-300",
   },
 };
 
