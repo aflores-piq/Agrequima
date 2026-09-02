@@ -3,6 +3,8 @@ import type {
   AgrupadorNutrienteItem,
   PaginaAgrupadorNutrientes,
   PaginaNomenclaturaPlaguicidas,
+  SinAgrupadorNutrientesResponse,
+  SinAgrupadorPlaguicidasResponse,
 } from "../types/nomenclatura";
 
 export async function listarNomenclaturaPlaguicidas(
@@ -13,6 +15,17 @@ export async function listarNomenclaturaPlaguicidas(
   const { data } = await apiClient.get<PaginaNomenclaturaPlaguicidas>(
     "/admin/nomenclatura/plaguicidas",
     { params: { busqueda: busqueda || undefined, pagina, tamano_pagina: tamanoPagina } }
+  );
+  return data;
+}
+
+export async function obtenerSinAgrupadorPlaguicidas(
+  pagina = 1,
+  tamanoPagina = 50
+): Promise<SinAgrupadorPlaguicidasResponse> {
+  const { data } = await apiClient.get<SinAgrupadorPlaguicidasResponse>(
+    "/admin/nomenclatura/plaguicidas/sin-agrupador",
+    { params: { pagina, tamano_pagina: tamanoPagina } }
   );
   return data;
 }
@@ -37,6 +50,17 @@ export async function listarAgrupadorNutrientes(
   const { data } = await apiClient.get<PaginaAgrupadorNutrientes>("/admin/nomenclatura/nutrientes", {
     params: { busqueda: busqueda || undefined, pagina, tamano_pagina: tamanoPagina },
   });
+  return data;
+}
+
+export async function obtenerSinAgrupadorNutrientes(
+  pagina = 1,
+  tamanoPagina = 50
+): Promise<SinAgrupadorNutrientesResponse> {
+  const { data } = await apiClient.get<SinAgrupadorNutrientesResponse>(
+    "/admin/nomenclatura/nutrientes/sin-agrupador",
+    { params: { pagina, tamano_pagina: tamanoPagina } }
+  );
   return data;
 }
 

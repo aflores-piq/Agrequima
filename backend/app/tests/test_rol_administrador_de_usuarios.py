@@ -121,7 +121,9 @@ def test_admin_usuarios_rechazado_en_historial_cargas(client, admin_usuarios_hea
 def test_admin_usuarios_rechazado_en_nomenclatura_y_excepciones(client, admin_usuarios_headers):
     for ruta in (
         "/api/admin/nomenclatura/plaguicidas",
+        "/api/admin/nomenclatura/plaguicidas/sin-agrupador",
         "/api/admin/nomenclatura/nutrientes",
+        "/api/admin/nomenclatura/nutrientes/sin-agrupador",
     ):
         r = client.get(ruta, headers=admin_usuarios_headers)
         assert r.status_code == 403, f"{ruta}: {r.text}"

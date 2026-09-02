@@ -49,7 +49,7 @@ export function CargaNutrientesPage() {
         <Title className="text-ink">Carga de nutrientes</Title>
         <Text className="text-ink-muted">
           Sube el archivo consolidado de licencias de importación (.csv o .xlsx). Los ajustes de
-          agrupador se hacen desde la pantalla de Excepciones.
+          agrupador se hacen desde la pantalla de Nomenclatura.
         </Text>
       </div>
 
@@ -106,7 +106,7 @@ export function CargaNutrientesPage() {
           </dl>
           {resumen.filas_sin_agrupador > 0 && (
             <Text className="mt-3 text-amber-400">
-              Hay licencias sin agrupador — revísalas en la pantalla de Excepciones.
+              Hay licencias sin agrupador — revísalas en la pantalla de Nomenclatura.
             </Text>
           )}
         </Card>

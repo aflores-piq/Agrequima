@@ -1,11 +1,26 @@
 import { useEffect, useState } from "react";
-import { Button, Card, TextInput, Title, Text } from "@tremor/react";
-import { actualizarAgrupadorNutriente, listarAgrupadorNutrientes } from "../../api/nomenclatura";
+import { Badge, Button, Card, TextInput, Title, Text } from "@tremor/react";
+import {
+  actualizarAgrupadorNutriente,
+  listarAgrupadorNutrientes,
+  obtenerSinAgrupadorNutrientes,
+} from "../../api/nomenclatura";
 import { mensajeError } from "../../api/client";
 import { PaginatedTable } from "../../components/PaginatedTable";
-import type { AgrupadorNutrienteItem } from "../../types/nomenclatura";
+import { SimpleDataTable } from "../../components/SimpleDataTable";
+import { formatNumber, formatUSD } from "../../utils/format";
+import type {
+  AgrupadorNutrienteItem,
+  SinAgrupadorNutrientesResponse,
+} from "../../types/nomenclatura";
 
 const TAMANO_PAGINA = 20;
+
+interface Edicion {
+  key: string;
+  producto: string;
+  codigo: string;
+}
 
 export function AgrupadorNutrientesPage() {
   const [busquedaInput, setBusquedaInput] = useState("");
@@ -16,7 +31,11 @@ export function AgrupadorNutrientesPage() {
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [edicion, setEdicion] = useState<{ key: string; producto: string; codigo: string } | null>(null);
+  const [paginaSinAgrupador, setPaginaSinAgrupador] = useState(1);
+  const [datosSinAgrupador, setDatosSinAgrupador] = useState<SinAgrupadorNutrientesResponse | null>(null);
+  const [errorSinAgrupador, setErrorSinAgrupador] = useState<string | null>(null);
+
+  const [edicion, setEdicion] = useState<Edicion | null>(null);
   const [guardando, setGuardando] = useState(false);
 
   function cargar() {
@@ -31,10 +50,24 @@ export function AgrupadorNutrientesPage() {
       .finally(() => setCargando(false));
   }
 
+  function cargarSinAgrupador() {
+    obtenerSinAgrupadorNutrientes(paginaSinAgrupador, TAMANO_PAGINA)
+      .then((res) => {
+        setDatosSinAgrupador(res);
+        setErrorSinAgrupador(null);
+      })
+      .catch((err) => setErrorSinAgrupador(mensajeError(err)));
+  }
+
   useEffect(cargar, [busqueda, pagina]);
+  useEffect(cargarSinAgrupador, [paginaSinAgrupador]);
 
   function abrirEdicion(fila: AgrupadorNutrienteItem) {
     setEdicion({ key: fila.nombre_key, producto: fila.producto_agrupado ?? "", codigo: fila.codigo ?? "" });
+  }
+
+  function abrirEdicionSinAgrupador(nombreKey: string) {
+    setEdicion({ key: nombreKey, producto: "", codigo: "" });
   }
 
   async function guardarEdicion() {
@@ -43,7 +76,11 @@ export function AgrupadorNutrientesPage() {
     try {
       await actualizarAgrupadorNutriente(edicion.key, edicion.producto, edicion.codigo || null);
       setEdicion(null);
+      // Un mismo guardado puede afectar tanto la lista del catálogo
+      // (sección de búsqueda) como la de "sin agrupador" — se recargan
+      // ambas siempre, sin importar desde cuál se abrió la edición.
       cargar();
+      cargarSinAgrupador();
     } catch (err) {
       setError(mensajeError(err));
     } finally {
@@ -60,28 +97,6 @@ export function AgrupadorNutrientesPage() {
         </Text>
       </div>
 
-      <div className="flex items-end gap-3">
-        <div>
-          <Text className="mb-1 text-xs text-ink-muted">Buscar</Text>
-          <TextInput
-            value={busquedaInput}
-            onValueChange={setBusquedaInput}
-            placeholder="Nombre comercial o producto agrupado"
-            className="w-72"
-          />
-        </div>
-        <Button
-          onClick={() => {
-            setPagina(1);
-            setBusqueda(busquedaInput);
-          }}
-        >
-          Buscar
-        </Button>
-      </div>
-
-      {error && <p className="rounded-tremor-small bg-danger-surface px-3 py-2 text-sm text-danger">{error}</p>}
-
       {edicion && (
         <Card className="bg-surface ring-1 ring-orange-500/40">
           <Text className="mb-2 text-ink-muted">
@@ -89,7 +104,7 @@ export function AgrupadorNutrientesPage() {
           </Text>
           <div className="flex flex-wrap items-end gap-3">
             <div>
-              <Text className="mb-1 text-xs text-ink-muted">Producto agrupado</Text>
+              <Text className="mb-1 text-xs text-ink-muted">Grupo (producto agrupado)</Text>
               <TextInput
                 value={edicion.producto}
                 onValueChange={(v) => setEdicion({ ...edicion, producto: v })}
@@ -97,7 +112,7 @@ export function AgrupadorNutrientesPage() {
               />
             </div>
             <div>
-              <Text className="mb-1 text-xs text-ink-muted">Código</Text>
+              <Text className="mb-1 text-xs text-ink-muted">Código (opcional)</Text>
               <TextInput
                 value={edicion.codigo}
                 onValueChange={(v) => setEdicion({ ...edicion, codigo: v })}
@@ -114,37 +129,130 @@ export function AgrupadorNutrientesPage() {
         </Card>
       )}
 
-      <Card className="bg-surface ring-1 ring-line">
-        {cargando ? (
+      <div>
+        <Title className="mb-3 text-ink">Buscar y editar catálogo</Title>
+
+        <div className="flex items-end gap-3">
+          <div>
+            <Text className="mb-1 text-xs text-ink-muted">Buscar</Text>
+            <TextInput
+              value={busquedaInput}
+              onValueChange={setBusquedaInput}
+              placeholder="Nombre comercial o producto agrupado"
+              className="w-72"
+            />
+          </div>
+          <Button
+            onClick={() => {
+              setPagina(1);
+              setBusqueda(busquedaInput);
+            }}
+          >
+            Buscar
+          </Button>
+        </div>
+
+        {error && <p className="mt-3 rounded-tremor-small bg-danger-surface px-3 py-2 text-sm text-danger">{error}</p>}
+
+        <Card className="mt-3 bg-surface ring-1 ring-line">
+          {cargando ? (
+            <p className="text-sm text-ink-muted">Cargando…</p>
+          ) : (
+            <PaginatedTable
+              columnas={[
+                { header: "Nombre comercial", accessor: (r: AgrupadorNutrienteItem) => r.nombre_key },
+                { header: "Grupo", accessor: (r: AgrupadorNutrienteItem) => r.producto_agrupado ?? "—" },
+                { header: "Código", accessor: (r: AgrupadorNutrienteItem) => r.codigo ?? "—" },
+                {
+                  header: "",
+                  accessor: (r: AgrupadorNutrienteItem) => (
+                    <button
+                      type="button"
+                      onClick={() => abrirEdicion(r)}
+                      className="text-xs font-medium text-orange-400 hover:text-orange-300"
+                    >
+                      Editar
+                    </button>
+                  ),
+                },
+              ]}
+              filas={filas}
+              total={total}
+              pagina={pagina}
+              tamanoPagina={TAMANO_PAGINA}
+              onCambiarPagina={setPagina}
+              getKey={(r) => r.nombre_key}
+            />
+          )}
+        </Card>
+      </div>
+
+      <div>
+        <Title className="mb-1 text-ink">Sin agrupador</Title>
+        <Text className="mb-3 text-ink-muted">
+          Nombres comerciales que aparecen en licencias cargadas pero todavía no tienen un grupo
+          asignado en el catálogo — se actualiza al instante al editar desde aquí.
+        </Text>
+
+        {errorSinAgrupador && (
+          <p className="mb-3 rounded-tremor-small bg-danger-surface px-3 py-2 text-sm text-danger">
+            {errorSinAgrupador}
+          </p>
+        )}
+
+        {!datosSinAgrupador ? (
           <p className="text-sm text-ink-muted">Cargando…</p>
         ) : (
-          <PaginatedTable
-            columnas={[
-              { header: "Nombre comercial", accessor: (r: AgrupadorNutrienteItem) => r.nombre_key },
-              { header: "Producto agrupado", accessor: (r: AgrupadorNutrienteItem) => r.producto_agrupado ?? "—" },
-              { header: "Código", accessor: (r: AgrupadorNutrienteItem) => r.codigo ?? "—" },
-              {
-                header: "",
-                accessor: (r: AgrupadorNutrienteItem) => (
-                  <button
-                    type="button"
-                    onClick={() => abrirEdicion(r)}
-                    className="text-xs font-medium text-orange-400 hover:text-orange-300"
-                  >
-                    Editar
-                  </button>
-                ),
-              },
-            ]}
-            filas={filas}
-            total={total}
-            pagina={pagina}
-            tamanoPagina={TAMANO_PAGINA}
-            onCambiarPagina={setPagina}
-            getKey={(r) => r.nombre_key}
-          />
+          <div className="space-y-4">
+            <Card className="bg-surface ring-1 ring-line">
+              <Title className="mb-3 text-ink">Resumen por nombre comercial</Title>
+              <SimpleDataTable
+                columnas={[
+                  { header: "Nombre comercial", accessor: (r) => r.nombre_ejemplo ?? r.nombre_key },
+                  { header: "Transacciones", accessor: (r) => formatNumber(r.transacciones), align: "right" },
+                  { header: "CIF USD", accessor: (r) => formatUSD(r.cif_dolares_total), align: "right" },
+                  {
+                    header: "¿Posible error de captura?",
+                    accessor: (r) => (r.posible_error_captura ? <Badge color="amber">Revisar</Badge> : "—"),
+                  },
+                ]}
+                filas={datosSinAgrupador.resumen}
+                getKey={(r) => r.nombre_key}
+              />
+            </Card>
+            <Card className="bg-surface ring-1 ring-line">
+              <Title className="mb-3 text-ink">Detalle de licencias sin agrupador</Title>
+              <PaginatedTable
+                columnas={[
+                  { header: "No. licencia", accessor: (r) => r.no_licencia ?? "—" },
+                  { header: "Nombre comercial", accessor: (r) => r.nombre_comercial ?? "—" },
+                  {
+                    header: "",
+                    accessor: (r) =>
+                      r.nombre_key ? (
+                        <button
+                          type="button"
+                          onClick={() => abrirEdicionSinAgrupador(r.nombre_key as string)}
+                          className="text-xs font-medium text-orange-400 hover:text-orange-300"
+                        >
+                          Editar
+                        </button>
+                      ) : (
+                        <span className="text-xs text-ink-faint">—</span>
+                      ),
+                  },
+                ]}
+                filas={datosSinAgrupador.detalle.filas}
+                total={datosSinAgrupador.detalle.total}
+                pagina={datosSinAgrupador.detalle.pagina}
+                tamanoPagina={datosSinAgrupador.detalle.tamano_pagina}
+                onCambiarPagina={setPaginaSinAgrupador}
+                getKey={(r, i) => `${r.no_licencia}-${i}`}
+              />
+            </Card>
+          </div>
         )}
-      </Card>
+      </div>
     </div>
   );
 }
