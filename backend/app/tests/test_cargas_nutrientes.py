@@ -37,7 +37,7 @@ def test_carga_nutrientes_happy_path(client, admin_headers):
     )
 
     r = client.post(
-        "/admin/cargas/nutrientes",
+        "/api/admin/cargas/nutrientes",
         headers=admin_headers,
         files={"archivo_nutrientes": ("test.csv", contenido, "text/csv")},
     )
@@ -89,7 +89,7 @@ def test_carga_nutrientes_happy_path_xlsx(client, admin_headers):
     )
 
     r = client.post(
-        "/admin/cargas/nutrientes",
+        "/api/admin/cargas/nutrientes",
         headers=admin_headers,
         files={
             "archivo_nutrientes": (
@@ -138,7 +138,7 @@ def test_carga_nutrientes_titulo_extra_arriba_del_encabezado_csv(client, admin_h
     )
 
     r = client.post(
-        "/admin/cargas/nutrientes",
+        "/api/admin/cargas/nutrientes",
         headers=admin_headers,
         files={"archivo_nutrientes": ("con_titulo.csv", contenido, "text/csv")},
     )
@@ -176,7 +176,7 @@ def test_carga_nutrientes_titulo_extra_arriba_del_encabezado_xlsx(client, admin_
     )
 
     r = client.post(
-        "/admin/cargas/nutrientes",
+        "/api/admin/cargas/nutrientes",
         headers=admin_headers,
         files={
             "archivo_nutrientes": (
@@ -213,7 +213,7 @@ def test_carga_nutrientes_requiere_rol_administrador(client, usuario_headers):
         ]
     )
     r = client.post(
-        "/admin/cargas/nutrientes",
+        "/api/admin/cargas/nutrientes",
         headers=usuario_headers,
         files={"archivo_nutrientes": ("test.csv", contenido, "text/csv")},
     )
@@ -224,7 +224,7 @@ def test_carga_nutrientes_extension_invalida(client, admin_headers):
     # .xlsx ya es válido (ver test_carga_nutrientes_happy_path_xlsx); una
     # extensión realmente no soportada como .txt debe seguir rechazándose.
     r = client.post(
-        "/admin/cargas/nutrientes",
+        "/api/admin/cargas/nutrientes",
         headers=admin_headers,
         files={"archivo_nutrientes": ("test.txt", b"esto no es un csv ni un excel")},
     )
@@ -235,7 +235,7 @@ def test_carga_nutrientes_extension_invalida(client, admin_headers):
 def test_carga_nutrientes_columnas_faltantes(client, admin_headers):
     contenido = b"Tipo;No_Licencia\nLICENCIAS;1\n"
     r = client.post(
-        "/admin/cargas/nutrientes",
+        "/api/admin/cargas/nutrientes",
         headers=admin_headers,
         files={"archivo_nutrientes": ("incompleto.csv", contenido, "text/csv")},
     )
@@ -269,7 +269,7 @@ def test_carga_nutrientes_solo_carga_el_mes_nuevo(client, admin_headers):
         ]
     )
     r1 = client.post(
-        "/admin/cargas/nutrientes",
+        "/api/admin/cargas/nutrientes",
         headers=admin_headers,
         files={"archivo_nutrientes": ("mes1_2.csv", primer_archivo, "text/csv")},
     )
@@ -288,7 +288,7 @@ def test_carga_nutrientes_solo_carga_el_mes_nuevo(client, admin_headers):
         ]
     )
     r2 = client.post(
-        "/admin/cargas/nutrientes",
+        "/api/admin/cargas/nutrientes",
         headers=admin_headers,
         files={"archivo_nutrientes": ("acumulado_1_a_5.csv", archivo_acumulado, "text/csv")},
     )

@@ -38,7 +38,7 @@ def _fila_plaguicidas(anio: int, mes: int, cif_usd: float, recibo: int) -> dict:
 def _cargar_plaguicidas(client, admin_headers, filas: list[dict]):
     contenido = construir_excel_importaciones(filas)
     r = client.post(
-        "/admin/cargas/plaguicidas",
+        "/api/admin/cargas/plaguicidas",
         headers=admin_headers,
         files={"archivo_importaciones": ("multianual.xlsx", contenido)},
     )
@@ -64,7 +64,7 @@ def test_multianual_dos_anios_con_datos(client, admin_headers, usuario_headers):
     )
 
     r = client.get(
-        "/dashboard/plaguicidas",
+        "/api/dashboard/plaguicidas",
         headers=usuario_headers,
         params={"anio": anio_actual, "mes": 2},
     )
@@ -100,7 +100,7 @@ def test_multianual_tres_anios_con_datos(client, admin_headers):
         ],
     )
 
-    r = client.get("/dashboard/plaguicidas", headers=admin_headers, params={"anio": anio_actual, "mes": 1})
+    r = client.get("/api/dashboard/plaguicidas", headers=admin_headers, params={"anio": anio_actual, "mes": 1})
     assert r.status_code == 200, r.text
     comparativo = r.json()["comparativo_acumulado_multianual"]
 
@@ -115,7 +115,7 @@ def test_multianual_ningun_anio_de_la_ventana_tiene_datos_previos(client, admin_
     limpiar_importacion_anio(anio_actual)
     _cargar_plaguicidas(client, admin_headers, [_fila_plaguicidas(anio_actual, 1, 10.0, 5000020)])
 
-    r = client.get("/dashboard/plaguicidas", headers=admin_headers, params={"anio": anio_actual, "mes": 1})
+    r = client.get("/api/dashboard/plaguicidas", headers=admin_headers, params={"anio": anio_actual, "mes": 1})
     assert r.status_code == 200, r.text
     comparativo = r.json()["comparativo_acumulado_multianual"]
     assert [serie["anio"] for serie in comparativo] == [anio_actual]
@@ -138,7 +138,7 @@ def test_multianual_respeta_el_mes_seleccionado_no_el_maximo_de_otros_anios(clie
         ],
     )
 
-    r = client.get("/dashboard/plaguicidas", headers=admin_headers, params={"anio": anio_actual, "mes": 3})
+    r = client.get("/api/dashboard/plaguicidas", headers=admin_headers, params={"anio": anio_actual, "mes": 3})
     assert r.status_code == 200, r.text
     comparativo = r.json()["comparativo_acumulado_multianual"]
     series = _series_por_anio(comparativo)
@@ -191,14 +191,14 @@ def test_multianual_respeta_filtros_activos(client, admin_headers):
         ]
     )
     r = client.post(
-        "/admin/cargas/plaguicidas",
+        "/api/admin/cargas/plaguicidas",
         headers=admin_headers,
         files={"archivo_importaciones": ("multianual_filtro.xlsx", contenido)},
     )
     assert r.status_code == 200, r.text
 
     r_dashboard = client.get(
-        "/dashboard/plaguicidas",
+        "/api/dashboard/plaguicidas",
         headers=admin_headers,
         params={"anio": anio_actual, "mes": 1, "ingrediente_act": grupo},
     )
@@ -229,14 +229,14 @@ def test_multianual_nutrientes_dos_anios_con_datos(client, admin_headers):
         ]
     )
     r = client.post(
-        "/admin/cargas/nutrientes",
+        "/api/admin/cargas/nutrientes",
         headers=admin_headers,
         files={"archivo_nutrientes": ("multianual.csv", contenido, "text/csv")},
     )
     assert r.status_code == 200, r.text
 
     r_dashboard = client.get(
-        "/dashboard/nutrientes", headers=admin_headers, params={"anio": anio_actual, "mes": 1}
+        "/api/dashboard/nutrientes", headers=admin_headers, params={"anio": anio_actual, "mes": 1}
     )
     assert r_dashboard.status_code == 200, r_dashboard.text
     comparativo = r_dashboard.json()["comparativo_acumulado_multianual"]
@@ -256,7 +256,7 @@ def test_exportar_acumulado_multianual_plaguicidas(client, admin_headers):
     )
 
     r = client.get(
-        "/dashboard/plaguicidas/export/acumulado-multianual",
+        "/api/dashboard/plaguicidas/export/acumulado-multianual",
         headers=admin_headers,
         params={"anio": anio_actual, "mes": 1},
     )
@@ -268,7 +268,7 @@ def test_exportar_acumulado_multianual_plaguicidas(client, admin_headers):
 
 def test_exportar_acumulado_multianual_requiere_permiso(client, usuario_headers):
     r = client.get(
-        "/dashboard/plaguicidas/export/acumulado-multianual",
+        "/api/dashboard/plaguicidas/export/acumulado-multianual",
         headers=usuario_headers,
         params={"anio": 2160, "mes": 1},
     )

@@ -61,7 +61,7 @@ def _cargar_plaguicidas_multisel(client, admin_headers):
         ]
     )
     r = client.post(
-        "/admin/cargas/plaguicidas",
+        "/api/admin/cargas/plaguicidas",
         headers=admin_headers,
         files={"archivo_importaciones": ("multisel.xlsx", contenido)},
     )
@@ -72,7 +72,7 @@ def test_plaguicidas_origen_multiple_es_or(client, admin_headers):
     _cargar_plaguicidas_multisel(client, admin_headers)
 
     r = client.get(
-        "/dashboard/plaguicidas",
+        "/api/dashboard/plaguicidas",
         headers=admin_headers,
         params={"anio": ANIO_PLAGUICIDAS, "mes": 1, "origen": ["PAIS A", "PAIS B"]},
     )
@@ -86,7 +86,7 @@ def test_plaguicidas_ingrediente_activo_combina_sin_agrupador_con_valor_real(cli
     _cargar_plaguicidas_multisel(client, admin_headers)
 
     r = client.get(
-        "/dashboard/plaguicidas",
+        "/api/dashboard/plaguicidas",
         headers=admin_headers,
         params={"anio": ANIO_PLAGUICIDAS, "mes": 1, "ingrediente_act": [GRUPO_A, "Sin agrupador"]},
     )
@@ -102,7 +102,7 @@ def test_plaguicidas_aplicacion_multiple_es_or(client, admin_headers):
     _cargar_plaguicidas_multisel(client, admin_headers)
 
     r = client.get(
-        "/dashboard/plaguicidas",
+        "/api/dashboard/plaguicidas",
         headers=admin_headers,
         params={"anio": ANIO_PLAGUICIDAS, "mes": 1, "aplicacion": ["Herbicida", "Fungicida"]},
     )
@@ -116,7 +116,7 @@ def test_plaguicidas_producto_multiple_es_or(client, admin_headers):
     _cargar_plaguicidas_multisel(client, admin_headers)
 
     r = client.get(
-        "/dashboard/plaguicidas",
+        "/api/dashboard/plaguicidas",
         headers=admin_headers,
         params={
             "anio": ANIO_PLAGUICIDAS, "mes": 1,
@@ -135,7 +135,7 @@ def test_plaguicidas_multiseleccion_respeta_exportacion(client, admin_headers):
     _cargar_plaguicidas_multisel(client, admin_headers)
 
     r = client.get(
-        "/dashboard/plaguicidas/export/detalle",
+        "/api/dashboard/plaguicidas/export/detalle",
         headers=admin_headers,
         params={"anio": ANIO_PLAGUICIDAS, "mes": 1, "origen": ["PAIS A", "PAIS B"]},
     )
@@ -193,7 +193,7 @@ def _cargar_nutrientes_multisel(client, admin_headers):
         ]
     )
     r = client.post(
-        "/admin/cargas/nutrientes",
+        "/api/admin/cargas/nutrientes",
         headers=admin_headers,
         files={"archivo_nutrientes": ("multisel.csv", contenido, "text/csv")},
     )
@@ -204,7 +204,7 @@ def test_nutrientes_origen_multiple_es_or(client, admin_headers):
     _cargar_nutrientes_multisel(client, admin_headers)
 
     r = client.get(
-        "/dashboard/nutrientes",
+        "/api/dashboard/nutrientes",
         headers=admin_headers,
         params={"anio": ANIO_NUTRIENTES, "mes": 1, "origen": ["PAIS NUT A", "PAIS NUT B"]},
     )
@@ -218,7 +218,7 @@ def test_nutrientes_nombre_comercial_combina_sin_agrupador_con_valor_real(client
     _cargar_nutrientes_multisel(client, admin_headers)
 
     r = client.get(
-        "/dashboard/nutrientes",
+        "/api/dashboard/nutrientes",
         headers=admin_headers,
         params={
             "anio": ANIO_NUTRIENTES, "mes": 1,
@@ -235,7 +235,7 @@ def test_nutrientes_componente_multiple_es_or(client, admin_headers):
     _cargar_nutrientes_multisel(client, admin_headers)
 
     r = client.get(
-        "/dashboard/nutrientes",
+        "/api/dashboard/nutrientes",
         headers=admin_headers,
         params={"anio": ANIO_NUTRIENTES, "mes": 1, "componente": ["NPK", "Potasio"]},
     )

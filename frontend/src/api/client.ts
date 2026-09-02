@@ -1,6 +1,11 @@
 import axios from "axios";
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8001";
+// Relativo al dominio actual por defecto (sin localhost fijo) -- así el
+// mismo build sirve para cualquier dominio donde se despliegue la app;
+// en desarrollo, VITE_API_URL (.env del frontend) apunta directo al
+// backend en :8001/api, ya que Vite y el backend corren en puertos
+// distintos.
+const API_URL = import.meta.env.VITE_API_URL ?? "/api";
 
 // Serializador de params propio: axios por defecto manda los arreglos
 // como "clave[]=a&clave[]=b" (bracket), pero FastAPI espera la clave

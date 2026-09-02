@@ -43,7 +43,7 @@ def test_carga_plaguicidas_happy_path(client, admin_headers):
     )
 
     r = client.post(
-        "/admin/cargas/plaguicidas",
+        "/api/admin/cargas/plaguicidas",
         headers=admin_headers,
         files={
             "archivo_importaciones": (
@@ -84,7 +84,7 @@ def test_carga_plaguicidas_requiere_rol_administrador(client, usuario_headers):
         ]
     )
     r = client.post(
-        "/admin/cargas/plaguicidas",
+        "/api/admin/cargas/plaguicidas",
         headers=usuario_headers,
         files={"archivo_importaciones": ("test.xlsx", contenido)},
     )
@@ -93,7 +93,7 @@ def test_carga_plaguicidas_requiere_rol_administrador(client, usuario_headers):
 
 def test_carga_plaguicidas_extension_invalida(client, admin_headers):
     r = client.post(
-        "/admin/cargas/plaguicidas",
+        "/api/admin/cargas/plaguicidas",
         headers=admin_headers,
         files={"archivo_importaciones": ("test.txt", b"esto no es un excel")},
     )
@@ -119,7 +119,7 @@ def test_carga_plaguicidas_acepta_csv(client, admin_headers):
     )
 
     r = client.post(
-        "/admin/cargas/plaguicidas",
+        "/api/admin/cargas/plaguicidas",
         headers=admin_headers,
         files={"archivo_importaciones": ("real.csv", contenido, "text/csv")},
     )
@@ -166,7 +166,7 @@ def test_carga_plaguicidas_titulo_extra_arriba_del_encabezado_xlsx(client, admin
     )
 
     r = client.post(
-        "/admin/cargas/plaguicidas",
+        "/api/admin/cargas/plaguicidas",
         headers=admin_headers,
         files={
             "archivo_importaciones": (
@@ -208,7 +208,7 @@ def test_carga_plaguicidas_titulo_extra_arriba_del_encabezado_csv(client, admin_
     )
 
     r = client.post(
-        "/admin/cargas/plaguicidas",
+        "/api/admin/cargas/plaguicidas",
         headers=admin_headers,
         files={"archivo_importaciones": ("con_titulo.csv", contenido, "text/csv")},
     )
@@ -231,7 +231,7 @@ def test_carga_plaguicidas_hoja_ambigua_queda_en_auditoria(client, admin_headers
     contenido = construir_excel_hoja_ambigua()
 
     r = client.post(
-        "/admin/cargas/plaguicidas",
+        "/api/admin/cargas/plaguicidas",
         headers=admin_headers,
         files={"archivo_importaciones": ("ambiguo.xlsx", contenido)},
     )
@@ -273,7 +273,7 @@ def test_carga_plaguicidas_solo_carga_el_mes_nuevo(client, admin_headers):
         ]
     )
     r1 = client.post(
-        "/admin/cargas/plaguicidas",
+        "/api/admin/cargas/plaguicidas",
         headers=admin_headers,
         files={"archivo_importaciones": ("mes1_2.xlsx", primer_archivo)},
     )
@@ -292,7 +292,7 @@ def test_carga_plaguicidas_solo_carga_el_mes_nuevo(client, admin_headers):
         ]
     )
     r2 = client.post(
-        "/admin/cargas/plaguicidas",
+        "/api/admin/cargas/plaguicidas",
         headers=admin_headers,
         files={"archivo_importaciones": ("acumulado_1_a_5.xlsx", archivo_acumulado)},
     )

@@ -31,7 +31,7 @@ def _cargar_plaguicidas_prueba(client, admin_headers):
         ]
     )
     r = client.post(
-        "/admin/cargas/plaguicidas",
+        "/api/admin/cargas/plaguicidas",
         headers=admin_headers,
         files={"archivo_importaciones": ("export_test.xlsx", contenido)},
     )
@@ -52,7 +52,7 @@ def _cargar_nutrientes_prueba(client, admin_headers):
         ]
     )
     r = client.post(
-        "/admin/cargas/nutrientes",
+        "/api/admin/cargas/nutrientes",
         headers=admin_headers,
         files={"archivo_nutrientes": ("export_test.csv", contenido, "text/csv")},
     )
@@ -69,7 +69,7 @@ def _leer_hoja(response_content: bytes, **kwargs):
 def test_require_export_permission_rechaza_usuario_sin_permiso(client, admin_headers, usuario_headers):
     _cargar_plaguicidas_prueba(client, admin_headers)
     r = client.get(
-        "/dashboard/plaguicidas/export/top-paises",
+        "/api/dashboard/plaguicidas/export/top-paises",
         headers=usuario_headers,
         params={"anio": ANIO_PRUEBA},
     )
@@ -78,7 +78,7 @@ def test_require_export_permission_rechaza_usuario_sin_permiso(client, admin_hea
 
 def test_require_export_permission_permite_administrador(client, admin_headers):
     r = client.get(
-        "/dashboard/plaguicidas/export/top-paises",
+        "/api/dashboard/plaguicidas/export/top-paises",
         headers=admin_headers,
         params={"anio": ANIO_PRUEBA},
     )
@@ -92,7 +92,7 @@ def test_require_export_permission_es_por_usuario_no_por_rol(
     """El permiso ya no depende del rol: un Usuario con PuedeExportar=1
     debe poder exportar, y un Administrador con PuedeExportar=0 no."""
     r_usuario_exportador = client.get(
-        "/dashboard/plaguicidas/export/top-paises",
+        "/api/dashboard/plaguicidas/export/top-paises",
         headers=usuario_exportador_headers,
         params={"anio": ANIO_PRUEBA},
     )
@@ -100,7 +100,7 @@ def test_require_export_permission_es_por_usuario_no_por_rol(
     assert r_usuario_exportador.headers["content-type"] == XLSX_CONTENT_TYPE
 
     r_admin_sin_exportar = client.get(
-        "/dashboard/plaguicidas/export/top-paises",
+        "/api/dashboard/plaguicidas/export/top-paises",
         headers=admin_sin_exportar_headers,
         params={"anio": ANIO_PRUEBA},
     )
@@ -108,7 +108,7 @@ def test_require_export_permission_es_por_usuario_no_por_rol(
 
 
 def test_require_export_permission_requiere_autenticacion(client):
-    r = client.get("/dashboard/plaguicidas/export/top-paises", params={"anio": ANIO_PRUEBA})
+    r = client.get("/api/dashboard/plaguicidas/export/top-paises", params={"anio": ANIO_PRUEBA})
     assert r.status_code == 401
 
 
@@ -117,7 +117,7 @@ def test_require_export_permission_requiere_autenticacion(client):
 
 def test_exportar_plaguicidas_elemento_desconocido_404(client, admin_headers):
     r = client.get(
-        "/dashboard/plaguicidas/export/no-existe",
+        "/api/dashboard/plaguicidas/export/no-existe",
         headers=admin_headers,
         params={"anio": ANIO_PRUEBA},
     )
@@ -126,7 +126,7 @@ def test_exportar_plaguicidas_elemento_desconocido_404(client, admin_headers):
 
 def test_exportar_plaguicidas_detalle_coincide_con_lo_cargado(client, admin_headers):
     r = client.get(
-        "/dashboard/plaguicidas/export/detalle",
+        "/api/dashboard/plaguicidas/export/detalle",
         headers=admin_headers,
         params={"anio": ANIO_PRUEBA},
     )
@@ -142,7 +142,7 @@ def test_exportar_plaguicidas_detalle_coincide_con_lo_cargado(client, admin_head
 
 def test_exportar_plaguicidas_todo_trae_una_hoja_por_elemento(client, admin_headers):
     r = client.get(
-        "/dashboard/plaguicidas/export-todo",
+        "/api/dashboard/plaguicidas/export-todo",
         headers=admin_headers,
         params={"anio": ANIO_PRUEBA},
     )
@@ -160,7 +160,7 @@ def test_exportar_plaguicidas_todo_trae_una_hoja_por_elemento(client, admin_head
 
 def test_exportar_nutrientes_elemento_desconocido_404(client, admin_headers):
     r = client.get(
-        "/dashboard/nutrientes/export/no-existe",
+        "/api/dashboard/nutrientes/export/no-existe",
         headers=admin_headers,
         params={"anio": ANIO_PRUEBA},
     )
@@ -170,7 +170,7 @@ def test_exportar_nutrientes_elemento_desconocido_404(client, admin_headers):
 def test_exportar_nutrientes_detalle_coincide_con_lo_cargado(client, admin_headers):
     _cargar_nutrientes_prueba(client, admin_headers)
     r = client.get(
-        "/dashboard/nutrientes/export/detalle",
+        "/api/dashboard/nutrientes/export/detalle",
         headers=admin_headers,
         params={"anio": ANIO_PRUEBA},
     )
@@ -184,7 +184,7 @@ def test_exportar_nutrientes_detalle_coincide_con_lo_cargado(client, admin_heade
 
 def test_exportar_nutrientes_todo_trae_una_hoja_por_elemento(client, admin_headers):
     r = client.get(
-        "/dashboard/nutrientes/export-todo",
+        "/api/dashboard/nutrientes/export-todo",
         headers=admin_headers,
         params={"anio": ANIO_PRUEBA},
     )
@@ -195,7 +195,7 @@ def test_exportar_nutrientes_todo_trae_una_hoja_por_elemento(client, admin_heade
 
 def test_require_export_permission_rechaza_usuario_en_nutrientes(client, usuario_headers):
     r = client.get(
-        "/dashboard/nutrientes/export/detalle",
+        "/api/dashboard/nutrientes/export/detalle",
         headers=usuario_headers,
         params={"anio": ANIO_PRUEBA},
     )

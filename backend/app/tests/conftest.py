@@ -79,7 +79,7 @@ def seed_usuarios_prueba():
 @pytest.fixture(scope="session")
 def admin_headers(client):
     r = client.post(
-        "/auth/login", json={"nombre_usuario": "test_admin", "password": CONTRASENA_PRUEBA}
+        "/api/auth/login", json={"nombre_usuario": "test_admin", "password": CONTRASENA_PRUEBA}
     )
     assert r.status_code == 200, r.text
     return {"Authorization": f"Bearer {r.json()['access_token']}"}
@@ -88,7 +88,7 @@ def admin_headers(client):
 @pytest.fixture(scope="session")
 def usuario_headers(client):
     r = client.post(
-        "/auth/login", json={"nombre_usuario": "test_usuario", "password": CONTRASENA_PRUEBA}
+        "/api/auth/login", json={"nombre_usuario": "test_usuario", "password": CONTRASENA_PRUEBA}
     )
     assert r.status_code == 200, r.text
     return {"Authorization": f"Bearer {r.json()['access_token']}"}
@@ -99,7 +99,7 @@ def usuario_exportador_headers(client):
     """Rol Usuario, pero con PuedeExportar=1: prueba que el permiso es
     individual por usuario, no heredado del rol."""
     r = client.post(
-        "/auth/login", json={"nombre_usuario": "test_usuario_exportador", "password": CONTRASENA_PRUEBA}
+        "/api/auth/login", json={"nombre_usuario": "test_usuario_exportador", "password": CONTRASENA_PRUEBA}
     )
     assert r.status_code == 200, r.text
     return {"Authorization": f"Bearer {r.json()['access_token']}"}
@@ -110,7 +110,7 @@ def admin_sin_exportar_headers(client):
     """Rol Administrador, pero con PuedeExportar=0: confirma que el rol
     por sí solo ya no otorga el permiso de exportar."""
     r = client.post(
-        "/auth/login", json={"nombre_usuario": "test_admin_sin_exportar", "password": CONTRASENA_PRUEBA}
+        "/api/auth/login", json={"nombre_usuario": "test_admin_sin_exportar", "password": CONTRASENA_PRUEBA}
     )
     assert r.status_code == 200, r.text
     return {"Authorization": f"Bearer {r.json()['access_token']}"}

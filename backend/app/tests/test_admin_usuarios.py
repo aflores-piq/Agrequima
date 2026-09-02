@@ -8,7 +8,7 @@ def _nombre_unico(prefijo: str) -> str:
 def test_crear_usuario_con_puede_exportar(client, admin_headers):
     nombre = _nombre_unico("test_crear_exporta")
     r = client.post(
-        "/admin/usuarios",
+        "/api/admin/usuarios",
         headers=admin_headers,
         json={
             "nombre_usuario": nombre,
@@ -26,7 +26,7 @@ def test_crear_usuario_con_puede_exportar(client, admin_headers):
 def test_crear_usuario_sin_puede_exportar_default_false(client, admin_headers):
     nombre = _nombre_unico("test_crear_sin_exportar")
     r = client.post(
-        "/admin/usuarios",
+        "/api/admin/usuarios",
         headers=admin_headers,
         json={"nombre_usuario": nombre, "password": "PasswordPrueba123", "rol": "Administrador"},
     )
@@ -37,7 +37,7 @@ def test_crear_usuario_sin_puede_exportar_default_false(client, admin_headers):
 def test_actualizar_puede_exportar(client, admin_headers):
     nombre = _nombre_unico("test_actualizar_exporta")
     r = client.post(
-        "/admin/usuarios",
+        "/api/admin/usuarios",
         headers=admin_headers,
         json={"nombre_usuario": nombre, "password": "PasswordPrueba123", "rol": "Usuario"},
     )
@@ -46,7 +46,7 @@ def test_actualizar_puede_exportar(client, admin_headers):
     assert r.json()["puede_exportar"] is False
 
     r_patch = client.patch(
-        f"/admin/usuarios/{usuario_id}",
+        f"/api/admin/usuarios/{usuario_id}",
         headers=admin_headers,
         json={"puede_exportar": True},
     )
@@ -56,7 +56,7 @@ def test_actualizar_puede_exportar(client, admin_headers):
     assert r_patch.json()["rol"] == "Usuario"
 
     r_login = client.post(
-        "/auth/login", json={"nombre_usuario": nombre, "password": "PasswordPrueba123"}
+        "/api/auth/login", json={"nombre_usuario": nombre, "password": "PasswordPrueba123"}
     )
     assert r_login.status_code == 200, r_login.text
     assert r_login.json()["puede_exportar"] is True
@@ -68,7 +68,7 @@ def test_usuario_recien_habilitado_puede_exportar_sin_relogin_previo(client, adm
     ese mismo token (no depende de volver a loguearse)."""
     nombre = _nombre_unico("test_export_en_vivo")
     r = client.post(
-        "/admin/usuarios",
+        "/api/admin/usuarios",
         headers=admin_headers,
         json={"nombre_usuario": nombre, "password": "PasswordPrueba123", "rol": "Usuario"},
     )
@@ -76,18 +76,18 @@ def test_usuario_recien_habilitado_puede_exportar_sin_relogin_previo(client, adm
     usuario_id = r.json()["usuario_id"]
 
     r_login = client.post(
-        "/auth/login", json={"nombre_usuario": nombre, "password": "PasswordPrueba123"}
+        "/api/auth/login", json={"nombre_usuario": nombre, "password": "PasswordPrueba123"}
     )
     assert r_login.status_code == 200, r_login.text
     headers = {"Authorization": f"Bearer {r_login.json()['access_token']}"}
 
-    r_export_antes = client.get("/dashboard/plaguicidas/export/top-paises", headers=headers)
+    r_export_antes = client.get("/api/dashboard/plaguicidas/export/top-paises", headers=headers)
     assert r_export_antes.status_code == 403
 
     r_patch = client.patch(
-        f"/admin/usuarios/{usuario_id}", headers=admin_headers, json={"puede_exportar": True}
+        f"/api/admin/usuarios/{usuario_id}", headers=admin_headers, json={"puede_exportar": True}
     )
     assert r_patch.status_code == 200, r_patch.text
 
-    r_export_despues = client.get("/dashboard/plaguicidas/export/top-paises", headers=headers)
+    r_export_despues = client.get("/api/dashboard/plaguicidas/export/top-paises", headers=headers)
     assert r_export_despues.status_code == 200

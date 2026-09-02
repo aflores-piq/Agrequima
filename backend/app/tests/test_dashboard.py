@@ -9,7 +9,7 @@ EMPRESA_MARCADOR = "EMPRESA DASHBOARD PRUEBA"
 
 
 def test_dashboard_plaguicidas_requiere_autenticacion(client):
-    assert client.get("/dashboard/plaguicidas").status_code == 401
+    assert client.get("/api/dashboard/plaguicidas").status_code == 401
 
 
 def test_dashboard_plaguicidas_kpis_coinciden_con_suma_directa(client, admin_headers, usuario_headers):
@@ -32,14 +32,14 @@ def test_dashboard_plaguicidas_kpis_coinciden_con_suma_directa(client, admin_hea
         ]
     )
     r = client.post(
-        "/admin/cargas/plaguicidas",
+        "/api/admin/cargas/plaguicidas",
         headers=admin_headers,
         files={"archivo_importaciones": ("dashboard_test.xlsx", contenido)},
     )
     assert r.status_code == 200, r.text
 
     r_dashboard = client.get(
-        "/dashboard/plaguicidas",
+        "/api/dashboard/plaguicidas",
         headers=usuario_headers,  # cualquier usuario autenticado, no solo Administrador
         # ANIO_PRUEBA ya es exclusivo de este archivo de pruebas, así que
         # basta como aislamiento (no hay filtro de Importador: el reporte
@@ -83,14 +83,14 @@ def test_dashboard_nutrientes_kpis_coinciden_con_suma_directa(client, admin_head
         ]
     )
     r = client.post(
-        "/admin/cargas/nutrientes",
+        "/api/admin/cargas/nutrientes",
         headers=admin_headers,
         files={"archivo_nutrientes": ("dashboard_test.csv", contenido, "text/csv")},
     )
     assert r.status_code == 200, r.text
 
     r_dashboard = client.get(
-        "/dashboard/nutrientes",
+        "/api/dashboard/nutrientes",
         headers=usuario_headers,
         params={"anio": ANIO_PRUEBA},
     )
