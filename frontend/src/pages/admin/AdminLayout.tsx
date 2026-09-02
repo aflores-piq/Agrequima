@@ -1,16 +1,27 @@
 import { NavLink, Outlet } from "react-router-dom";
 import { Header } from "../../components/layout/Header";
+import { useAuth } from "../../auth/AuthContext";
 
-const items = [
+const ITEMS_ADMINISTRADOR = [
   { to: "/admin/cargas/plaguicidas", label: "Carga de plaguicidas" },
   { to: "/admin/cargas/nutrientes", label: "Carga de nutrientes" },
   { to: "/admin/nomenclatura/plaguicidas", label: "Nomenclatura plaguicidas" },
   { to: "/admin/nomenclatura/nutrientes", label: "Agrupador nutrientes" },
-  { to: "/admin/excepciones", label: "Excepciones" },
   { to: "/admin/usuarios", label: "Usuarios" },
 ];
 
+// "Administrador de Usuarios" (personal de Agrequima) solo ve/usa la
+// pantalla de Usuarios dentro de Administración — nada de Carga/
+// Nomenclatura, ni por menú ni (ver App.tsx) por URL directa. Sí tiene
+// acceso a los dashboards (/app), igual que un Usuario — ver el enlace
+// "Ver dashboards →" más abajo, sin condición de rol.
+const ITEMS_ADMINISTRADOR_USUARIOS = [{ to: "/admin/usuarios", label: "Usuarios" }];
+
 export function AdminLayout() {
+  const { sesion } = useAuth();
+  const esAdministradorDeUsuarios = sesion?.rol === "Administrador de Usuarios";
+  const items = esAdministradorDeUsuarios ? ITEMS_ADMINISTRADOR_USUARIOS : ITEMS_ADMINISTRADOR;
+
   return (
     <div className="min-h-screen bg-app">
       <Header />

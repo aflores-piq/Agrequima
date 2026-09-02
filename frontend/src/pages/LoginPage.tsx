@@ -3,6 +3,7 @@ import type { FormEvent } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Button, Card, TextInput, Title, Text } from "@tremor/react";
 import { useAuth } from "../auth/AuthContext";
+import { destinoPorRol } from "../auth/RequireRole";
 import { mensajeError } from "../api/client";
 import agrequimaPortada from "../assets/agrequima-portada.jpg";
 
@@ -18,8 +19,7 @@ export function LoginPage() {
 
   useEffect(() => {
     if (sesion) {
-      const destino = sesion.rol === "Administrador" ? "/admin" : "/app";
-      navigate(destino, { replace: true });
+      navigate(destinoPorRol(sesion.rol), { replace: true });
     }
   }, [sesion, navigate]);
 
@@ -31,8 +31,12 @@ export function LoginPage() {
     setCargando(true);
     try {
       await iniciarSesion(nombreUsuario, password);
+      // Si venía rebotado de una ruta protegida, volver ahí. Si fue un
+      // login directo (sin "desde"), el useEffect de arriba redirige
+      // solo apenas "sesion" se actualiza, usando destinoPorRol() —
+      // misma lógica en los dos casos, sin un "/app" fijo de por medio.
       const desde = (location.state as { desde?: string } | null)?.desde;
-      navigate(desde ?? "/app", { replace: true });
+      if (desde) navigate(desde, { replace: true });
     } catch (err) {
       setError(mensajeError(err));
     } finally {

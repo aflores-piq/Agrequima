@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { Badge, Button, Card, Select, SelectItem, TextInput, Title, Text } from "@tremor/react";
-import { actualizarUsuario, crearUsuario, listarUsuarios } from "../../api/usuarios";
+import { actualizarUsuario, cambiarPasswordUsuario, crearUsuario, listarUsuarios } from "../../api/usuarios";
 import { mensajeError } from "../../api/client";
 import { useAuth } from "../../auth/AuthContext";
 import { SimpleDataTable } from "../../components/SimpleDataTable";
@@ -10,6 +10,11 @@ import type { UsuarioOut } from "../../types/usuarios";
 
 export function UsuariosPage() {
   const { sesion } = useAuth();
+  // "Administrador de Usuarios" (personal de Agrequima) solo puede crear
+  // o dejar cuentas con rol "Usuario" — asignar "Administrador" o
+  // "Administrador de Usuarios" le está vedado también en el backend,
+  // pero el selector ya no debe ni ofrecer esas opciones.
+  const puedeAsignarRolesDeAdministracion = sesion?.rol === "Administrador";
   const [usuarios, setUsuarios] = useState<UsuarioOut[]>([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -21,6 +26,11 @@ export function UsuariosPage() {
   const [puedeExportar, setPuedeExportar] = useState(false);
   const [creando, setCreando] = useState(false);
   const [errorForm, setErrorForm] = useState<string | null>(null);
+
+  const [editandoPasswordId, setEditandoPasswordId] = useState<number | null>(null);
+  const [nuevaPassword, setNuevaPassword] = useState("");
+  const [guardandoPassword, setGuardandoPassword] = useState(false);
+  const [errorPassword, setErrorPassword] = useState<string | null>(null);
 
   function cargar() {
     setCargando(true);
@@ -75,6 +85,35 @@ export function UsuariosPage() {
     }
   }
 
+  function iniciarCambioPassword(usuario: UsuarioOut) {
+    setEditandoPasswordId(usuario.usuario_id);
+    setNuevaPassword("");
+    setErrorPassword(null);
+  }
+
+  function cancelarCambioPassword() {
+    setEditandoPasswordId(null);
+    setNuevaPassword("");
+    setErrorPassword(null);
+  }
+
+  async function guardarNuevaPassword(usuarioId: number) {
+    setErrorPassword(null);
+    if (nuevaPassword.length < 8) {
+      setErrorPassword("La contraseña debe tener al menos 8 caracteres.");
+      return;
+    }
+    setGuardandoPassword(true);
+    try {
+      await cambiarPasswordUsuario(usuarioId, { password: nuevaPassword });
+      cancelarCambioPassword();
+    } catch (err) {
+      setErrorPassword(mensajeError(err));
+    } finally {
+      setGuardandoPassword(false);
+    }
+  }
+
   async function alternarPuedeExportar(usuario: UsuarioOut) {
     try {
       await actualizarUsuario(usuario.usuario_id, { puede_exportar: !usuario.puede_exportar });
@@ -108,9 +147,14 @@ export function UsuariosPage() {
           </div>
           <div>
             <Text className="mb-1 text-xs text-ink-muted">Rol</Text>
-            <Select value={rol} onValueChange={(v) => setRol(v as Rol)} className="w-40">
+            <Select value={rol} onValueChange={(v) => setRol(v as Rol)} className="w-48">
               <SelectItem value="Usuario">Usuario</SelectItem>
-              <SelectItem value="Administrador">Administrador</SelectItem>
+              {puedeAsignarRolesDeAdministracion && (
+                <SelectItem value="Administrador">Administrador</SelectItem>
+              )}
+              {puedeAsignarRolesDeAdministracion && (
+                <SelectItem value="Administrador de Usuarios">Administrador de Usuarios</SelectItem>
+              )}
             </Select>
           </div>
           <label className="flex items-center gap-2 pb-2 text-sm text-ink-muted">
@@ -149,10 +193,15 @@ export function UsuariosPage() {
                   <Select
                     value={r.rol}
                     onValueChange={(v) => cambiarRol(r, v as Rol)}
-                    className="w-40"
+                    className="w-48"
                   >
                     <SelectItem value="Usuario">Usuario</SelectItem>
-                    <SelectItem value="Administrador">Administrador</SelectItem>
+                    {puedeAsignarRolesDeAdministracion && (
+                      <SelectItem value="Administrador">Administrador</SelectItem>
+                    )}
+                    {puedeAsignarRolesDeAdministracion && (
+                      <SelectItem value="Administrador de Usuarios">Administrador de Usuarios</SelectItem>
+                    )}
                   </Select>
                 ),
               },
@@ -179,6 +228,47 @@ export function UsuariosPage() {
               {
                 header: "Último login",
                 accessor: (r: UsuarioOut) => (r.ultimo_login ? new Date(r.ultimo_login).toLocaleString("es-GT") : "—"),
+              },
+              {
+                header: "Contraseña",
+                accessor: (r: UsuarioOut) =>
+                  editandoPasswordId === r.usuario_id ? (
+                    <div className="flex flex-col gap-1">
+                      <div className="flex items-center gap-2">
+                        <TextInput
+                          type="password"
+                          value={nuevaPassword}
+                          onValueChange={setNuevaPassword}
+                          placeholder="Nueva contraseña"
+                          className="w-36"
+                        />
+                        <Button
+                          size="xs"
+                          loading={guardandoPassword}
+                          disabled={guardandoPassword || !nuevaPassword}
+                          onClick={() => guardarNuevaPassword(r.usuario_id)}
+                        >
+                          Guardar
+                        </Button>
+                        <button
+                          type="button"
+                          onClick={cancelarCambioPassword}
+                          className="text-xs text-ink-muted hover:text-ink"
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                      {errorPassword && <p className="text-xs text-danger">{errorPassword}</p>}
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => iniciarCambioPassword(r)}
+                      className="text-xs font-medium text-teal-400 hover:text-teal-300"
+                    >
+                      Cambiar contraseña
+                    </button>
+                  ),
               },
               {
                 header: "",

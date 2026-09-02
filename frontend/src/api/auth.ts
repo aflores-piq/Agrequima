@@ -13,3 +13,10 @@ export async function actualizarPreferencia(tema: Tema): Promise<PreferenciasRes
   const { data } = await apiClient.patch<PreferenciasResponse>("/auth/preferencias", { tema });
   return data;
 }
+
+export async function cambiarMiPassword(passwordActual: string, passwordNueva: string): Promise<void> {
+  await apiClient.patch("/auth/password", {
+    password_actual: passwordActual,
+    password_nueva: passwordNueva,
+  });
+}

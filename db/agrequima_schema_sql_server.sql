@@ -33,7 +33,7 @@ BEGIN
         RolId       INT IDENTITY(1,1) PRIMARY KEY,
         NombreRol   VARCHAR(50) NOT NULL UNIQUE
     );
-    INSERT INTO dbo.Roles (NombreRol) VALUES ('Administrador'), ('Usuario');
+    INSERT INTO dbo.Roles (NombreRol) VALUES ('Administrador'), ('Usuario'), ('Administrador de Usuarios');
 END
 GO
 

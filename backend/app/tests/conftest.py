@@ -36,6 +36,9 @@ def seed_usuarios_prueba():
         rol_usuario_id = conn.execute(
             text("SELECT RolId FROM dbo.Roles WHERE NombreRol = 'Usuario'")
         ).scalar()
+        rol_admin_usuarios_id = conn.execute(
+            text("SELECT RolId FROM dbo.Roles WHERE NombreRol = 'Administrador de Usuarios'")
+        ).scalar()
 
         # Upsert idempotente (no DELETE): en corridas repetidas, filas de
         # AuditoriaCargas de corridas anteriores ya referencian a estos
@@ -53,6 +56,7 @@ def seed_usuarios_prueba():
             ("test_inactivo", rol_usuario_id, 0, 0),
             ("test_usuario_exportador", rol_usuario_id, 1, 1),
             ("test_admin_sin_exportar", rol_admin_id, 1, 0),
+            ("test_admin_usuarios", rol_admin_usuarios_id, 1, 0),
         ):
             existente = conn.execute(
                 text("SELECT UsuarioId FROM dbo.Usuarios WHERE NombreUsuario = :u"), {"u": nombre}
@@ -111,6 +115,17 @@ def admin_sin_exportar_headers(client):
     por sí solo ya no otorga el permiso de exportar."""
     r = client.post(
         "/api/auth/login", json={"nombre_usuario": "test_admin_sin_exportar", "password": CONTRASENA_PRUEBA}
+    )
+    assert r.status_code == 200, r.text
+    return {"Authorization": f"Bearer {r.json()['access_token']}"}
+
+
+@pytest.fixture(scope="session")
+def admin_usuarios_headers(client):
+    """Rol 'Administrador de Usuarios' (personal de Agrequima): solo debe
+    poder usar /admin/usuarios, nada de Carga/Nomenclatura."""
+    r = client.post(
+        "/api/auth/login", json={"nombre_usuario": "test_admin_usuarios", "password": CONTRASENA_PRUEBA}
     )
     assert r.status_code == 200, r.text
     return {"Authorization": f"Bearer {r.json()['access_token']}"}

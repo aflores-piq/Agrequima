@@ -80,3 +80,62 @@ def test_login_usuario_inactivo(client):
 def test_endpoint_protegido_sin_token(client):
     r = client.get("/api/dashboard/plaguicidas")
     assert r.status_code == 401
+
+
+def test_cambiar_mi_password_exitoso(client, usuario_headers):
+    """Autoservicio disponible para cualquier rol (acá probado con
+    'Usuario' a propósito, no un rol de administración) — pide la
+    contraseña actual como confirmación."""
+    r = client.patch(
+        "/api/auth/password",
+        headers=usuario_headers,
+        json={"password_actual": CONTRASENA_PRUEBA, "password_nueva": "NuevaPassword456"},
+    )
+    assert r.status_code == 204, r.text
+
+    # La contraseña vieja ya no sirve, la nueva sí.
+    r_login_vieja = client.post(
+        "/api/auth/login", json={"nombre_usuario": "test_usuario", "password": CONTRASENA_PRUEBA}
+    )
+    assert r_login_vieja.status_code == 401
+
+    r_login_nueva = client.post(
+        "/api/auth/login", json={"nombre_usuario": "test_usuario", "password": "NuevaPassword456"}
+    )
+    assert r_login_nueva.status_code == 200, r_login_nueva.text
+
+    # Se deja la contraseña como estaba, para no afectar otros tests que
+    # reutilizan usuario_headers (fixture de session scope, logueado una
+    # sola vez con CONTRASENA_PRUEBA).
+    r_reset = client.patch(
+        "/api/auth/password",
+        headers=usuario_headers,
+        json={"password_actual": "NuevaPassword456", "password_nueva": CONTRASENA_PRUEBA},
+    )
+    assert r_reset.status_code == 204, r_reset.text
+
+
+def test_cambiar_mi_password_actual_incorrecta(client, usuario_headers):
+    r = client.patch(
+        "/api/auth/password",
+        headers=usuario_headers,
+        json={"password_actual": "esta_no_es", "password_nueva": "NuevaPassword456"},
+    )
+    assert r.status_code == 400
+
+
+def test_cambiar_mi_password_nueva_muy_corta(client, usuario_headers):
+    r = client.patch(
+        "/api/auth/password",
+        headers=usuario_headers,
+        json={"password_actual": CONTRASENA_PRUEBA, "password_nueva": "corta"},
+    )
+    assert r.status_code == 400
+
+
+def test_cambiar_mi_password_requiere_autenticacion(client):
+    r = client.patch(
+        "/api/auth/password",
+        json={"password_actual": "x", "password_nueva": "NuevaPassword456"},
+    )
+    assert r.status_code == 401

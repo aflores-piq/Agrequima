@@ -28,3 +28,7 @@ class UsuarioUpdate(BaseModel):
     rol: str | None = None
     activo: bool | None = None
     puede_exportar: bool | None = None
+
+
+class CambiarPasswordRequest(BaseModel):
+    password: str

@@ -1,4 +1,4 @@
-export type Rol = "Administrador" | "Usuario";
+export type Rol = "Administrador" | "Usuario" | "Administrador de Usuarios";
 export type Tema = "Claro" | "Oscuro";
 
 export interface TokenResponse {

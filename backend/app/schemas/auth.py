@@ -24,3 +24,8 @@ class ActualizarPreferenciasRequest(BaseModel):
 
 class PreferenciasResponse(BaseModel):
     tema: Tema
+
+
+class CambiarMiPasswordRequest(BaseModel):
+    password_actual: str
+    password_nueva: str

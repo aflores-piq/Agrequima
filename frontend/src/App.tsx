@@ -1,6 +1,6 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider, useAuth } from "./auth/AuthContext";
-import { RequireRole } from "./auth/RequireRole";
+import { RequireRole, destinoPorRol } from "./auth/RequireRole";
 import { ThemeProvider } from "./theme/ThemeContext";
 import { LoginPage } from "./pages/LoginPage";
 import { AppLayout } from "./pages/app/AppLayout";
@@ -11,13 +11,18 @@ import { CargaPlaguicidasPage } from "./pages/admin/CargaPlaguicidasPage";
 import { CargaNutrientesPage } from "./pages/admin/CargaNutrientesPage";
 import { NomenclaturaPlaguicidasPage } from "./pages/admin/NomenclaturaPlaguicidasPage";
 import { AgrupadorNutrientesPage } from "./pages/admin/AgrupadorNutrientesPage";
-import { ExcepcionesPage } from "./pages/admin/ExcepcionesPage";
 import { UsuariosPage } from "./pages/admin/UsuariosPage";
 
 function InicioRedirect() {
   const { sesion } = useAuth();
   if (!sesion) return <Navigate to="/login" replace />;
-  return <Navigate to={sesion.rol === "Administrador" ? "/admin" : "/app"} replace />;
+  return <Navigate to={destinoPorRol(sesion.rol)} replace />;
+}
+
+function AdminIndexRedirect() {
+  const { sesion } = useAuth();
+  const destino = sesion?.rol === "Administrador de Usuarios" ? "usuarios" : "cargas/plaguicidas";
+  return <Navigate to={destino} replace />;
 }
 
 export default function App() {
@@ -31,7 +36,7 @@ export default function App() {
           <Route
             path="/app"
             element={
-              <RequireRole roles={["Administrador", "Usuario"]}>
+              <RequireRole roles={["Administrador", "Usuario", "Administrador de Usuarios"]}>
                 <AppLayout />
               </RequireRole>
             }
@@ -44,17 +49,47 @@ export default function App() {
           <Route
             path="/admin"
             element={
-              <RequireRole roles={["Administrador"]}>
+              <RequireRole roles={["Administrador", "Administrador de Usuarios"]}>
                 <AdminLayout />
               </RequireRole>
             }
           >
-            <Route index element={<Navigate to="cargas/plaguicidas" replace />} />
-            <Route path="cargas/plaguicidas" element={<CargaPlaguicidasPage />} />
-            <Route path="cargas/nutrientes" element={<CargaNutrientesPage />} />
-            <Route path="nomenclatura/plaguicidas" element={<NomenclaturaPlaguicidasPage />} />
-            <Route path="nomenclatura/nutrientes" element={<AgrupadorNutrientesPage />} />
-            <Route path="excepciones" element={<ExcepcionesPage />} />
+            <Route index element={<AdminIndexRedirect />} />
+            {/* Carga/Nomenclatura: exclusivas de "Administrador" — "Administrador
+                de Usuarios" solo entra a /admin para usar Usuarios. Un enlace
+                directo a estas rutas debe rebotar, no solo estar oculto del menú. */}
+            <Route
+              path="cargas/plaguicidas"
+              element={
+                <RequireRole roles={["Administrador"]}>
+                  <CargaPlaguicidasPage />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="cargas/nutrientes"
+              element={
+                <RequireRole roles={["Administrador"]}>
+                  <CargaNutrientesPage />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="nomenclatura/plaguicidas"
+              element={
+                <RequireRole roles={["Administrador"]}>
+                  <NomenclaturaPlaguicidasPage />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="nomenclatura/nutrientes"
+              element={
+                <RequireRole roles={["Administrador"]}>
+                  <AgrupadorNutrientesPage />
+                </RequireRole>
+              }
+            />
             <Route path="usuarios" element={<UsuariosPage />} />
           </Route>
 

@@ -26,3 +26,7 @@ export interface UsuarioUpdate {
   activo?: boolean;
   puede_exportar?: boolean;
 }
+
+export interface CambiarPasswordRequest {
+  password: string;
+}

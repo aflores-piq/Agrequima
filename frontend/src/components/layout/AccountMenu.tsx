@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
+import type { FormEvent } from "react";
 import { useAuth } from "../../auth/AuthContext";
 import { useTheme } from "../../theme/ThemeContext";
 import { mensajeError } from "../../api/client";
+import { cambiarMiPassword } from "../../api/auth";
 import type { Tema } from "../../types/auth";
 
 const TEMAS: { value: Tema; label: string }[] = [
@@ -23,6 +25,48 @@ export function AccountMenu() {
   const [guardando, setGuardando] = useState(false);
   const [errorTema, setErrorTema] = useState<string | null>(null);
   const contenedorRef = useRef<HTMLDivElement>(null);
+
+  const [cambiandoPassword, setCambiandoPassword] = useState(false);
+  const [passwordActual, setPasswordActual] = useState("");
+  const [passwordNueva, setPasswordNueva] = useState("");
+  const [passwordConfirmar, setPasswordConfirmar] = useState("");
+  const [guardandoPassword, setGuardandoPassword] = useState(false);
+  const [errorPassword, setErrorPassword] = useState<string | null>(null);
+  const [exitoPassword, setExitoPassword] = useState(false);
+
+  function cerrarFormularioPassword() {
+    setCambiandoPassword(false);
+    setPasswordActual("");
+    setPasswordNueva("");
+    setPasswordConfirmar("");
+    setErrorPassword(null);
+    setExitoPassword(false);
+  }
+
+  async function handleCambiarPassword(e: FormEvent) {
+    e.preventDefault();
+    setErrorPassword(null);
+    if (passwordNueva.length < 8) {
+      setErrorPassword("La contraseña nueva debe tener al menos 8 caracteres.");
+      return;
+    }
+    if (passwordNueva !== passwordConfirmar) {
+      setErrorPassword("La confirmación no coincide con la contraseña nueva.");
+      return;
+    }
+    setGuardandoPassword(true);
+    try {
+      await cambiarMiPassword(passwordActual, passwordNueva);
+      setPasswordActual("");
+      setPasswordNueva("");
+      setPasswordConfirmar("");
+      setExitoPassword(true);
+    } catch (error) {
+      setErrorPassword(mensajeError(error));
+    } finally {
+      setGuardandoPassword(false);
+    }
+  }
 
   useEffect(() => {
     function onClickFuera(e: MouseEvent) {
@@ -99,6 +143,81 @@ export function AccountMenu() {
               <p role="alert" className="mt-2 text-xs text-danger">
                 No se pudo guardar el tema: {errorTema}
               </p>
+            )}
+          </div>
+
+          <div className="border-t border-line px-4 py-3">
+            {!cambiandoPassword ? (
+              <button
+                type="button"
+                onClick={() => setCambiandoPassword(true)}
+                className="text-xs font-medium text-ink-muted hover:text-ink"
+              >
+                Cambiar mi contraseña
+              </button>
+            ) : exitoPassword ? (
+              <div>
+                <p className="text-xs text-emerald-500">Contraseña actualizada correctamente.</p>
+                <button
+                  type="button"
+                  onClick={cerrarFormularioPassword}
+                  className="mt-2 text-xs font-medium text-ink-muted hover:text-ink"
+                >
+                  Cerrar
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={handleCambiarPassword} className="space-y-2">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-ink-faint">
+                  Cambiar mi contraseña
+                </p>
+                <input
+                  type="password"
+                  placeholder="Contraseña actual"
+                  value={passwordActual}
+                  onChange={(e) => setPasswordActual(e.target.value)}
+                  required
+                  className="w-full rounded-tremor-small border border-line bg-surface px-2 py-1.5 text-xs text-ink placeholder:text-ink-faint focus:border-accent focus:outline-none"
+                />
+                <input
+                  type="password"
+                  placeholder="Contraseña nueva"
+                  value={passwordNueva}
+                  onChange={(e) => setPasswordNueva(e.target.value)}
+                  required
+                  className="w-full rounded-tremor-small border border-line bg-surface px-2 py-1.5 text-xs text-ink placeholder:text-ink-faint focus:border-accent focus:outline-none"
+                />
+                <input
+                  type="password"
+                  placeholder="Confirmar contraseña nueva"
+                  value={passwordConfirmar}
+                  onChange={(e) => setPasswordConfirmar(e.target.value)}
+                  required
+                  className="w-full rounded-tremor-small border border-line bg-surface px-2 py-1.5 text-xs text-ink placeholder:text-ink-faint focus:border-accent focus:outline-none"
+                />
+                {errorPassword && (
+                  <p role="alert" className="text-xs text-danger">
+                    {errorPassword}
+                  </p>
+                )}
+                <div className="flex gap-2 pt-1">
+                  <button
+                    type="submit"
+                    disabled={guardandoPassword}
+                    className="flex-1 rounded-tremor-small bg-accent px-2 py-1.5 text-xs font-medium text-white transition-colors hover:opacity-90 disabled:opacity-60"
+                  >
+                    {guardandoPassword ? "Guardando…" : "Guardar"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={cerrarFormularioPassword}
+                    disabled={guardandoPassword}
+                    className="text-xs text-ink-muted hover:text-ink"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </form>
             )}
           </div>
 

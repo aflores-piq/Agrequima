@@ -29,7 +29,7 @@ export function AppLayout() {
             >
               Nutrientes
             </NavLink>
-            {sesion?.rol === "Administrador" && (
+            {(sesion?.rol === "Administrador" || sesion?.rol === "Administrador de Usuarios") && (
               <NavLink
                 to="/admin"
                 className={({ isActive }) =>
