@@ -8,3 +8,4 @@ node_modules/
 frontend/dist/
 .pytest_cache/
 db/_schema_test_tmp.sql
+logs/
