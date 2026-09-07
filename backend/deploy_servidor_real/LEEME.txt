@@ -11,6 +11,7 @@ Archivos que vas a usar:
   01_crear_base_piq_ia.sql       -> lo abris en SQL Server Management Studio (SSMS)
   02_seed_roles_y_admin.sql      -> lo abris tambien en SSMS, despues del anterior
   03_cargar_datos_iniciales.sql  -> lo abris tambien en SSMS, despues del anterior
+  04_migracion_nutrientes_tipo_exclusion.sql -> lo abris tambien en SSMS, cuando corresponda (ver Paso 3B)
   generar_hash_password.py       -> genera el valor que necesita 02_seed_roles_y_admin.sql
   sync_piq_ia.py                 -> el programa que trae los datos cada noche
   .env.ejemplo                   -> plantilla de configuracion (la vas a copiar y completar)
@@ -192,6 +193,46 @@ de nuevo el archivo completo lo deja bien.
 
 Este script NO toca Roles ni Usuarios -- eso ya quedó bien en el Paso
 2 y no se pisa acá.
+
+
+====================================================================
+ PASO 3B -- Migración: exclusión de productos y corrección de Tipo en
+ Nutrientes (agregado después del despliegue inicial -- con SSMS)
+====================================================================
+
+Este paso corrige, sobre los datos ya cargados en el Paso 3, dos cosas
+que se descubrieron después de que Nutrientes ya estaba funcionando:
+
+  - 29 productos que en realidad son plaguicidas (Glifosato, Atrazina,
+    etc.) se habían colado en el diccionario de Nutrientes -- el
+    cliente confirmó que no corresponden ahí. Este script agrega una
+    columna Excluido y la marca en esos productos y en las filas de
+    Nutrientes ya cargadas que los mencionan (dejan de mostrarse en
+    dashboards/exports, pero el dato crudo NO se borra).
+  - Tipo="." (o vacío) en Nutrientes significa "Licencias" -- antes se
+    dejaba tal cual por no saber qué significaba; ahora se corrige.
+
+1. Abrir "04_migracion_nutrientes_tipo_exclusion.sql" (de esta carpeta)
+   en SSMS, igual que los Pasos 1-3 (Archivo > Abrir, o arrastrarlo a
+   la ventana).
+
+2. Presionar F5 (o "¡ Ejecutar") con la conexión a PIQ_IA activa
+   (fijarse arriba en SSMS que diga "PIQ_IA", no "master").
+
+3. En la pestaña "Mensajes", revisar que no haya ninguna línea en
+   ROJO. Al final aparece una tabla con 5 filas (conteos de
+   verificación) -- comparar contra los valores de referencia que trae
+   el propio encabezado del archivo (216 filas de Nutrientes con
+   Excluido=1, 5,750 filas de Tipo corregidas, en la base de
+   desarrollo). Si en PIQ_IA los números salen menores, es
+   probablemente normal (PIQ_IA puede tener menos historial cargado
+   todavía que la base de desarrollo) -- lo que sí hay que revisar es
+   que "Filas con Tipo=\".\" o vacío restantes" dé 0 y que "Productos
+   Excluido=1" dé 29.
+
+Es seguro volver a correr este script las veces que haga falta: agrega
+la columna solo si no existe, y los UPDATE solo tocan filas que
+todavía no tienen el valor correcto.
 
 
 ====================================================================
