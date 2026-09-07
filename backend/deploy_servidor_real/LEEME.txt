@@ -12,6 +12,7 @@ Archivos que vas a usar:
   02_seed_roles_y_admin.sql      -> lo abris tambien en SSMS, despues del anterior
   03_cargar_datos_iniciales.sql  -> lo abris tambien en SSMS, despues del anterior
   04_migracion_nutrientes_tipo_exclusion.sql -> lo abris tambien en SSMS, cuando corresponda (ver Paso 3B)
+  05_fix_colacion_usp_cargarnutrientes.sql   -> lo abris tambien en SSMS, si ves el error de collation al cargar Nutrientes (ver Paso 3C)
   generar_hash_password.py       -> genera el valor que necesita 02_seed_roles_y_admin.sql
   sync_piq_ia.py                 -> el programa que trae los datos cada noche
   .env.ejemplo                   -> plantilla de configuracion (la vas a copiar y completar)
@@ -233,6 +234,41 @@ que se descubrieron después de que Nutrientes ya estaba funcionando:
 Es seguro volver a correr este script las veces que haga falta: agrega
 la columna solo si no existe, y los UPDATE solo tocan filas que
 todavía no tienen el valor correcto.
+
+
+====================================================================
+ PASO 3C -- Fix de collation en usp_CargarNutrientes (correr SOLO si
+ al cargar Nutrientes aparece un error mencionando "collation conflict"
+ -- con SSMS)
+====================================================================
+
+Si al subir un archivo de Nutrientes desde la pantalla de Carga
+aparece un error 500 y en stderr.log del servidor aparece algo como:
+
+    pyodbc.ProgrammingError: [...] Cannot resolve the collation
+    conflict between "SQL_Latin1_General_CP1_CI_AS" and
+    "Modern_Spanish_CI_AS" in the equal to operation. (468)
+
+es porque el collation por defecto de esta base (heredado de la
+instancia de SQL Server de este servidor) no coincide con el
+collation fijo que traen las columnas del catálogo de nutrientes. Este
+paso lo corrige de forma permanente.
+
+1. Abrir "05_fix_colacion_usp_cargarnutrientes.sql" (de esta carpeta)
+   en SSMS, igual que los pasos anteriores.
+
+2. Presionar F5 (o "¡ Ejecutar") con la conexión a PIQ_IA activa.
+
+3. En la pestaña "Mensajes", confirmar que no haya ninguna línea en
+   ROJO y que aparezca "usp_CargarNutrientes actualizado con COLLATE
+   DATABASE_DEFAULT.".
+
+4. Volver a intentar la carga del archivo de Nutrientes que había
+   fallado, desde la pantalla de Carga -- ya debería funcionar.
+
+Es seguro volver a correr este script las veces que haga falta:
+reemplaza la definición completa del procedimiento cada vez, sin
+depender de ningún estado previo.
 
 
 ====================================================================

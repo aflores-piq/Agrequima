@@ -415,14 +415,30 @@ BEGIN
             ISNULL(c.Excluido, 0), GETDATE(), @UserId
         FROM dbo.stg_Nutrientes s
         LEFT JOIN dbo.CatalogoAgrupadorNutrientes c
-               ON c.NombreComercial_Key = s.NombreComercial_Key;
+               -- COLLATE DATABASE_DEFAULT en ambos lados: stg_Nutrientes lo
+               -- recrea pandas (to_sql if_exists="replace") en cada carga,
+               -- sin especificar collation -- sus columnas de texto quedan
+               -- con el collation DEFAULT DE LA BASE donde vive PIQ_IA/
+               -- AGREQUIMA. CatalogoAgrupadorNutrientes.NombreComercial_Key
+               -- en cambio quedó con COLLATE Modern_Spanish_CI_AS fijo desde
+               -- que se generó este script. Si el collation default de la
+               -- base del servidor real no es Modern_Spanish_CI_AS (ej.
+               -- SQL_Latin1_General_CP1_CI_AS, el default de fábrica de SQL
+               -- Server), este JOIN sin COLLATE explícito falla con el error
+               -- 468 "Cannot resolve the collation conflict..." -- pasó en
+               -- producción al cargar Nutrientes de julio 2026, nunca en
+               -- desarrollo porque ahí el collation de la instancia y el de
+               -- la base coinciden (los dos Modern_Spanish_CI_AS). Forzar
+               -- DATABASE_DEFAULT en los dos lados hace la comparación
+               -- funcionar sin importar cuál sea ese default.
+               ON c.NombreComercial_Key COLLATE DATABASE_DEFAULT = s.NombreComercial_Key COLLATE DATABASE_DEFAULT;
 
         INSERT INTO dbo.log_ExcepcionesAgrupadorNutrientes
             (No_Licencia, NombreComercial, NombreComercial_Key, Cantidad, CIF_dolares)
         SELECT s.No_Licencia, s.NombreComercial, s.NombreComercial_Key, s.Cantidad, s.CIF_dolares
         FROM dbo.stg_Nutrientes s
         LEFT JOIN dbo.CatalogoAgrupadorNutrientes c
-               ON c.NombreComercial_Key = s.NombreComercial_Key
+               ON c.NombreComercial_Key COLLATE DATABASE_DEFAULT = s.NombreComercial_Key COLLATE DATABASE_DEFAULT
         WHERE c.NombreComercial_Key IS NULL AND s.NombreComercial_Key IS NOT NULL;
 
         COMMIT TRANSACTION;

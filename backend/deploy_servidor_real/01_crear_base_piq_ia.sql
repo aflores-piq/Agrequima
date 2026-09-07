@@ -378,14 +378,26 @@ BEGIN
             ISNULL(c.Excluido, 0), GETDATE(), @UserId
         FROM dbo.stg_Nutrientes s
         LEFT JOIN dbo.CatalogoAgrupadorNutrientes c
-               ON c.NombreComercial_Key = s.NombreComercial_Key;
+               -- COLLATE DATABASE_DEFAULT en ambos lados: stg_Nutrientes lo recrea
+               -- pandas (to_sql if_exists="replace") en cada carga sin especificar
+               -- collation, asi que sus columnas de texto quedan con el collation
+               -- default DE LA BASE (PIQ_IA/AGREQUIMA), mientras que
+               -- CatalogoAgrupadorNutrientes.NombreComercial_Key quedo fijo en
+               -- COLLATE Modern_Spanish_CI_AS. Si el collation default de la base
+               -- del servidor real no es Modern_Spanish_CI_AS (ej.
+               -- SQL_Latin1_General_CP1_CI_AS, el default de fabrica de SQL
+               -- Server), este JOIN sin COLLATE explicito falla con el error 468
+               -- "Cannot resolve the collation conflict..." -- paso en produccion al
+               -- cargar Nutrientes de julio 2026, nunca en desarrollo porque ahi el
+               -- collation de la instancia y el de la base coinciden.
+               ON c.NombreComercial_Key COLLATE DATABASE_DEFAULT = s.NombreComercial_Key COLLATE DATABASE_DEFAULT;
 
         INSERT INTO dbo.log_ExcepcionesAgrupadorNutrientes
             (No_Licencia, NombreComercial, NombreComercial_Key, Cantidad, CIF_dolares)
         SELECT s.No_Licencia, s.NombreComercial, s.NombreComercial_Key, s.Cantidad, s.CIF_dolares
         FROM dbo.stg_Nutrientes s
         LEFT JOIN dbo.CatalogoAgrupadorNutrientes c
-               ON c.NombreComercial_Key = s.NombreComercial_Key
+               ON c.NombreComercial_Key COLLATE DATABASE_DEFAULT = s.NombreComercial_Key COLLATE DATABASE_DEFAULT
         WHERE c.NombreComercial_Key IS NULL AND s.NombreComercial_Key IS NOT NULL;
 
         COMMIT TRANSACTION;
