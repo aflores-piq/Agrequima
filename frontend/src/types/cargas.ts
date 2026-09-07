@@ -15,6 +15,7 @@ export interface ResumenCargaNutrientes {
   filas_cargadas: number;
   anios: number[];
   filas_truncadas: number;
+  filas_descartadas_sin_f: number;
   filas_sin_agrupador: number;
   agrupador_actualizado: boolean;
   claves_agrupador_nuevas: number | null;

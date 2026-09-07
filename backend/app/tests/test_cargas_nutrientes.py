@@ -16,7 +16,7 @@ def test_carga_nutrientes_happy_path(client, admin_headers):
     contenido = construir_csv_nutrientes(
         [
             {
-                "Tipo": "LICENCIAS", "No_Licencia": "1-90", "No_Registro": "REG-1",
+                "Tipo": "LICENCIAS", "No_Licencia": "1-90", "No_Registro": "REG-F-1",
                 "NombreComercial": "UREA PRUEBA", "EmpresaImportadora": "IMPORTADORA PRUEBA",
                 "FechaEmision": f"15/01/{ANIO_PRUEBA}", "UMedida": "Kilogramos", "Cantidad": 100,
                 "PaisProcedencia": "Testlandia", "PaisOrigen": "Testlandia",
@@ -25,7 +25,7 @@ def test_carga_nutrientes_happy_path(client, admin_headers):
                 "Concentraciones": "46-0-0", "Componentes": "N", "VENTANILLA": "MAGA",
             },
             {
-                "Tipo": "LICENCIAS", "No_Licencia": "2-90", "No_Registro": "REG-2",
+                "Tipo": "LICENCIAS", "No_Licencia": "2-90", "No_Registro": "REG-F-2",
                 "NombreComercial": "PRODUCTO SIN AGRUPADOR EN CATALOGO", "EmpresaImportadora": "IMPORTADORA PRUEBA",
                 "FechaEmision": f"20/02/{ANIO_PRUEBA}", "UMedida": "Litros", "Cantidad": 50,
                 "PaisProcedencia": "Testlandia", "PaisOrigen": "Testlandia",
@@ -60,6 +60,101 @@ def test_carga_nutrientes_happy_path(client, admin_headers):
     assert float(cif_bd) == 1500.0
 
 
+def test_carga_nutrientes_mapea_tipo_punto_y_vacio_a_licencias(client, admin_headers):
+    """Tipo="." (o vacío) significa "Licencias" -- confirmado por el
+    cliente, ya no es un valor ambiguo que haya que dejar tal cual."""
+    anio = 2093
+    limpiar_nutrientes_anio(anio)
+    contenido = construir_csv_nutrientes(
+        [
+            {
+                "Tipo": ".", "No_Licencia": "1-93", "No_Registro": "REG-F-1",
+                "NombreComercial": "PRODUCTO TIPO PUNTO", "EmpresaImportadora": "IMPORTADORA PRUEBA",
+                "FechaEmision": f"10/01/{anio}", "UMedida": "Kilogramos", "Cantidad": 10,
+                "PaisProcedencia": "Testlandia", "PaisOrigen": "Testlandia",
+                "AduanadeIngreso": "Puerto Prueba", " CIF_dolares ": "$100.00",
+                " CIF_Q ": "Q770.00", " TimbresQ ": "Q1.00", "Exportador": "Exportador Prueba",
+                "Concentraciones": "10-10-10", "Componentes": "NPK", "VENTANILLA": "MAGA",
+            },
+            {
+                "Tipo": "PERMISOS", "No_Licencia": "2-93", "No_Registro": "REG-F-2",
+                "NombreComercial": "PRODUCTO TIPO NORMAL", "EmpresaImportadora": "IMPORTADORA PRUEBA",
+                "FechaEmision": f"12/01/{anio}", "UMedida": "Kilogramos", "Cantidad": 20,
+                "PaisProcedencia": "Testlandia", "PaisOrigen": "Testlandia",
+                "AduanadeIngreso": "Puerto Prueba", " CIF_dolares ": "$200.00",
+                " CIF_Q ": "Q1540.00", " TimbresQ ": "Q2.00", "Exportador": "Exportador Prueba",
+                "Concentraciones": "10-10-10", "Componentes": "NPK", "VENTANILLA": "MAGA",
+            },
+        ]
+    )
+
+    r = client.post(
+        "/api/admin/cargas/nutrientes",
+        headers=admin_headers,
+        files={"archivo_nutrientes": ("test_tipo.csv", contenido, "text/csv")},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["filas_cargadas"] == 2
+
+    with engine.connect() as conn:
+        filas = conn.execute(
+            text("SELECT NombreComercial, Tipo FROM dbo.Nutrientes WHERE anio = :anio ORDER BY NombreComercial"),
+            {"anio": anio},
+        ).all()
+    por_nombre = {f.NombreComercial: f.Tipo for f in filas}
+    assert por_nombre["PRODUCTO TIPO PUNTO"] == "Licencias"
+    assert por_nombre["PRODUCTO TIPO NORMAL"] == "PERMISOS"  # no se toca lo que ya venía distinto de "."
+
+
+def test_carga_nutrientes_descarta_filas_sin_f_en_no_registro(client, admin_headers):
+    """Filtro permanente: solo se cargan filas cuyo No_Registro contiene
+    la letra "F" -- las demás se descartan en silencio, y el conteo
+    queda visible en el resumen de la carga."""
+    anio = 2094
+    limpiar_nutrientes_anio(anio)
+    contenido = construir_csv_nutrientes(
+        [
+            {
+                "Tipo": "LICENCIAS", "No_Licencia": "1-94", "No_Registro": "_100-F-1-1",
+                "NombreComercial": "PRODUCTO CON F", "EmpresaImportadora": "IMPORTADORA PRUEBA",
+                "FechaEmision": f"05/03/{anio}", "UMedida": "Kilogramos", "Cantidad": 10,
+                "PaisProcedencia": "Testlandia", "PaisOrigen": "Testlandia",
+                "AduanadeIngreso": "Puerto Prueba", " CIF_dolares ": "$100.00",
+                " CIF_Q ": "Q770.00", " TimbresQ ": "Q1.00", "Exportador": "Exportador Prueba",
+                "Concentraciones": "10-10-10", "Componentes": "NPK", "VENTANILLA": "MAGA",
+            },
+            {
+                "Tipo": "LICENCIAS", "No_Licencia": "2-94", "No_Registro": "_100-ENMIENDA-1-1",
+                "NombreComercial": "PRODUCTO SIN F", "EmpresaImportadora": "IMPORTADORA PRUEBA",
+                "FechaEmision": f"06/03/{anio}", "UMedida": "Kilogramos", "Cantidad": 20,
+                "PaisProcedencia": "Testlandia", "PaisOrigen": "Testlandia",
+                "AduanadeIngreso": "Puerto Prueba", " CIF_dolares ": "$200.00",
+                " CIF_Q ": "Q1540.00", " TimbresQ ": "Q2.00", "Exportador": "Exportador Prueba",
+                "Concentraciones": "10-10-10", "Componentes": "NPK", "VENTANILLA": "MAGA",
+            },
+        ]
+    )
+
+    r = client.post(
+        "/api/admin/cargas/nutrientes",
+        headers=admin_headers,
+        files={"archivo_nutrientes": ("test_no_registro.csv", contenido, "text/csv")},
+    )
+    assert r.status_code == 200, r.text
+    data = r.json()
+    assert data["filas_cargadas"] == 1
+    assert data["filas_descartadas_sin_f"] == 1
+
+    with engine.connect() as conn:
+        nombres = [
+            row[0]
+            for row in conn.execute(
+                text("SELECT NombreComercial FROM dbo.Nutrientes WHERE anio = :anio"), {"anio": anio}
+            ).all()
+        ]
+    assert nombres == ["PRODUCTO CON F"]
+
+
 def test_carga_nutrientes_happy_path_xlsx(client, admin_headers):
     """Mismo caso feliz que el .csv, pero subiendo un .xlsx con las
     celdas ya tipadas (fecha real, montos numéricos) — confirma que el
@@ -68,7 +163,7 @@ def test_carga_nutrientes_happy_path_xlsx(client, admin_headers):
     contenido = construir_excel_nutrientes(
         [
             {
-                "Tipo": "LICENCIAS", "No_Licencia": "1-89", "No_Registro": "REG-1",
+                "Tipo": "LICENCIAS", "No_Licencia": "1-89", "No_Registro": "REG-F-1",
                 "NombreComercial": "UREA PRUEBA XLSX", "EmpresaImportadora": "IMPORTADORA PRUEBA",
                 "FechaEmision": f"15/01/{ANIO_PRUEBA_XLSX}", "UMedida": "Kilogramos", "Cantidad": 100,
                 "PaisProcedencia": "Testlandia", "PaisOrigen": "Testlandia",
@@ -77,7 +172,7 @@ def test_carga_nutrientes_happy_path_xlsx(client, admin_headers):
                 "Concentraciones": "46-0-0", "Componentes": "N", "VENTANILLA": "MAGA",
             },
             {
-                "Tipo": "LICENCIAS", "No_Licencia": "2-89", "No_Registro": "REG-2",
+                "Tipo": "LICENCIAS", "No_Licencia": "2-89", "No_Registro": "REG-F-2",
                 "NombreComercial": "PRODUCTO SIN AGRUPADOR EN CATALOGO", "EmpresaImportadora": "IMPORTADORA PRUEBA",
                 "FechaEmision": f"20/02/{ANIO_PRUEBA_XLSX}", "UMedida": "Litros", "Cantidad": 50,
                 "PaisProcedencia": "Testlandia", "PaisOrigen": "Testlandia",
@@ -127,7 +222,7 @@ def test_carga_nutrientes_xlsx_fecha_como_texto_no_invierte_dia_mes(client, admi
     contenido = construir_excel_nutrientes(
         [
             {
-                "Tipo": "LICENCIAS", "No_Licencia": "500-88", "No_Registro": "REG-1",
+                "Tipo": "LICENCIAS", "No_Licencia": "500-88", "No_Registro": "REG-F-1",
                 "NombreComercial": "PRODUCTO FECHA TEXTO", "EmpresaImportadora": "IMPORTADORA PRUEBA",
                 "FechaEmision": f"12/05/{anio}", "UMedida": "Kilogramos", "Cantidad": 100,
                 "PaisProcedencia": "Testlandia", "PaisOrigen": "Testlandia",
@@ -136,7 +231,7 @@ def test_carga_nutrientes_xlsx_fecha_como_texto_no_invierte_dia_mes(client, admi
                 "Concentraciones": "46-0-0", "Componentes": "N", "VENTANILLA": "MAGA",
             },
             {
-                "Tipo": "LICENCIAS", "No_Licencia": "501-88", "No_Registro": "REG-2",
+                "Tipo": "LICENCIAS", "No_Licencia": "501-88", "No_Registro": "REG-F-2",
                 "NombreComercial": "PRODUCTO FECHA TEXTO DIA31", "EmpresaImportadora": "IMPORTADORA PRUEBA",
                 "FechaEmision": f"31/01/{anio}", "UMedida": "Litros", "Cantidad": 50,
                 "PaisProcedencia": "Testlandia", "PaisOrigen": "Testlandia",
@@ -185,7 +280,7 @@ def test_carga_nutrientes_titulo_extra_arriba_del_encabezado_csv(client, admin_h
     contenido = construir_csv_nutrientes(
         [
             {
-                "Tipo": "LICENCIAS", "No_Licencia": "1-87", "No_Registro": "REG-1",
+                "Tipo": "LICENCIAS", "No_Licencia": "1-87", "No_Registro": "REG-F-1",
                 "NombreComercial": "PRODUCTO CON TITULO CSV", "EmpresaImportadora": "IMPORTADORA PRUEBA",
                 "FechaEmision": f"15/01/{anio}", "UMedida": "Kilogramos", "Cantidad": 100,
                 "PaisProcedencia": "Testlandia", "PaisOrigen": "Testlandia",
@@ -223,7 +318,7 @@ def test_carga_nutrientes_titulo_extra_arriba_del_encabezado_xlsx(client, admin_
     contenido = construir_excel_nutrientes(
         [
             {
-                "Tipo": "LICENCIAS", "No_Licencia": "1-86", "No_Registro": "REG-1",
+                "Tipo": "LICENCIAS", "No_Licencia": "1-86", "No_Registro": "REG-F-1",
                 "NombreComercial": "PRODUCTO CON TITULO XLSX", "EmpresaImportadora": "IMPORTADORA PRUEBA",
                 "FechaEmision": f"15/01/{anio}", "UMedida": "Kilogramos", "Cantidad": 100,
                 "PaisProcedencia": "Testlandia", "PaisOrigen": "Testlandia",
@@ -264,7 +359,7 @@ def test_carga_nutrientes_requiere_rol_administrador(client, usuario_headers):
     contenido = construir_csv_nutrientes(
         [
             {
-                "Tipo": "LICENCIAS", "No_Licencia": "X", "No_Registro": "X", "NombreComercial": "X",
+                "Tipo": "LICENCIAS", "No_Licencia": "X", "No_Registro": "XF", "NombreComercial": "X",
                 "EmpresaImportadora": "X", "FechaEmision": "01/01/2091", "UMedida": "Kilogramos",
                 "Cantidad": 1, "PaisProcedencia": "X", "PaisOrigen": "X", "AduanadeIngreso": "X",
                 " CIF_dolares ": "$1.00", " CIF_Q ": "Q1.00", " TimbresQ ": "Q1.00",
@@ -305,7 +400,7 @@ def test_carga_nutrientes_columnas_faltantes(client, admin_headers):
 
 def _fila_nutriente(licencia: str, anio: int, mes: int, dia: int) -> dict:
     return {
-        "Tipo": "LICENCIAS", "No_Licencia": licencia, "No_Registro": f"REG-{licencia}",
+        "Tipo": "LICENCIAS", "No_Licencia": licencia, "No_Registro": f"REG-F-{licencia}",
         "NombreComercial": "PRODUCTO ACUMULADO", "EmpresaImportadora": "IMPORTADORA PRUEBA",
         "FechaEmision": f"{dia:02d}/{mes:02d}/{anio}", "UMedida": "Kilogramos", "Cantidad": 1,
         "PaisProcedencia": "Testlandia", "PaisOrigen": "Testlandia",

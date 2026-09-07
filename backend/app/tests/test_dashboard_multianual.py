@@ -214,7 +214,7 @@ def test_multianual_nutrientes_dos_anios_con_datos(client, admin_headers):
 
     def _fila(anio, mes, cif, licencia):
         return {
-            "Tipo": "LICENCIAS", "No_Licencia": licencia, "No_Registro": "REG-1",
+            "Tipo": "LICENCIAS", "No_Licencia": licencia, "No_Registro": "REG-F-1",
             "NombreComercial": "PRODUCTO MULTIANUAL", "EmpresaImportadora": EMPRESA_MARCADOR,
             "FechaEmision": f"10/{mes:02d}/{anio}", "UMedida": "Kilogramos", "Cantidad": 100,
             "PaisProcedencia": "Testlandia", "PaisOrigen": "Testlandia", "AduanadeIngreso": "Puerto A",

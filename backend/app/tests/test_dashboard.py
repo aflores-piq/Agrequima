@@ -65,7 +65,7 @@ def test_dashboard_nutrientes_kpis_coinciden_con_suma_directa(client, admin_head
     contenido = construir_csv_nutrientes(
         [
             {
-                "Tipo": "LICENCIAS", "No_Licencia": "L1", "No_Registro": "R1",
+                "Tipo": "LICENCIAS", "No_Licencia": "L1", "No_Registro": "RF1",
                 "NombreComercial": "PRODUCTO DASHBOARD 1", "EmpresaImportadora": EMPRESA_MARCADOR,
                 "FechaEmision": f"10/01/{ANIO_PRUEBA}", "UMedida": "Kilogramos", "Cantidad": 100,
                 "PaisProcedencia": "Testlandia", "PaisOrigen": "Testlandia", "AduanadeIngreso": "Puerto A",
@@ -73,7 +73,7 @@ def test_dashboard_nutrientes_kpis_coinciden_con_suma_directa(client, admin_head
                 "Exportador": "X", "Concentraciones": "X", "Componentes": "X", "VENTANILLA": "MAGA",
             },
             {
-                "Tipo": "LICENCIAS", "No_Licencia": "L2", "No_Registro": "R2",
+                "Tipo": "LICENCIAS", "No_Licencia": "L2", "No_Registro": "RF2",
                 "NombreComercial": "PRODUCTO DASHBOARD 2", "EmpresaImportadora": EMPRESA_MARCADOR,
                 "FechaEmision": f"15/06/{ANIO_PRUEBA}", "UMedida": "Litros", "Cantidad": 50,
                 "PaisProcedencia": "Testlandia", "PaisOrigen": "Testlandia", "AduanadeIngreso": "Puerto B",

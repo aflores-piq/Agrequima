@@ -152,7 +152,31 @@ def _leer_crudo_nutrientes(contenido: bytes, es_csv: bool) -> pd.DataFrame:
     return df
 
 
-def _cargar_nutrientes(contenido: bytes, es_csv: bool = True) -> tuple[pd.DataFrame, list[dict]]:
+def _mapear_tipo_nutriente(valor: str | None) -> str | None:
+    """"." (o vacío) en la columna Tipo del archivo de nutrientes
+    significa "Licencias" -- confirmado por el cliente, ya no es un
+    valor ambiguo. `valor` ya pasó por limpiar_texto() acá arriba, así
+    que "vacío" llega como None."""
+    if valor is None or valor == ".":
+        return "Licencias"
+    return valor
+
+
+def _filtrar_solo_con_f_en_no_registro(df: pd.DataFrame) -> tuple[pd.DataFrame, int]:
+    """Filtro permanente: solo se cargan filas cuyo No_Registro contiene
+    la letra "F" (case-insensitive) -- las demás (ej. "..._ENMIENDA_...",
+    IDs puramente numéricos) se descartan en silencio, sin error, en
+    TODO archivo consolidado de ahora en adelante. Se aplica acá (no en
+    el archivo de origen) para que quede visible cuántas filas se
+    descartaron en el resumen de la carga."""
+    contiene_f = df["No_Registro"].apply(
+        lambda v: isinstance(v, str) and "F" in v.upper()
+    )
+    descartadas = int((~contiene_f).sum())
+    return df[contiene_f].copy(), descartadas
+
+
+def _cargar_nutrientes(contenido: bytes, es_csv: bool = True) -> tuple[pd.DataFrame, list[dict], int]:
     df = _leer_crudo_nutrientes(contenido, es_csv)
 
     for col in _COLUMNAS_TEXTO:
@@ -184,7 +208,7 @@ def _cargar_nutrientes(contenido: bytes, es_csv: bool = True) -> tuple[pd.DataFr
         fecha_emision = pd.to_datetime(df["FechaEmision"].apply(_fecha_celda_excel))
 
     salida = pd.DataFrame({
-        "Tipo": df["Tipo"],
+        "Tipo": df["Tipo"].apply(_mapear_tipo_nutriente),
         # a_texto_id (no limpiar_texto): en un Excel, una licencia/registro
         # puramente numérico llega como float (ej. 123.0) y hay que quitar
         # el ".0", igual que RECIBO en etl_plaguicidas.py.
@@ -209,9 +233,10 @@ def _cargar_nutrientes(contenido: bytes, es_csv: bool = True) -> tuple[pd.DataFr
         "VENTANILLA": df["VENTANILLA"],
     })
 
+    salida, filas_descartadas_sin_f = _filtrar_solo_con_f_en_no_registro(salida)
     salida, advertencias_truncado = truncar_columnas(salida, LIMITES_COLUMNAS)
 
-    return salida, advertencias_truncado
+    return salida, advertencias_truncado, filas_descartadas_sin_f
 
 
 def _mes_maximo_cargado_por_anio(anios: list[int]) -> dict[int, int]:
@@ -272,7 +297,9 @@ def procesar_carga_nutrientes(
             agrupador_actualizado = True
 
         es_csv = nombre_archivo_nutrientes.lower().endswith(".csv")
-        df_nutrientes, advertencias_trunc = _cargar_nutrientes(contenido_nutrientes, es_csv)
+        df_nutrientes, advertencias_trunc, filas_descartadas_sin_f = _cargar_nutrientes(
+            contenido_nutrientes, es_csv
+        )
         df_nutrientes, filas_ya_cargadas, meses_nuevos = _filtrar_solo_mes_nuevo(df_nutrientes)
         df_nutrientes.to_sql("stg_Nutrientes", engine, if_exists="replace", index=False)
 
@@ -310,6 +337,7 @@ def procesar_carga_nutrientes(
         meses_nuevos=meses_nuevos,
         filas_ya_cargadas=filas_ya_cargadas,
         filas_truncadas=len(advertencias_trunc),
+        filas_descartadas_sin_f=filas_descartadas_sin_f,
         filas_sin_agrupador=int(filas_sin_agrupador),
         agrupador_actualizado=agrupador_actualizado,
         claves_agrupador_nuevas=claves_agrupador_nuevas,

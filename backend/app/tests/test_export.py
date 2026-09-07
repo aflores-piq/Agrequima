@@ -42,7 +42,7 @@ def _cargar_nutrientes_prueba(client, admin_headers):
     contenido = construir_csv_nutrientes(
         [
             {
-                "Tipo": "LICENCIAS", "No_Licencia": "LE1", "No_Registro": "RE1",
+                "Tipo": "LICENCIAS", "No_Licencia": "LE1", "No_Registro": "RFE1",
                 "NombreComercial": "PRODUCTO EXPORT 1", "EmpresaImportadora": EMPRESA_MARCADOR,
                 "FechaEmision": f"10/01/{ANIO_PRUEBA}", "UMedida": "Kilogramos", "Cantidad": 100,
                 "PaisProcedencia": "Testlandia", "PaisOrigen": "Testlandia", "AduanadeIngreso": "Puerto Export",

@@ -172,7 +172,7 @@ def _preparar_catalogo_nutrientes():
 
 def _fila_nutriente(licencia: str, nombre_comercial: str, origen: str, componente: str, cif: float) -> dict:
     return {
-        "Tipo": "LICENCIAS", "No_Licencia": licencia, "No_Registro": f"REG-{licencia}",
+        "Tipo": "LICENCIAS", "No_Licencia": licencia, "No_Registro": f"REG-F-{licencia}",
         "NombreComercial": nombre_comercial, "EmpresaImportadora": "IMPORTADORA MULTISEL",
         "FechaEmision": f"10/01/{ANIO_NUTRIENTES}", "UMedida": "Kilogramos", "Cantidad": 1,
         "PaisProcedencia": "Testlandia", "PaisOrigen": origen,

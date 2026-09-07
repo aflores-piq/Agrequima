@@ -38,10 +38,11 @@ _TOP_N_PAISES = 20
 _TABLA_RESUMEN_MAX = 50
 
 # "PLAGUICIDA" es un registro que no pertenece a esta tabla (1 fila) —
-# se excluye de TODO el dashboard (KPIs y los 3 rankings). Tipo="."
-# (542 filas auditadas) NO se excluye: no sabemos qué significa ese
-# valor y no nos corresponde decidir que es basura — eso lo define el
-# cliente, no el código (revertido a pedido explícito).
+# se excluye de TODO el dashboard (KPIs y los 3 rankings). Tipo="." ya
+# NO necesita filtro: el cliente confirmó que significa "Licencias", así
+# que se corrige en el origen (ver _mapear_tipo_nutriente en
+# etl_nutrientes.py, más el backfill de las filas históricas) en vez de
+# ocultarse/reinterpretarse acá.
 _TIPOS_INVALIDOS = ["PLAGUICIDA"]
 
 # Columnas que identifican una fila real: dos filas iguales en las 6 son
