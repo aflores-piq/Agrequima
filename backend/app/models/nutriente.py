@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Date, DateTime, Float, Integer, Numeric, String
+from sqlalchemy import Boolean, Column, Date, DateTime, Float, Integer, Numeric, String
 
 from app.core.db import Base
 
@@ -28,5 +28,12 @@ class Nutriente(Base):
     VENTANILLA = Column(String(50))
     ProductoAgrupado = Column(String(150))
     CodigoAgrupador = Column(String(20))
+    # Copiado desde CatalogoAgrupadorNutrientes.Excluido al cargar (mismo
+    # JOIN que ya llena ProductoAgrupado/CodigoAgrupador, ver
+    # usp_CargarNutrientes) y vuelto a sincronizar cada vez que se edita
+    # el catálogo (sincronizar_agrupador_nutrientes) -- así una fila
+    # excluida deja de mostrarse en dashboards/exports sin depender de
+    # un JOIN en tiempo real ni de repetir la carga.
+    Excluido = Column(Boolean, nullable=False, default=False)
     fechamod = Column(DateTime)
     userid = Column(Integer)

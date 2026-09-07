@@ -54,10 +54,17 @@ def sincronizar_agrupador_plaguicidas(db: Session) -> int:
 
 
 def sincronizar_agrupador_nutrientes(db: Session) -> int:
+    """También sincroniza Excluido (no solo ProductoAgrupado/Codigo): un
+    producto marcado como excluido en el catálogo (ver Excluido en
+    CatalogoAgrupadorNutrientes) debe dejar de mostrarse en
+    dashboards/exports de inmediato en TODAS las filas que ya estaban
+    cargadas con ese NombreComercial, no solo en las que se carguen de
+    ahora en adelante."""
     clave_nutriente = _normalizar_sql("n.NombreComercial")
     resultado = db.execute(text(f"""
         UPDATE n
-        SET n.ProductoAgrupado = c.ProductoAgrupado, n.CodigoAgrupador = c.Codigo
+        SET n.ProductoAgrupado = c.ProductoAgrupado, n.CodigoAgrupador = c.Codigo,
+            n.Excluido = c.Excluido
         FROM dbo.Nutrientes n
         JOIN dbo.CatalogoAgrupadorNutrientes c
           ON c.NombreComercial_Key = {clave_nutriente}
@@ -65,6 +72,7 @@ def sincronizar_agrupador_nutrientes(db: Session) -> int:
           AND (
               ISNULL(n.ProductoAgrupado, '') <> ISNULL(c.ProductoAgrupado, '')
            OR ISNULL(n.CodigoAgrupador, '') <> ISNULL(c.Codigo, '')
+           OR n.Excluido <> c.Excluido
           )
     """))
     return resultado.rowcount

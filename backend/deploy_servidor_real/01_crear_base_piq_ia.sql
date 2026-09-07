@@ -147,10 +147,11 @@ CREATE TABLE dbo.[Nutrientes] (
 	[Concentraciones] NVARCHAR(150) COLLATE Modern_Spanish_CI_AS NULL, 
 	[Componentes] NVARCHAR(500) COLLATE Modern_Spanish_CI_AS NULL, 
 	[VENTANILLA] NVARCHAR(50) COLLATE Modern_Spanish_CI_AS NULL, 
-	[ProductoAgrupado] NVARCHAR(150) COLLATE Modern_Spanish_CI_AS NULL, 
-	[CodigoAgrupador] VARCHAR(20) COLLATE Modern_Spanish_CI_AS NULL, 
-	fechamod DATETIME NULL, 
-	userid INTEGER NULL, 
+	[ProductoAgrupado] NVARCHAR(150) COLLATE Modern_Spanish_CI_AS NULL,
+	[CodigoAgrupador] VARCHAR(20) COLLATE Modern_Spanish_CI_AS NULL,
+	[Excluido] BIT NOT NULL DEFAULT (0),
+	fechamod DATETIME NULL,
+	userid INTEGER NULL,
 	CONSTRAINT [PK_Nutrientes] PRIMARY KEY CLUSTERED (nutrienteid)
 );
 END
@@ -171,10 +172,11 @@ GO
 IF OBJECT_ID('dbo.CatalogoAgrupadorNutrientes', 'U') IS NULL
 BEGIN
 CREATE TABLE dbo.[CatalogoAgrupadorNutrientes] (
-	[NombreComercial_Key] VARCHAR(400) COLLATE Modern_Spanish_CI_AS NOT NULL, 
-	[ProductoAgrupado] NVARCHAR(150) COLLATE Modern_Spanish_CI_AS NULL, 
-	[Codigo] VARCHAR(20) COLLATE Modern_Spanish_CI_AS NULL, 
-	[FechaMod] DATETIME NOT NULL DEFAULT (getdate()), 
+	[NombreComercial_Key] VARCHAR(400) COLLATE Modern_Spanish_CI_AS NOT NULL,
+	[ProductoAgrupado] NVARCHAR(150) COLLATE Modern_Spanish_CI_AS NULL,
+	[Codigo] VARCHAR(20) COLLATE Modern_Spanish_CI_AS NULL,
+	[FechaMod] DATETIME NOT NULL DEFAULT (getdate()),
+	[Excluido] BIT NOT NULL DEFAULT (0),
 	CONSTRAINT [PK__Catalogo__5F0245891384BB33] PRIMARY KEY CLUSTERED ([NombreComercial_Key])
 );
 END
@@ -365,14 +367,15 @@ BEGIN
             anio, Tipo, No_Licencia, No_Registro, NombreComercial, EmpresaImportadora,
             FechaEmision, UMedida, Cantidad, PaisProcedencia, PaisOrigen, AduanadeIngreso,
             CIF_dolares, CIF_Q, TimbresQ, Exportador, Concentraciones, Componentes,
-            VENTANILLA, ProductoAgrupado, CodigoAgrupador, fechamod, userid
+            VENTANILLA, ProductoAgrupado, CodigoAgrupador, Excluido, fechamod, userid
         )
         SELECT
             CAST(s.anio AS INT), s.Tipo, s.No_Licencia, s.No_Registro, s.NombreComercial,
             s.EmpresaImportadora, TRY_CAST(s.FechaEmision AS DATE), s.UMedida,
             s.Cantidad, s.PaisProcedencia, s.PaisOrigen, s.AduanadeIngreso,
             s.CIF_dolares, s.CIF_Q, s.TimbresQ, s.Exportador, s.Concentraciones,
-            s.Componentes, s.VENTANILLA, c.ProductoAgrupado, c.Codigo, GETDATE(), @UserId
+            s.Componentes, s.VENTANILLA, c.ProductoAgrupado, c.Codigo,
+            ISNULL(c.Excluido, 0), GETDATE(), @UserId
         FROM dbo.stg_Nutrientes s
         LEFT JOIN dbo.CatalogoAgrupadorNutrientes c
                ON c.NombreComercial_Key = s.NombreComercial_Key;

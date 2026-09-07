@@ -178,6 +178,7 @@ BEGIN
         VENTANILLA          NVARCHAR(50) NULL,
         ProductoAgrupado    NVARCHAR(150) NULL,     -- resultado del cruce con el catálogo
         CodigoAgrupador     VARCHAR(20) NULL,
+        Excluido            BIT NOT NULL DEFAULT 0,  -- copiado de CatalogoAgrupadorNutrientes.Excluido
         fechamod            DATETIME NULL,
         userid              INT NULL,
         CONSTRAINT PK_Nutrientes PRIMARY KEY CLUSTERED (nutrienteid ASC)
@@ -228,7 +229,8 @@ BEGIN
         NombreComercial_Key VARCHAR(400) NOT NULL PRIMARY KEY,
         ProductoAgrupado    NVARCHAR(150) NULL,
         Codigo               VARCHAR(20) NULL,
-        FechaMod             DATETIME NOT NULL DEFAULT GETDATE()
+        FechaMod             DATETIME NOT NULL DEFAULT GETDATE(),
+        Excluido             BIT NOT NULL DEFAULT 0  -- productos que el cliente confirmó que NO corresponden a Nutrientes
     );
 END
 GO
@@ -402,14 +404,15 @@ BEGIN
             anio, Tipo, No_Licencia, No_Registro, NombreComercial, EmpresaImportadora,
             FechaEmision, UMedida, Cantidad, PaisProcedencia, PaisOrigen, AduanadeIngreso,
             CIF_dolares, CIF_Q, TimbresQ, Exportador, Concentraciones, Componentes,
-            VENTANILLA, ProductoAgrupado, CodigoAgrupador, fechamod, userid
+            VENTANILLA, ProductoAgrupado, CodigoAgrupador, Excluido, fechamod, userid
         )
         SELECT
             CAST(s.anio AS INT), s.Tipo, s.No_Licencia, s.No_Registro, s.NombreComercial,
             s.EmpresaImportadora, TRY_CAST(s.FechaEmision AS DATE), s.UMedida,
             s.Cantidad, s.PaisProcedencia, s.PaisOrigen, s.AduanadeIngreso,
             s.CIF_dolares, s.CIF_Q, s.TimbresQ, s.Exportador, s.Concentraciones,
-            s.Componentes, s.VENTANILLA, c.ProductoAgrupado, c.Codigo, GETDATE(), @UserId
+            s.Componentes, s.VENTANILLA, c.ProductoAgrupado, c.Codigo,
+            ISNULL(c.Excluido, 0), GETDATE(), @UserId
         FROM dbo.stg_Nutrientes s
         LEFT JOIN dbo.CatalogoAgrupadorNutrientes c
                ON c.NombreComercial_Key = s.NombreComercial_Key;

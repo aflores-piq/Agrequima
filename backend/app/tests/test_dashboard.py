@@ -1,6 +1,7 @@
 from sqlalchemy import text
 
 from app.core.db import engine
+from app.services.text_utils import normalizar
 from app.tests.helpers import construir_csv_nutrientes, construir_excel_importaciones
 
 ANIO_PRUEBA = 2091
@@ -107,3 +108,83 @@ def test_dashboard_nutrientes_kpis_coinciden_con_suma_directa(client, admin_head
     assert kpis["cif_total_usd"] == round(float(suma_directa_usd), 2)
     assert kpis["cif_total_q"] == round(float(suma_directa_q), 2)
     assert kpis["registros"] == conteo_directo
+
+
+def test_dashboard_nutrientes_excluye_productos_marcados_excluido(client, admin_headers):
+    """Un producto marcado Excluido=1 en CatalogoAgrupadorNutrientes (el
+    cliente confirmó que no corresponde a Nutrientes) no debe aparecer
+    en ningún KPI del dashboard, aunque su fila cruda sí se cargue en
+    dbo.Nutrientes."""
+    anio = 2095
+    nombre_excluido = "PRODUCTO EXCLUIDO PRUEBA DASHBOARD"
+    clave_excluida = normalizar(nombre_excluido)
+    with engine.begin() as conn:
+        conn.execute(text("DELETE FROM dbo.Nutrientes WHERE anio = :anio"), {"anio": anio})
+        conn.execute(
+            text(
+                "DELETE FROM dbo.CatalogoAgrupadorNutrientes WHERE NombreComercial_Key = :clave"
+            ),
+            {"clave": clave_excluida},
+        )
+        conn.execute(
+            text(
+                "INSERT INTO dbo.CatalogoAgrupadorNutrientes (NombreComercial_Key, ProductoAgrupado, Excluido) "
+                "VALUES (:clave, 'otros', 1)"
+            ),
+            {"clave": clave_excluida},
+        )
+
+    try:
+        contenido = construir_csv_nutrientes(
+            [
+                {
+                    "Tipo": "LICENCIAS", "No_Licencia": "1-95", "No_Registro": "REG-F-1",
+                    "NombreComercial": nombre_excluido, "EmpresaImportadora": "IMPORTADORA PRUEBA",
+                    "FechaEmision": f"10/01/{anio}", "UMedida": "Kilogramos", "Cantidad": 10,
+                    "PaisProcedencia": "Testlandia", "PaisOrigen": "Testlandia", "AduanadeIngreso": "Puerto A",
+                    " CIF_dolares ": "$1,000.00", " CIF_Q ": "Q7,700.00", " TimbresQ ": "Q1.00",
+                    "Exportador": "X", "Concentraciones": "X", "Componentes": "X", "VENTANILLA": "MAGA",
+                },
+                {
+                    "Tipo": "LICENCIAS", "No_Licencia": "2-95", "No_Registro": "REG-F-2",
+                    "NombreComercial": "PRODUCTO NORMAL PRUEBA DASHBOARD", "EmpresaImportadora": "IMPORTADORA PRUEBA",
+                    "FechaEmision": f"12/01/{anio}", "UMedida": "Kilogramos", "Cantidad": 20,
+                    "PaisProcedencia": "Testlandia", "PaisOrigen": "Testlandia", "AduanadeIngreso": "Puerto B",
+                    " CIF_dolares ": "$500.00", " CIF_Q ": "Q3,850.00", " TimbresQ ": "Q2.00",
+                    "Exportador": "X", "Concentraciones": "X", "Componentes": "X", "VENTANILLA": "MAGA",
+                },
+            ]
+        )
+        r = client.post(
+            "/api/admin/cargas/nutrientes",
+            headers=admin_headers,
+            files={"archivo_nutrientes": ("dashboard_excluido.csv", contenido, "text/csv")},
+        )
+        assert r.status_code == 200, r.text
+
+        # La fila cruda sí queda en la base, marcada Excluido=1 por el
+        # JOIN de usp_CargarNutrientes contra el catálogo.
+        with engine.connect() as conn:
+            excluido_bd = conn.execute(
+                text("SELECT Excluido FROM dbo.Nutrientes WHERE anio = :anio AND NombreComercial = :n"),
+                {"anio": anio, "n": nombre_excluido},
+            ).scalar()
+        assert bool(excluido_bd) is True
+
+        r_dashboard = client.get(
+            "/api/dashboard/nutrientes", headers=admin_headers, params={"anio": anio, "mes": 1}
+        )
+        assert r_dashboard.status_code == 200, r_dashboard.text
+        body = r_dashboard.json()
+        assert body["kpis"]["registros"] == 1
+        assert body["kpis"]["cif_total_usd"] == 500.0
+        nombres_detalle = {f["nombre_comercial"] for f in body["detalle"]["filas"]}
+        assert nombre_excluido not in nombres_detalle
+        assert "PRODUCTO NORMAL PRUEBA DASHBOARD" in nombres_detalle
+    finally:
+        with engine.begin() as conn:
+            conn.execute(text("DELETE FROM dbo.Nutrientes WHERE anio = :anio"), {"anio": anio})
+            conn.execute(
+                text("DELETE FROM dbo.CatalogoAgrupadorNutrientes WHERE NombreComercial_Key = :clave"),
+                {"clave": clave_excluida},
+            )

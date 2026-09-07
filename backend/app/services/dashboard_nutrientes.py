@@ -134,18 +134,26 @@ def _anio_default(db: Session) -> int:
 
 def obtener_opciones_filtro_nutrientes(db: Session) -> OpcionesFiltroNutrientes:
     """Valores reales y distintos para poblar los dropdowns/autocompletado
-    de la fila de filtros (en vez de cuadros de texto en blanco)."""
+    de la fila de filtros (en vez de cuadros de texto en blanco). No
+    ofrece opciones que solo existen en filas Excluido=1 -- si se
+    seleccionaran, el dashboard nunca mostraría resultados para ellas."""
+    no_excluido = db.query(Nutriente).filter(Nutriente.Excluido == False)
     anios = sorted(
-        (a for (a,) in db.query(Nutriente.anio).distinct().all() if a is not None), reverse=True
+        (a for (a,) in no_excluido.with_entities(Nutriente.anio).distinct().all() if a is not None),
+        reverse=True,
     )
-    paises_origen = sorted({p for (p,) in db.query(Nutriente.PaisOrigen).distinct().all() if p})
-    componentes = sorted({c for (c,) in db.query(Nutriente.Componentes).distinct().all() if c})
-    grupos_presentes = db.query(Nutriente.ProductoAgrupado).distinct().all()
+    paises_origen = sorted(
+        {p for (p,) in no_excluido.with_entities(Nutriente.PaisOrigen).distinct().all() if p}
+    )
+    componentes = sorted(
+        {c for (c,) in no_excluido.with_entities(Nutriente.Componentes).distinct().all() if c}
+    )
+    grupos_presentes = no_excluido.with_entities(Nutriente.ProductoAgrupado).distinct().all()
     nombres_comerciales = sorted({g for (g,) in grupos_presentes if g})
     if any(g is None for (g,) in grupos_presentes):
         nombres_comerciales.append(SIN_AGRUPADOR)
     nombres_comerciales_raw = sorted(
-        {n for (n,) in db.query(Nutriente.NombreComercial).distinct().all() if n}
+        {n for (n,) in no_excluido.with_entities(Nutriente.NombreComercial).distinct().all() if n}
     )
     return OpcionesFiltroNutrientes(
         anios=anios,
@@ -207,7 +215,12 @@ def construir_contexto_nutrientes(
             db,
             db.query(Nutriente)
             .filter(Nutriente.anio == anio_query)
-            .filter(Nutriente.Tipo.notin_(_TIPOS_INVALIDOS)),
+            .filter(Nutriente.Tipo.notin_(_TIPOS_INVALIDOS))
+            # Productos marcados Excluido=1 en el catálogo (ver
+            # CatalogoAgrupadorNutrientes.Excluido): no corresponden a
+            # Nutrientes según el cliente. La fila cruda sigue en la
+            # base -- solo se oculta de dashboards/exports.
+            .filter(Nutriente.Excluido == False),
         )
         query = _aplicar_filtros(
             query, nombre_comercial, nombre_comercial_raw, origen, componente,
