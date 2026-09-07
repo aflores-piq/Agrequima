@@ -13,6 +13,7 @@ Archivos que vas a usar:
   03_cargar_datos_iniciales.sql  -> lo abris tambien en SSMS, despues del anterior
   04_migracion_nutrientes_tipo_exclusion.sql -> lo abris tambien en SSMS, cuando corresponda (ver Paso 3B)
   05_fix_colacion_usp_cargarnutrientes.sql   -> lo abris tambien en SSMS, si ves el error de collation al cargar Nutrientes (ver Paso 3C)
+  06_fix_colacion_procedimientos_restantes.sql -> lo abris tambien en SSMS, preventivo -- mismo error en Plaguicidas/Nomenclatura/Agrupador (ver Paso 3D)
   generar_hash_password.py       -> genera el valor que necesita 02_seed_roles_y_admin.sql
   sync_piq_ia.py                 -> el programa que trae los datos cada noche
   .env.ejemplo                   -> plantilla de configuracion (la vas a copiar y completar)
@@ -269,6 +270,34 @@ paso lo corrige de forma permanente.
 Es seguro volver a correr este script las veces que haga falta:
 reemplaza la definición completa del procedimiento cada vez, sin
 depender de ningún estado previo.
+
+
+====================================================================
+ PASO 3D -- Fix PREVENTIVO de collation en Carga de Plaguicidas y en
+ Nomenclatura/Agrupador (mismo problema del Paso 3C, en 3 procedimientos
+ más -- con SSMS)
+====================================================================
+
+El Paso 3C corrigió el error de collation solo en usp_CargarNutrientes.
+El mismo problema existe, sin haber fallado todavía, en otros 3
+procedimientos: la carga de Plaguicidas (usp_CargarImportacion) y las
+actualizaciones de catálogo de Nomenclatura y de Agrupador de
+Nutrientes (usp_ActualizarNomenclatura, usp_ActualizarAgrupadorNutrientes).
+No hace falta esperar a que fallen -- correlo ahora mismo, es
+preventivo.
+
+1. Abrir "06_fix_colacion_procedimientos_restantes.sql" (de esta
+   carpeta) en SSMS, igual que los pasos anteriores.
+
+2. Presionar F5 (o "¡ Ejecutar") con la conexión a PIQ_IA activa.
+
+3. En la pestaña "Mensajes", confirmar que no haya ninguna línea en
+   ROJO y que aparezcan las 3 líneas de confirmación (una por cada
+   procedimiento) más "Fix de collation aplicado a los 3 procedimientos
+   restantes.".
+
+Es seguro volver a correr este script las veces que haga falta: mismo
+motivo que el Paso 3C.
 
 
 ====================================================================

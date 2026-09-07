@@ -301,7 +301,13 @@ BEGIN
         FROM dbo.stg_Nomenclatura
         WHERE IngredienteActivo_Key IS NOT NULL
     ) AS origen
-    ON destino.IngredienteActivo_Key = origen.IngredienteActivo_Key
+    -- COLLATE DATABASE_DEFAULT en los dos lados: stg_Nomenclatura la
+    -- recrea pandas (to_sql if_exists="replace") en cada carga sin
+    -- especificar collation -- mismo problema resuelto en
+    -- usp_CargarNutrientes (ver ese procedimiento para la causa
+    -- completa: error 468 si el collation default de la base no
+    -- coincide con el de las columnas del catálogo permanente).
+    ON destino.IngredienteActivo_Key COLLATE DATABASE_DEFAULT = origen.IngredienteActivo_Key COLLATE DATABASE_DEFAULT
     WHEN MATCHED AND (
             ISNULL(destino.Agrupador,'') <> ISNULL(origen.Agrupador,'')
          OR ISNULL(destino.Codigo,'')    <> ISNULL(origen.Codigo,'')
@@ -343,7 +349,10 @@ BEGIN
             GETDATE(), @UserId, c.Agrupador, c.Codigo
         FROM dbo.stg_Importacion s
         LEFT JOIN dbo.CatalogoNomenclaturaPlaguicidas c
-               ON c.IngredienteActivo_Key = s.ingrediente_key;
+               -- COLLATE DATABASE_DEFAULT: mismo fix de collation que
+               -- usp_CargarNutrientes (stg_Importacion también la
+               -- recrea pandas sin especificar collation).
+               ON c.IngredienteActivo_Key COLLATE DATABASE_DEFAULT = s.ingrediente_key COLLATE DATABASE_DEFAULT;
 
         INSERT INTO dbo.log_ExcepcionesAgrupador
             (recibointerno, ingrediente_act, ingrediente_key, producto, cantidad, cif_USD)
@@ -351,7 +360,7 @@ BEGIN
                CAST(s.cantidad AS DECIMAL(18,2)), CAST(s.cif_USD AS DECIMAL(18,2))
         FROM dbo.stg_Importacion s
         LEFT JOIN dbo.CatalogoNomenclaturaPlaguicidas c
-               ON c.IngredienteActivo_Key = s.ingrediente_key
+               ON c.IngredienteActivo_Key COLLATE DATABASE_DEFAULT = s.ingrediente_key COLLATE DATABASE_DEFAULT
         WHERE c.IngredienteActivo_Key IS NULL AND s.ingrediente_key IS NOT NULL;
 
         COMMIT TRANSACTION;
@@ -377,7 +386,10 @@ BEGIN
         FROM dbo.stg_AgrupadorNutrientes
         WHERE NombreComercial_Key IS NOT NULL
     ) AS origen
-    ON destino.NombreComercial_Key = origen.NombreComercial_Key
+    -- COLLATE DATABASE_DEFAULT: mismo fix de collation que
+    -- usp_CargarNutrientes (stg_AgrupadorNutrientes también la recrea
+    -- pandas sin especificar collation).
+    ON destino.NombreComercial_Key COLLATE DATABASE_DEFAULT = origen.NombreComercial_Key COLLATE DATABASE_DEFAULT
     WHEN MATCHED AND (
             ISNULL(destino.ProductoAgrupado,'') <> ISNULL(origen.ProductoAgrupado,'')
          OR ISNULL(destino.Codigo,'')            <> ISNULL(origen.Codigo,'')
