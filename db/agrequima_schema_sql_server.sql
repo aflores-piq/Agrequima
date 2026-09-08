@@ -474,7 +474,7 @@ BEGIN
             CASE
                 WHEN EXISTS (
                     SELECT 1 FROM dbo.FormulasExcluidasNutrientes f
-                    WHERE s.Componentes LIKE CONCAT('%', f.Formula, '%')
+                    WHERE s.Componentes COLLATE DATABASE_DEFAULT LIKE CONCAT('%', f.Formula, '%') COLLATE DATABASE_DEFAULT
                 ) THEN 1
                 ELSE ISNULL(c.Excluido, 0)
             END,

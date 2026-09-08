@@ -35,7 +35,22 @@
    INSERT de fórmulas no duplica, y los UPDATE de backfill solo tocan
    filas que todavía tienen Excluido=0 (una segunda corrida no vuelve a
    contar las mismas filas como "cambiadas" -- @@ROWCOUNT dará 0 la
-   segunda vez si nada nuevo coincide).
+   segunda vez si nada nuevo coincide). Es seguro correrlo también si
+   ya se corrió antes SOLO hasta la creación de la tabla (ver nota de
+   collation más abajo) -- el paso 1 detecta que la tabla y las 2
+   fórmulas ya existen y no las duplica.
+
+   NOTA DE COLLATION (agregada tras un fallo real en el servidor):
+   dbo.FormulasExcluidasNutrientes.Formula se crea SIN especificar
+   COLLATE, así que su collation real depende del default de la base
+   PIQ_IA en cada servidor (mismo problema que
+   05_fix_colacion_usp_cargarnutrientes.sql). En el servidor real, ese
+   default no coincide con el COLLATE Modern_Spanish_CI_AS fijo de
+   Nutrientes.Componentes / CatalogoAgrupadorNutrientes, y la primera
+   versión de este script falló con el error 468 "Cannot resolve the
+   collation conflict..." en los 3 LIKE (los 2 backfills y el CASE de
+   usp_CargarNutrientes). Por eso cada comparación LIKE de acá lleva
+   COLLATE DATABASE_DEFAULT en AMBOS lados.
    ===================================================================== */
 
 USE PIQ_IA;
@@ -80,7 +95,7 @@ FROM dbo.Nutrientes n
 WHERE n.Excluido = 0
   AND EXISTS (
       SELECT 1 FROM dbo.FormulasExcluidasNutrientes f
-      WHERE n.Componentes LIKE CONCAT('%', f.Formula, '%')
+      WHERE n.Componentes COLLATE DATABASE_DEFAULT LIKE CONCAT('%', f.Formula, '%') COLLATE DATABASE_DEFAULT
   );
 PRINT 'Backfill dbo.Nutrientes: ' + CAST(@@ROWCOUNT AS VARCHAR(10)) + ' filas pasaron de Excluido=0 a Excluido=1.';
 GO
@@ -99,7 +114,7 @@ WHERE c.Excluido = 0
       SELECT 1
       FROM dbo.Nutrientes n
       JOIN dbo.FormulasExcluidasNutrientes f
-        ON n.Componentes LIKE CONCAT('%', f.Formula, '%')
+        ON n.Componentes COLLATE DATABASE_DEFAULT LIKE CONCAT('%', f.Formula, '%') COLLATE DATABASE_DEFAULT
       WHERE n.NombreComercial IS NOT NULL
         AND UPPER(LTRIM(RTRIM(
               REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(
@@ -144,7 +159,7 @@ BEGIN
             CASE
                 WHEN EXISTS (
                     SELECT 1 FROM dbo.FormulasExcluidasNutrientes f
-                    WHERE s.Componentes LIKE CONCAT('%', f.Formula, '%')
+                    WHERE s.Componentes COLLATE DATABASE_DEFAULT LIKE CONCAT('%', f.Formula, '%') COLLATE DATABASE_DEFAULT
                 ) THEN 1
                 ELSE ISNULL(c.Excluido, 0)
             END,
@@ -187,7 +202,7 @@ UNION ALL
 SELECT
     'Filas activas (vw_NutrientesActivos) que todavía mencionan Mancozeb/Propamocarbhydrocloride (debe ser 0)',
     (SELECT COUNT(*) FROM dbo.vw_NutrientesActivos v WHERE EXISTS (
-        SELECT 1 FROM dbo.FormulasExcluidasNutrientes f WHERE v.Componentes LIKE CONCAT('%', f.Formula, '%')
+        SELECT 1 FROM dbo.FormulasExcluidasNutrientes f WHERE v.Componentes COLLATE DATABASE_DEFAULT LIKE CONCAT('%', f.Formula, '%') COLLATE DATABASE_DEFAULT
     ));
 GO
 
