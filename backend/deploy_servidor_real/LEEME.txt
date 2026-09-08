@@ -15,6 +15,7 @@ Archivos que vas a usar:
   05_fix_colacion_usp_cargarnutrientes.sql   -> lo abris tambien en SSMS, si ves el error de collation al cargar Nutrientes (ver Paso 3C)
   06_fix_colacion_procedimientos_restantes.sql -> lo abris tambien en SSMS, preventivo -- mismo error en Plaguicidas/Nomenclatura/Agrupador (ver Paso 3D)
   07_vista_nutrientes_activos.sql -> lo abris tambien en SSMS, crea la vista que oculta productos excluidos en todo dashboard/reporte/export (ver Paso 3E)
+  08_formulas_excluidas_nutrientes.sql -> lo abris tambien en SSMS, excluye por formula completa (Mancozeb, Propamocarbhydrocloride) en vez de por producto puntual (ver Paso 3F)
   generar_hash_password.py       -> genera el valor que necesita 02_seed_roles_y_admin.sql
   sync_piq_ia.py                 -> el programa que trae los datos cada noche
   .env.ejemplo                   -> plantilla de configuracion (la vas a copiar y completar)
@@ -331,6 +332,48 @@ cambios -- las filas excluidas NO se borran, solo dejan de verse desde
 la vista. La carga de Nutrientes (Paso 3, Paso 3B, Paso 3C) sigue
 escribiendo en dbo.Nutrientes normalmente, no hace falta cambiar nada
 ahí.
+
+
+====================================================================
+ PASO 3F -- Exclusión por fórmula completa en Nutrientes (Mancozeb,
+ Propamocarbhydrocloride -- con SSMS)
+====================================================================
+
+Hasta el Paso 3B, la exclusión era por PRODUCTO puntual (ej. "ARKO 80
+WP"). El cliente confirmó que en realidad quiere excluir cualquier
+producto que use ciertas fórmulas/componentes como ingrediente -- por
+eso el widget "Fórmulas/Componentes ordenado por CIF USD" seguía
+mostrando "Mancozeb" y "Propamocarbhydrocloride": decenas de otros
+productos legítimos también usan esas fórmulas y no estaban en la
+lista de productos excluidos.
+
+Este paso agrega una tabla dbo.FormulasExcluidasNutrientes (ya trae
+"Mancozeb" y "Propamocarbhydrocloride" cargadas -- una fórmula nueva en
+el futuro es un INSERT en esa tabla, no un cambio de código), aplica el
+backfill a los datos ya cargados, y actualiza usp_CargarNutrientes para
+que las cargas futuras apliquen la regla solas.
+
+1. Abrir "08_formulas_excluidas_nutrientes.sql" (de esta carpeta) en
+   SSMS, igual que los pasos anteriores.
+
+2. Presionar F5 (o "¡ Ejecutar") con la conexión a PIQ_IA activa.
+
+3. En la pestaña "Mensajes", confirmar que no haya ninguna línea en
+   ROJO. Al final aparece una tabla de verificación con 3 filas --
+   confirmar que "Filas activas... que todavía mencionan
+   Mancozeb/Propamocarbhydrocloride" dé 0.
+
+Es seguro volver a correr este script las veces que haga falta: el
+INSERT de fórmulas no duplica, y los UPDATE de backfill solo tocan
+filas que todavía tienen Excluido=0 (una segunda corrida no cuenta de
+nuevo las mismas filas).
+
+Para agregar una fórmula nueva más adelante (sin correr este script de
+nuevo): en SSMS, conectado a PIQ_IA,
+    INSERT INTO dbo.FormulasExcluidasNutrientes (Formula) VALUES ('NombreDeLaFormula');
+y después correr el backfill de los pasos 2 y 3 de este mismo script
+(o pedir que se genere un script nuevo si hace falta dejarlo
+documentado).
 
 
 ====================================================================

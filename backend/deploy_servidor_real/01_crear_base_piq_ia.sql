@@ -182,6 +182,22 @@ CREATE TABLE dbo.[CatalogoAgrupadorNutrientes] (
 END
 GO
 
+IF OBJECT_ID('dbo.FormulasExcluidasNutrientes', 'U') IS NULL
+BEGIN
+CREATE TABLE dbo.[FormulasExcluidasNutrientes] (
+	[Formula] VARCHAR(200) COLLATE Modern_Spanish_CI_AS NOT NULL,
+	[FechaCreacion] DATETIME NOT NULL DEFAULT (getdate()),
+	CONSTRAINT [PK_FormulasExcluidasNutrientes] PRIMARY KEY CLUSTERED ([Formula])
+);
+END
+GO
+
+IF NOT EXISTS (SELECT 1 FROM dbo.FormulasExcluidasNutrientes WHERE Formula = 'Mancozeb')
+    INSERT INTO dbo.FormulasExcluidasNutrientes (Formula) VALUES ('Mancozeb');
+IF NOT EXISTS (SELECT 1 FROM dbo.FormulasExcluidasNutrientes WHERE Formula = 'Propamocarbhydrocloride')
+    INSERT INTO dbo.FormulasExcluidasNutrientes (Formula) VALUES ('Propamocarbhydrocloride');
+GO
+
 IF OBJECT_ID('dbo.log_ExcepcionesAgrupador', 'U') IS NULL
 BEGIN
 CREATE TABLE dbo.[log_ExcepcionesAgrupador] (
@@ -378,7 +394,14 @@ BEGIN
             s.Cantidad, s.PaisProcedencia, s.PaisOrigen, s.AduanadeIngreso,
             s.CIF_dolares, s.CIF_Q, s.TimbresQ, s.Exportador, s.Concentraciones,
             s.Componentes, s.VENTANILLA, c.ProductoAgrupado, c.Codigo,
-            ISNULL(c.Excluido, 0), GETDATE(), @UserId
+            CASE
+                WHEN EXISTS (
+                    SELECT 1 FROM dbo.FormulasExcluidasNutrientes f
+                    WHERE s.Componentes LIKE CONCAT('%', f.Formula, '%')
+                ) THEN 1
+                ELSE ISNULL(c.Excluido, 0)
+            END,
+            GETDATE(), @UserId
         FROM dbo.stg_Nutrientes s
         LEFT JOIN dbo.CatalogoAgrupadorNutrientes c
                -- COLLATE DATABASE_DEFAULT en ambos lados: stg_Nutrientes lo recrea

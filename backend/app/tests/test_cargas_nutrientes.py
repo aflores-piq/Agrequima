@@ -106,6 +106,57 @@ def test_carga_nutrientes_mapea_tipo_punto_y_vacio_a_licencias(client, admin_hea
     assert por_nombre["PRODUCTO TIPO NORMAL"] == "PERMISOS"  # no se toca lo que ya venía distinto de "."
 
 
+def test_carga_nutrientes_excluye_automaticamente_por_formula(client, admin_headers):
+    """El cliente confirmó (WhatsApp) que quiere excluir CUALQUIER
+    producto cuya fórmula/componente contenga "Mancozeb" o
+    "Propamocarbhydrocloride" -- ver dbo.FormulasExcluidasNutrientes.
+    usp_CargarNutrientes debe marcar Excluido=1 automáticamente en cada
+    carga futura, sin depender de que el producto ya esté en el
+    catálogo (acá se prueba justo con un producto nuevo, "sin
+    agrupador")."""
+    anio = 2096
+    limpiar_nutrientes_anio(anio)
+    contenido = construir_csv_nutrientes(
+        [
+            {
+                "Tipo": "LICENCIAS", "No_Licencia": "1-96", "No_Registro": "REG-F-1",
+                "NombreComercial": "PRODUCTO NUEVO CON MANCOZEB PRUEBA", "EmpresaImportadora": "IMPORTADORA PRUEBA",
+                "FechaEmision": f"10/01/{anio}", "UMedida": "Kilogramos", "Cantidad": 10,
+                "PaisProcedencia": "Testlandia", "PaisOrigen": "Testlandia",
+                "AduanadeIngreso": "Puerto Prueba", " CIF_dolares ": "$100.00",
+                " CIF_Q ": "Q770.00", " TimbresQ ": "Q1.00", "Exportador": "Exportador Prueba",
+                "Concentraciones": "10-10-10", "Componentes": "Mancozeb", "VENTANILLA": "MAGA",
+            },
+            {
+                "Tipo": "LICENCIAS", "No_Licencia": "2-96", "No_Registro": "REG-F-2",
+                "NombreComercial": "PRODUCTO NUEVO NORMAL PRUEBA", "EmpresaImportadora": "IMPORTADORA PRUEBA",
+                "FechaEmision": f"11/01/{anio}", "UMedida": "Kilogramos", "Cantidad": 20,
+                "PaisProcedencia": "Testlandia", "PaisOrigen": "Testlandia",
+                "AduanadeIngreso": "Puerto Prueba", " CIF_dolares ": "$200.00",
+                " CIF_Q ": "Q1540.00", " TimbresQ ": "Q2.00", "Exportador": "Exportador Prueba",
+                "Concentraciones": "10-10-10", "Componentes": "NPK", "VENTANILLA": "MAGA",
+            },
+        ]
+    )
+
+    r = client.post(
+        "/api/admin/cargas/nutrientes",
+        headers=admin_headers,
+        files={"archivo_nutrientes": ("test_formula_excluida.csv", contenido, "text/csv")},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["filas_cargadas"] == 2
+
+    with engine.connect() as conn:
+        filas = conn.execute(
+            text("SELECT NombreComercial, Excluido FROM dbo.Nutrientes WHERE anio = :anio ORDER BY NombreComercial"),
+            {"anio": anio},
+        ).all()
+    por_nombre = {f.NombreComercial: bool(f.Excluido) for f in filas}
+    assert por_nombre["PRODUCTO NUEVO CON MANCOZEB PRUEBA"] is True
+    assert por_nombre["PRODUCTO NUEVO NORMAL PRUEBA"] is False
+
+
 def test_carga_nutrientes_descarta_filas_sin_f_en_no_registro(client, admin_headers):
     """Filtro permanente: solo se cargan filas cuyo No_Registro contiene
     la letra "F" -- las demás se descartan en silencio, y el conteo

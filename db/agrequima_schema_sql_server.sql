@@ -254,6 +254,28 @@ FROM dbo.Nutrientes
 WHERE Excluido = 0;
 GO
 
+-- Fórmulas/componentes que el cliente confirmó que deben excluirse de
+-- Nutrientes por completo (no un producto puntual -- CUALQUIER producto
+-- cuyo Componentes contenga alguna de estas fórmulas). Agregar una
+-- fórmula nueva en el futuro es un INSERT acá, no un cambio de código
+-- -- ver usp_CargarNutrientes (la aplica automáticamente en cada carga)
+-- y el backfill correspondiente en
+-- deploy_servidor_real/08_formulas_excluidas_nutrientes.sql.
+IF OBJECT_ID('dbo.FormulasExcluidasNutrientes') IS NULL
+BEGIN
+    CREATE TABLE dbo.FormulasExcluidasNutrientes(
+        Formula       VARCHAR(200) NOT NULL PRIMARY KEY,
+        FechaCreacion DATETIME NOT NULL DEFAULT GETDATE()
+    );
+END
+GO
+
+IF NOT EXISTS (SELECT 1 FROM dbo.FormulasExcluidasNutrientes WHERE Formula = 'Mancozeb')
+    INSERT INTO dbo.FormulasExcluidasNutrientes (Formula) VALUES ('Mancozeb');
+IF NOT EXISTS (SELECT 1 FROM dbo.FormulasExcluidasNutrientes WHERE Formula = 'Propamocarbhydrocloride')
+    INSERT INTO dbo.FormulasExcluidasNutrientes (Formula) VALUES ('Propamocarbhydrocloride');
+GO
+
 /* =====================================================================
    4. LOGS DE EXCEPCIONES (transacciones sin agrupador encontrado)
    ===================================================================== */
@@ -443,7 +465,20 @@ BEGIN
             s.Cantidad, s.PaisProcedencia, s.PaisOrigen, s.AduanadeIngreso,
             s.CIF_dolares, s.CIF_Q, s.TimbresQ, s.Exportador, s.Concentraciones,
             s.Componentes, s.VENTANILLA, c.ProductoAgrupado, c.Codigo,
-            ISNULL(c.Excluido, 0), GETDATE(), @UserId
+            -- Excluido=1 si el catálogo ya lo marca para este producto, O
+            -- si la fórmula/componente de la fila coincide con alguna de
+            -- dbo.FormulasExcluidasNutrientes -- esto último aplica
+            -- automáticamente a CUALQUIER producto (nuevo o ya
+            -- catalogado) que use esa fórmula, sin depender de que
+            -- alguien lo agregue al catálogo a mano.
+            CASE
+                WHEN EXISTS (
+                    SELECT 1 FROM dbo.FormulasExcluidasNutrientes f
+                    WHERE s.Componentes LIKE CONCAT('%', f.Formula, '%')
+                ) THEN 1
+                ELSE ISNULL(c.Excluido, 0)
+            END,
+            GETDATE(), @UserId
         FROM dbo.stg_Nutrientes s
         LEFT JOIN dbo.CatalogoAgrupadorNutrientes c
                -- COLLATE DATABASE_DEFAULT en ambos lados: stg_Nutrientes lo
