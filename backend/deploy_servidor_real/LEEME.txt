@@ -14,6 +14,7 @@ Archivos que vas a usar:
   04_migracion_nutrientes_tipo_exclusion.sql -> lo abris tambien en SSMS, cuando corresponda (ver Paso 3B)
   05_fix_colacion_usp_cargarnutrientes.sql   -> lo abris tambien en SSMS, si ves el error de collation al cargar Nutrientes (ver Paso 3C)
   06_fix_colacion_procedimientos_restantes.sql -> lo abris tambien en SSMS, preventivo -- mismo error en Plaguicidas/Nomenclatura/Agrupador (ver Paso 3D)
+  07_vista_nutrientes_activos.sql -> lo abris tambien en SSMS, crea la vista que oculta productos excluidos en todo dashboard/reporte/export (ver Paso 3E)
   generar_hash_password.py       -> genera el valor que necesita 02_seed_roles_y_admin.sql
   sync_piq_ia.py                 -> el programa que trae los datos cada noche
   .env.ejemplo                   -> plantilla de configuracion (la vas a copiar y completar)
@@ -298,6 +299,38 @@ preventivo.
 
 Es seguro volver a correr este script las veces que haga falta: mismo
 motivo que el Paso 3C.
+
+
+====================================================================
+ PASO 3E -- Vista dbo.vw_NutrientesActivos (solución estructural a la
+ exclusión de productos -- con SSMS)
+====================================================================
+
+Hasta el Paso 3B, "un producto excluido no se muestra" dependía de que
+cada pantalla/reporte se acordara de filtrar Excluido=1 por su cuenta.
+Este paso lo vuelve estructural: crea una vista
+(dbo.vw_NutrientesActivos) que YA excluye esas filas por definición --
+todo el código del backend que arma dashboards, reportes o exports de
+Nutrientes se migró para leer de esta vista en vez de dbo.Nutrientes
+directamente, así que un código nuevo que se agregue después ya no
+puede "olvidarse" del filtro sin querer.
+
+1. Abrir "07_vista_nutrientes_activos.sql" (de esta carpeta) en SSMS,
+   igual que los pasos anteriores.
+
+2. Presionar F5 (o "¡ Ejecutar") con la conexión a PIQ_IA activa.
+
+3. En la pestaña "Mensajes", confirmar que no haya ninguna línea en
+   ROJO y que aparezca "dbo.vw_NutrientesActivos creada/actualizada.".
+
+Es seguro volver a correr este script las veces que haga falta:
+CREATE OR ALTER VIEW reemplaza la definición completa cada vez.
+
+Importante: dbo.Nutrientes (la tabla real) sigue existiendo sin
+cambios -- las filas excluidas NO se borran, solo dejan de verse desde
+la vista. La carga de Nutrientes (Paso 3, Paso 3B, Paso 3C) sigue
+escribiendo en dbo.Nutrientes normalmente, no hace falta cambiar nada
+ahí.
 
 
 ====================================================================

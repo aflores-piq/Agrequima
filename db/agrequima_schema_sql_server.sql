@@ -235,6 +235,25 @@ BEGIN
 END
 GO
 
+-- Vista de solo lectura: dbo.Nutrientes sin las filas Excluido=1 --
+-- solución ESTRUCTURAL a la exclusión de productos (en vez de que cada
+-- dashboard/reporte/export se acuerde de agregar WHERE Excluido = 0 por
+-- su cuenta, todo ese código lee de esta vista -- ver NutrienteActivo
+-- en app/models/nutriente.py). dbo.Nutrientes (la tabla real) sigue
+-- siendo la que usan la carga (usp_CargarNutrientes) y la
+-- sincronización del catálogo, que sí necesitan ver las filas
+-- excluidas también.
+CREATE OR ALTER VIEW dbo.vw_NutrientesActivos AS
+SELECT
+    nutrienteid, anio, Tipo, No_Licencia, No_Registro, NombreComercial,
+    EmpresaImportadora, FechaEmision, UMedida, Cantidad, PaisProcedencia,
+    PaisOrigen, AduanadeIngreso, CIF_dolares, CIF_Q, TimbresQ, Exportador,
+    Concentraciones, Componentes, VENTANILLA, ProductoAgrupado,
+    CodigoAgrupador, Excluido, fechamod, userid
+FROM dbo.Nutrientes
+WHERE Excluido = 0;
+GO
+
 /* =====================================================================
    4. LOGS DE EXCEPCIONES (transacciones sin agrupador encontrado)
    ===================================================================== */

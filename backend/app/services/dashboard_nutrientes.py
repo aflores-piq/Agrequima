@@ -1,5 +1,8 @@
 """Agregaciones del dashboard de nutrientes, calculadas en SQL/SQLAlchemy
-sobre dbo.Nutrientes (no en el frontend).
+sobre dbo.vw_NutrientesActivos (no en el frontend) -- esa vista, no
+dbo.Nutrientes directamente, para que los productos marcados Excluido=1
+queden fuera por construcción, sin depender de que cada función se
+acuerde de filtrarlos (ver NutrienteActivo en models/nutriente.py).
 
 Cada bloque (gráfico o tabla) se calcula en una función `df_*` que
 devuelve un DataFrame de pandas — es la única fuente de verdad para ese
@@ -16,7 +19,7 @@ import pandas as pd
 from sqlalchemy import and_, extract, func, or_
 from sqlalchemy.orm import Query, Session, aliased
 
-from app.models.nutriente import Nutriente
+from app.models.nutriente import NutrienteActivo
 from app.schemas.dashboard import (
     ComparacionAcumuladaMensual,
     ComparacionMensual,
@@ -49,12 +52,12 @@ _TIPOS_INVALIDOS = ["PLAGUICIDA"]
 # la MISMA transacción capturada dos veces, no dos transacciones
 # distintas (39 grupos duplicados exactos auditados contra la base).
 _COLUMNAS_IDENTIDAD_FILA = (
-    Nutriente.No_Licencia,
-    Nutriente.No_Registro,
-    Nutriente.FechaEmision,
-    Nutriente.EmpresaImportadora,
-    Nutriente.NombreComercial,
-    Nutriente.CIF_dolares,
+    NutrienteActivo.No_Licencia,
+    NutrienteActivo.No_Registro,
+    NutrienteActivo.FechaEmision,
+    NutrienteActivo.EmpresaImportadora,
+    NutrienteActivo.NombreComercial,
+    NutrienteActivo.CIF_dolares,
 )
 
 
@@ -72,14 +75,14 @@ def _filtro_no_duplicado_exacto(db: Session, query: Query) -> Query:
     del cambio); las comparaciones son NULL-safe (a = b OR ambos NULL)
     para reproducir el mismo agrupamiento que hacía PARTITION BY, que
     trata NULL = NULL como iguales dentro de una partición."""
-    otra = aliased(Nutriente)
+    otra = aliased(NutrienteActivo)
     condiciones_igualdad = [
         or_(getattr(otra, col.key) == col, and_(getattr(otra, col.key).is_(None), col.is_(None)))
         for col in _COLUMNAS_IDENTIDAD_FILA
     ]
     existe_duplicado_con_id_mas_bajo = (
         db.query(otra.nutrienteid)
-        .filter(otra.nutrienteid < Nutriente.nutrienteid)
+        .filter(otra.nutrienteid < NutrienteActivo.nutrienteid)
         .filter(*condiciones_igualdad)
         .exists()
     )
@@ -87,7 +90,7 @@ def _filtro_no_duplicado_exacto(db: Session, query: Query) -> Query:
 
 # Ver comentario equivalente en dashboard_plaguicidas.py: valor especial
 # del filtro de "Nombre comercial" (que filtra por
-# Nutriente.ProductoAgrupado, ver _aplicar_filtros) para las filas sin
+# NutrienteActivo.ProductoAgrupado, ver _aplicar_filtros) para las filas sin
 # agrupador (ProductoAgrupado IS NULL).
 SIN_AGRUPADOR = "Sin agrupador"
 
@@ -102,9 +105,9 @@ def _filtro_producto_agrupado(query, valores: list[str] | None):
     valores_reales = [v for v in valores if v != SIN_AGRUPADOR]
     condiciones = []
     if valores_reales:
-        condiciones.append(Nutriente.ProductoAgrupado.in_(valores_reales))
+        condiciones.append(NutrienteActivo.ProductoAgrupado.in_(valores_reales))
     if incluye_sin_agrupador:
-        condiciones.append(Nutriente.ProductoAgrupado.is_(None))
+        condiciones.append(NutrienteActivo.ProductoAgrupado.is_(None))
     return query.filter(or_(*condiciones)) if condiciones else query
 
 
@@ -120,40 +123,41 @@ def _aplicar_filtros(
     # como viene del archivo original, sin pasar por el catálogo de
     # agrupación — independiente del filtro de arriba (ProductoAgrupado).
     if nombre_comercial_raw:
-        query = query.filter(Nutriente.NombreComercial.in_(nombre_comercial_raw))
+        query = query.filter(NutrienteActivo.NombreComercial.in_(nombre_comercial_raw))
     if origen:
-        query = query.filter(Nutriente.PaisOrigen.in_(origen))
+        query = query.filter(NutrienteActivo.PaisOrigen.in_(origen))
     if componente:
-        query = query.filter(Nutriente.Componentes.in_(componente))
+        query = query.filter(NutrienteActivo.Componentes.in_(componente))
     return query
 
 
 def _anio_default(db: Session) -> int:
-    return db.query(func.max(Nutriente.anio)).scalar() or 0
+    return db.query(func.max(NutrienteActivo.anio)).scalar() or 0
 
 
 def obtener_opciones_filtro_nutrientes(db: Session) -> OpcionesFiltroNutrientes:
     """Valores reales y distintos para poblar los dropdowns/autocompletado
-    de la fila de filtros (en vez de cuadros de texto en blanco). No
-    ofrece opciones que solo existen en filas Excluido=1 -- si se
-    seleccionaran, el dashboard nunca mostraría resultados para ellas."""
-    no_excluido = db.query(Nutriente).filter(Nutriente.Excluido == False)
+    de la fila de filtros (en vez de cuadros de texto en blanco).
+    NutrienteActivo (dbo.vw_NutrientesActivos) ya excluye Excluido=1 por
+    definición de la vista -- no ofrece opciones que un usuario pudiera
+    seleccionar sin obtener nunca resultados."""
+    base = db.query(NutrienteActivo)
     anios = sorted(
-        (a for (a,) in no_excluido.with_entities(Nutriente.anio).distinct().all() if a is not None),
+        (a for (a,) in base.with_entities(NutrienteActivo.anio).distinct().all() if a is not None),
         reverse=True,
     )
     paises_origen = sorted(
-        {p for (p,) in no_excluido.with_entities(Nutriente.PaisOrigen).distinct().all() if p}
+        {p for (p,) in base.with_entities(NutrienteActivo.PaisOrigen).distinct().all() if p}
     )
     componentes = sorted(
-        {c for (c,) in no_excluido.with_entities(Nutriente.Componentes).distinct().all() if c}
+        {c for (c,) in base.with_entities(NutrienteActivo.Componentes).distinct().all() if c}
     )
-    grupos_presentes = no_excluido.with_entities(Nutriente.ProductoAgrupado).distinct().all()
+    grupos_presentes = base.with_entities(NutrienteActivo.ProductoAgrupado).distinct().all()
     nombres_comerciales = sorted({g for (g,) in grupos_presentes if g})
     if any(g is None for (g,) in grupos_presentes):
         nombres_comerciales.append(SIN_AGRUPADOR)
     nombres_comerciales_raw = sorted(
-        {n for (n,) in no_excluido.with_entities(Nutriente.NombreComercial).distinct().all() if n}
+        {n for (n,) in base.with_entities(NutrienteActivo.NombreComercial).distinct().all() if n}
     )
     return OpcionesFiltroNutrientes(
         anios=anios,
@@ -169,8 +173,8 @@ def _mes_maximo_disponible(db: Session, anio: int) -> int:
     con datos EN dbo.Nutrientes para el año seleccionado (independiente
     de plaguicidas, que vive en otra tabla)."""
     resultado = (
-        db.query(func.max(extract("month", Nutriente.FechaEmision)))
-        .filter(Nutriente.anio == anio)
+        db.query(func.max(extract("month", NutrienteActivo.FechaEmision)))
+        .filter(NutrienteActivo.anio == anio)
         .scalar()
     )
     return int(resultado) if resultado else 12
@@ -208,19 +212,20 @@ def construir_contexto_nutrientes(
     mes_maximo = _mes_maximo_disponible(db, anio_actual)
     mes_seleccionado = mes or mes_maximo
 
-    mes_expr = extract("month", Nutriente.FechaEmision)
+    mes_expr = extract("month", NutrienteActivo.FechaEmision)
 
     def _base(anio_query: int):
+        # NutrienteActivo (dbo.vw_NutrientesActivos) ya excluye
+        # Excluido=1 por definición de la vista -- productos que el
+        # cliente confirmó que no corresponden a Nutrientes (ver
+        # CatalogoAgrupadorNutrientes.Excluido). No hace falta (ni
+        # sobra) un .filter(Excluido == False) acá: la fila cruda sigue
+        # en dbo.Nutrientes, solo se oculta de dashboards/exports.
         query = _filtro_no_duplicado_exacto(
             db,
-            db.query(Nutriente)
-            .filter(Nutriente.anio == anio_query)
-            .filter(Nutriente.Tipo.notin_(_TIPOS_INVALIDOS))
-            # Productos marcados Excluido=1 en el catálogo (ver
-            # CatalogoAgrupadorNutrientes.Excluido): no corresponden a
-            # Nutrientes según el cliente. La fila cruda sigue en la
-            # base -- solo se oculta de dashboards/exports.
-            .filter(Nutriente.Excluido == False),
+            db.query(NutrienteActivo)
+            .filter(NutrienteActivo.anio == anio_query)
+            .filter(NutrienteActivo.Tipo.notin_(_TIPOS_INVALIDOS)),
         )
         query = _aplicar_filtros(
             query, nombre_comercial, nombre_comercial_raw, origen, componente,
@@ -231,7 +236,7 @@ def construir_contexto_nutrientes(
 
     base_actual = _base(anio_actual)
     base_anterior = _base(anio_anterior)
-    cif_total = float(base_actual.with_entities(func.sum(Nutriente.CIF_dolares)).scalar() or 0) or 1
+    cif_total = float(base_actual.with_entities(func.sum(NutrienteActivo.CIF_dolares)).scalar() or 0) or 1
 
     return ContextoNutrientes(
         db=db,
@@ -248,10 +253,10 @@ def construir_contexto_nutrientes(
 
 def _kpis_nutrientes(ctx: ContextoNutrientes) -> KpisNutrientes:
     fila = ctx.base_actual.with_entities(
-        func.sum(Nutriente.CIF_dolares),
-        func.sum(Nutriente.CIF_Q),
-        func.count(Nutriente.nutrienteid),
-        func.count(Nutriente.EmpresaImportadora.distinct()),
+        func.sum(NutrienteActivo.CIF_dolares),
+        func.sum(NutrienteActivo.CIF_Q),
+        func.count(NutrienteActivo.nutrienteid),
+        func.count(NutrienteActivo.EmpresaImportadora.distinct()),
     ).one()
     return KpisNutrientes(
         cif_total_usd=float(fila[0] or 0),
@@ -262,8 +267,8 @@ def _kpis_nutrientes(ctx: ContextoNutrientes) -> KpisNutrientes:
 
 
 def _totales_por_mes(query: Query) -> dict[int, float]:
-    mes_expr = extract("month", Nutriente.FechaEmision)
-    return dict(query.with_entities(mes_expr, func.sum(Nutriente.CIF_dolares)).group_by(mes_expr).all())
+    mes_expr = extract("month", NutrienteActivo.FechaEmision)
+    return dict(query.with_entities(mes_expr, func.sum(NutrienteActivo.CIF_dolares)).group_by(mes_expr).all())
 
 
 def df_acumulado_mensual(ctx: ContextoNutrientes) -> pd.DataFrame:
@@ -329,10 +334,10 @@ def df_acumulado_multianual_ancho(ctx: ContextoNutrientes) -> pd.DataFrame:
 def df_top_formulas(ctx: ContextoNutrientes) -> pd.DataFrame:
     """Gráfico 3: top fórmulas químicas (ProductoAgrupado) por CIF."""
     filas = (
-        ctx.base_actual.with_entities(Nutriente.ProductoAgrupado, func.sum(Nutriente.CIF_dolares))
-        .filter(Nutriente.ProductoAgrupado.isnot(None))
-        .group_by(Nutriente.ProductoAgrupado)
-        .order_by(func.sum(Nutriente.CIF_dolares).desc())
+        ctx.base_actual.with_entities(NutrienteActivo.ProductoAgrupado, func.sum(NutrienteActivo.CIF_dolares))
+        .filter(NutrienteActivo.ProductoAgrupado.isnot(None))
+        .group_by(NutrienteActivo.ProductoAgrupado)
+        .order_by(func.sum(NutrienteActivo.CIF_dolares).desc())
         .limit(_TOP_N_FORMULAS)
         .all()
     )
@@ -348,9 +353,9 @@ def df_top_aduanas(ctx: ContextoNutrientes) -> pd.DataFrame:
     acentos, con/sin el prefijo "Puerto"): se normaliza antes de agrupar."""
     cif_por_aduana: dict[str, float] = defaultdict(float)
     for aduana_raw, cif_usd in (
-        ctx.base_actual.with_entities(Nutriente.AduanadeIngreso, func.sum(Nutriente.CIF_dolares))
-        .filter(Nutriente.AduanadeIngreso.isnot(None))
-        .group_by(Nutriente.AduanadeIngreso)
+        ctx.base_actual.with_entities(NutrienteActivo.AduanadeIngreso, func.sum(NutrienteActivo.CIF_dolares))
+        .filter(NutrienteActivo.AduanadeIngreso.isnot(None))
+        .group_by(NutrienteActivo.AduanadeIngreso)
         .all()
     ):
         aduana = normalizar_aduana(aduana_raw)
@@ -368,13 +373,13 @@ def df_top_paises_origen(ctx: ContextoNutrientes) -> pd.DataFrame:
     los elementos exportables pedidos, pero se deja disponible)."""
     filas = (
         ctx.base_actual.with_entities(
-            Nutriente.PaisOrigen,
-            func.count(Nutriente.nutrienteid),
-            func.sum(Nutriente.CIF_dolares),
+            NutrienteActivo.PaisOrigen,
+            func.count(NutrienteActivo.nutrienteid),
+            func.sum(NutrienteActivo.CIF_dolares),
         )
-        .filter(Nutriente.PaisOrigen.isnot(None))
-        .group_by(Nutriente.PaisOrigen)
-        .order_by(func.sum(Nutriente.CIF_dolares).desc())
+        .filter(NutrienteActivo.PaisOrigen.isnot(None))
+        .group_by(NutrienteActivo.PaisOrigen)
+        .order_by(func.sum(NutrienteActivo.CIF_dolares).desc())
         .limit(_TOP_N_PAISES)
         .all()
     )
@@ -404,16 +409,16 @@ def df_formulas_componentes(ctx: ContextoNutrientes) -> pd.DataFrame:
     valores de esa columna vienen de Componentes."""
     filas_detalle = (
         ctx.base_actual.with_entities(
-            Nutriente.Componentes,
-            Nutriente.Concentraciones,
-            Nutriente.UMedida,
-            func.count(Nutriente.nutrienteid),
-            func.sum(Nutriente.Cantidad),
-            func.sum(Nutriente.CIF_dolares),
-            func.sum(Nutriente.CIF_Q),
+            NutrienteActivo.Componentes,
+            NutrienteActivo.Concentraciones,
+            NutrienteActivo.UMedida,
+            func.count(NutrienteActivo.nutrienteid),
+            func.sum(NutrienteActivo.Cantidad),
+            func.sum(NutrienteActivo.CIF_dolares),
+            func.sum(NutrienteActivo.CIF_Q),
         )
-        .filter(Nutriente.Componentes.isnot(None))
-        .group_by(Nutriente.Componentes, Nutriente.Concentraciones, Nutriente.UMedida)
+        .filter(NutrienteActivo.Componentes.isnot(None))
+        .group_by(NutrienteActivo.Componentes, NutrienteActivo.Concentraciones, NutrienteActivo.UMedida)
         .all()
     )
     agregados: dict[str, dict[str, Any]] = {}
@@ -456,7 +461,7 @@ def df_detalle(ctx: ContextoNutrientes) -> pd.DataFrame:
     esta misma query base (ctx.base_actual) por separado para el scroll
     continuo, sin traer miles de filas a Python en cada bloque."""
     filas = ctx.base_actual.order_by(
-        Nutriente.FechaEmision.desc(), Nutriente.nutrienteid.desc()
+        NutrienteActivo.FechaEmision.desc(), NutrienteActivo.nutrienteid.desc()
     ).all()
     return sin_nan(pd.DataFrame(
         [
@@ -503,9 +508,9 @@ def obtener_dashboard_nutrientes(
 
     # --- Tabla detalle paginada (SQL-side OFFSET/LIMIT, independiente de
     # df_detalle: ver nota en esa función) ---
-    total_detalle = ctx.base_actual.with_entities(func.count(Nutriente.nutrienteid)).scalar() or 0
+    total_detalle = ctx.base_actual.with_entities(func.count(NutrienteActivo.nutrienteid)).scalar() or 0
     filas_detalle = (
-        ctx.base_actual.order_by(Nutriente.FechaEmision.desc(), Nutriente.nutrienteid.desc())
+        ctx.base_actual.order_by(NutrienteActivo.FechaEmision.desc(), NutrienteActivo.nutrienteid.desc())
         .offset((pagina - 1) * tamano_pagina)
         .limit(tamano_pagina)
         .all()
