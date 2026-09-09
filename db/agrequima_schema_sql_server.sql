@@ -277,6 +277,68 @@ IF NOT EXISTS (SELECT 1 FROM dbo.FormulasExcluidasNutrientes WHERE Formula = 'Pr
 GO
 
 /* =====================================================================
+   3B. FINANCIERO - Saldos Bancarios y Otros Ingresos (tabla final +
+   staging, mismo patrón que Nutrientes). Son cargas directas por
+   Excel, sin cruce de catálogo/agrupador -- por eso no hay tabla
+   intermedia de catálogo como en Nutrientes/Plaguicidas.
+   ===================================================================== */
+IF OBJECT_ID('dbo.SaldoBancario') IS NULL
+BEGIN
+    CREATE TABLE dbo.SaldoBancario(
+        SaldoBancarioId INT IDENTITY(1,1) NOT NULL,
+        Concepto        NVARCHAR(50) NULL,      -- 'Saldo inicial' | 'Creditos' | 'Debitos'
+        Anio            INT NULL,
+        Mes             INT NULL,
+        Banco           NVARCHAR(50) NULL,      -- BANRURAL, BANCOR, BI, PROMERICA (hoy)
+        Valor           DECIMAL(18,2) NULL,
+        UsuarioId       INT NULL,
+        FechaMod        DATETIME NOT NULL DEFAULT GETDATE(),
+        CONSTRAINT PK_SaldoBancario PRIMARY KEY CLUSTERED (SaldoBancarioId ASC)
+    );
+END
+GO
+
+IF OBJECT_ID('dbo.stg_SaldoBancario') IS NULL
+BEGIN
+    CREATE TABLE dbo.stg_SaldoBancario(
+        Concepto        VARCHAR(MAX) NULL,
+        Anio            FLOAT NULL,
+        Mes             FLOAT NULL,
+        Banco           VARCHAR(MAX) NULL,
+        Valor           FLOAT NULL
+    );
+END
+GO
+
+IF OBJECT_ID('dbo.OtroIngreso') IS NULL
+BEGIN
+    CREATE TABLE dbo.OtroIngreso(
+        OtroIngresoId   INT IDENTITY(1,1) NOT NULL,
+        Tipo            NVARCHAR(50) NULL,      -- 'Presupuesto' | 'Ejecutado'
+        Concepto        NVARCHAR(200) NULL,     -- texto libre (hoy 12 valores fijos, no es catálogo)
+        Anio            INT NULL,
+        Mes             INT NULL,
+        Valor           DECIMAL(18,2) NULL,
+        UsuarioId       INT NULL,
+        FechaMod        DATETIME NOT NULL DEFAULT GETDATE(),
+        CONSTRAINT PK_OtroIngreso PRIMARY KEY CLUSTERED (OtroIngresoId ASC)
+    );
+END
+GO
+
+IF OBJECT_ID('dbo.stg_OtroIngreso') IS NULL
+BEGIN
+    CREATE TABLE dbo.stg_OtroIngreso(
+        Tipo            VARCHAR(MAX) NULL,
+        Concepto        VARCHAR(MAX) NULL,
+        Anio            FLOAT NULL,
+        Mes             FLOAT NULL,
+        Valor           FLOAT NULL
+    );
+END
+GO
+
+/* =====================================================================
    4. LOGS DE EXCEPCIONES (transacciones sin agrupador encontrado)
    ===================================================================== */
 IF OBJECT_ID('dbo.log_ExcepcionesAgrupador') IS NULL
@@ -315,7 +377,7 @@ IF OBJECT_ID('dbo.AuditoriaCargas') IS NULL
 BEGIN
     CREATE TABLE dbo.AuditoriaCargas(
         CargaId             INT IDENTITY(1,1) PRIMARY KEY,
-        TipoCarga           VARCHAR(20) NOT NULL,   -- 'Plaguicidas' | 'Nutrientes'
+        TipoCarga           VARCHAR(20) NOT NULL,   -- 'Plaguicidas' | 'Nutrientes' | 'SaldosBancarios' | 'OtrosIngresos'
         NombreArchivo       VARCHAR(300) NULL,
         UsuarioId           INT NULL,
         FechaCarga          DATETIME NOT NULL DEFAULT GETDATE(),

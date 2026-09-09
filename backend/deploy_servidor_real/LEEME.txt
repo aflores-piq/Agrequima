@@ -496,7 +496,19 @@ comando también lo instala, y si ya está no lo reinstala.)
    SYNC_TABLAS             -> dejar tal cual viene (ya trae las 4
                               tablas correctas). Solo se toca si en el
                               futuro se agregan tablas de otros
-                              proyectos (Financiero, Indicadores).
+                              proyectos (Indicadores).
+
+   SYNC_CONTACC_DB_*       -> conexion al servidor de CONTACC
+                              (contabilidad del cliente, modulo
+                              Financiero) -- servidor/base DISTINTOS de
+                              los de arriba. Completar SERVER, NAME
+                              (normalmente "CONTACC"), USER y PASSWORD
+                              con los datos reales que de el cliente.
+   SYNC_VISTAS_CONTACC     -> dejar tal cual viene (ya trae las 8
+                              vistas correctas). No agregar
+                              vw_piq_viaticos ni vw_piq_kilometraje,
+                              quedan fuera de alcance del modulo
+                              Financiero.
 
 3. Guardar el archivo (Ctrl+S) y cerrarlo.
 

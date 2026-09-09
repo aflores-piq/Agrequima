@@ -10,13 +10,22 @@ instalacion paso a paso.
 
 Genérico a propósito: la lista de tablas a espejar se lee de la
 variable de entorno SYNC_TABLAS (separadas por coma) -- para agregar
-tablas de otros proyectos (Financiero, Indicadores) en el futuro,
-alcanza con ampliar esa variable en el .env, sin tocar este código.
+tablas nuevas en el futuro, alcanza con ampliar esa variable en el
+.env, sin tocar este código.
 
 Para cada tabla: refleja el esquema real desde el origen, crea la misma
 tabla en destino si no existe, y hace un refresh completo (vacía +
 inserta todas las filas actuales) -- así el espejo queda idéntico a la
 fuente en cada corrida.
+
+Módulo Financiero: además de SYNC_TABLAS/SYNC_ORIGEN_* (Importacion,
+Nutrientes, catálogos), este script espeja un SEGUNDO origen
+independiente -- las vistas de solo lectura de CONTACC (contabilidad
+del cliente), listadas en SYNC_VISTAS_CONTACC y conectadas vía
+SYNC_CONTACC_DB_* (server/name/user/password propios, un servidor
+distinto del de SYNC_ORIGEN_*). Agregar o sacar una vista es editar esa
+variable, no el código. El destino sigue siendo el mismo PIQ_IA de
+siempre.
 
 Uso:
     python sync_piq_ia.py
@@ -38,6 +47,12 @@ load_dotenv(CARPETA_SCRIPT / ".env")
 ODBC_DRIVER = os.getenv("ODBC_DRIVER", "ODBC Driver 17 for SQL Server")
 
 TABLAS_A_ESPEJAR = [t.strip() for t in os.getenv("SYNC_TABLAS", "").split(",") if t.strip()]
+
+# Segundo origen, independiente del de arriba -- vistas de solo lectura
+# de CONTACC (contabilidad del cliente, modulo Financiero), en un
+# servidor/base distintos de SYNC_ORIGEN_*. El destino sigue siendo el
+# mismo PIQ_IA de siempre.
+VISTAS_CONTACC = [v.strip() for v in os.getenv("SYNC_VISTAS_CONTACC", "").split(",") if v.strip()]
 
 LOG_DIR = CARPETA_SCRIPT / "logs"
 LOG_DIR.mkdir(exist_ok=True)
@@ -144,26 +159,40 @@ def _copiar_tabla(origen_engine, destino_engine, nombre_tabla: str) -> int:
 
 
 def main() -> int:
-    if not TABLAS_A_ESPEJAR:
-        logger.error("SYNC_TABLAS está vacío en .env — no hay nada que espejar.")
+    if not TABLAS_A_ESPEJAR and not VISTAS_CONTACC:
+        logger.error("SYNC_TABLAS y SYNC_VISTAS_CONTACC están vacíos en .env — no hay nada que espejar.")
         return 1
 
-    origen_engine = create_engine(_conn_str("ORIGEN"))
     destino_engine = create_engine(_conn_str("DESTINO"))
-
     _crear_tabla_log_si_no_existe(destino_engine)
 
-    logger.info("=== Iniciando sincronización PIQ_IA (%d tablas configuradas) ===", len(TABLAS_A_ESPEJAR))
     hubo_error = False
-    for tabla in TABLAS_A_ESPEJAR:
-        try:
-            filas = _copiar_tabla(origen_engine, destino_engine, tabla)
-            logger.info("OK   %-40s %d filas", tabla, filas)
-            _registrar_log(destino_engine, tabla, filas, "OK")
-        except Exception as exc:
-            hubo_error = True
-            logger.exception("ERROR al copiar %s", tabla)
-            _registrar_log(destino_engine, tabla, None, "Error", str(exc))
+
+    if TABLAS_A_ESPEJAR:
+        origen_engine = create_engine(_conn_str("ORIGEN"))
+        logger.info("=== Iniciando sincronización PIQ_IA (%d tablas configuradas) ===", len(TABLAS_A_ESPEJAR))
+        for tabla in TABLAS_A_ESPEJAR:
+            try:
+                filas = _copiar_tabla(origen_engine, destino_engine, tabla)
+                logger.info("OK   %-40s %d filas", tabla, filas)
+                _registrar_log(destino_engine, tabla, filas, "OK")
+            except Exception as exc:
+                hubo_error = True
+                logger.exception("ERROR al copiar %s", tabla)
+                _registrar_log(destino_engine, tabla, None, "Error", str(exc))
+
+    if VISTAS_CONTACC:
+        contacc_engine = create_engine(_conn_str("CONTACC"))
+        logger.info("=== Iniciando sincronización CONTACC -> PIQ_IA (%d vistas configuradas) ===", len(VISTAS_CONTACC))
+        for vista in VISTAS_CONTACC:
+            try:
+                filas = _copiar_tabla(contacc_engine, destino_engine, vista)
+                logger.info("OK   %-40s %d filas", vista, filas)
+                _registrar_log(destino_engine, vista, filas, "OK")
+            except Exception as exc:
+                hubo_error = True
+                logger.exception("ERROR al copiar %s", vista)
+                _registrar_log(destino_engine, vista, None, "Error", str(exc))
 
     logger.info("=== Sincronización PIQ_IA finalizada (%s) ===", "con errores" if hubo_error else "OK")
     return 1 if hubo_error else 0
