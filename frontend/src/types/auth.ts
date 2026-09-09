@@ -7,6 +7,9 @@ export interface TokenResponse {
   rol: Rol;
   puede_exportar: boolean;
   tema: Tema;
+  acceso_importaciones: boolean;
+  acceso_financiero: boolean;
+  acceso_indicadores: boolean;
 }
 
 export interface PreferenciasResponse {

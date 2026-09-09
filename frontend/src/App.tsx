@@ -9,6 +9,8 @@ import { DashboardNutrientesPage } from "./pages/app/DashboardNutrientesPage";
 import { AdminLayout } from "./pages/admin/AdminLayout";
 import { CargaPlaguicidasPage } from "./pages/admin/CargaPlaguicidasPage";
 import { CargaNutrientesPage } from "./pages/admin/CargaNutrientesPage";
+import { CargaSaldoBancarioPage } from "./pages/admin/CargaSaldoBancarioPage";
+import { CargaOtroIngresoPage } from "./pages/admin/CargaOtroIngresoPage";
 import { NomenclaturaPlaguicidasPage } from "./pages/admin/NomenclaturaPlaguicidasPage";
 import { AgrupadorNutrientesPage } from "./pages/admin/AgrupadorNutrientesPage";
 import { UsuariosPage } from "./pages/admin/UsuariosPage";
@@ -87,6 +89,22 @@ export default function App() {
               element={
                 <RequireRole roles={["Administrador"]}>
                   <AgrupadorNutrientesPage />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="cargas/saldos-bancarios"
+              element={
+                <RequireRole roles={["Administrador"]}>
+                  <CargaSaldoBancarioPage />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="cargas/otros-ingresos"
+              element={
+                <RequireRole roles={["Administrador"]}>
+                  <CargaOtroIngresoPage />
                 </RequireRole>
               }
             />

@@ -46,12 +46,18 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse
         puede_exportar=usuario.PuedeExportar,
         nombre_completo=usuario.NombreCompleto,
         email=usuario.Email,
+        acceso_importaciones=usuario.AccesoImportaciones,
+        acceso_financiero=usuario.AccesoFinanciero,
+        acceso_indicadores=usuario.AccesoIndicadores,
     )
     return TokenResponse(
         access_token=token,
         rol=rol.NombreRol,
         puede_exportar=usuario.PuedeExportar,
         tema=usuario.Tema,
+        acceso_importaciones=usuario.AccesoImportaciones,
+        acceso_financiero=usuario.AccesoFinanciero,
+        acceso_indicadores=usuario.AccesoIndicadores,
     )
 
 

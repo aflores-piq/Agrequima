@@ -68,6 +68,9 @@ CREATE TABLE dbo.[Usuarios] (
 	[UltimoLogin] DATETIME NULL, 
 	[PuedeExportar] BIT NOT NULL DEFAULT ((0)), 
 	[Tema] VARCHAR(10) COLLATE Modern_Spanish_CI_AS NOT NULL DEFAULT ('Claro'), 
+	[AccesoImportaciones] BIT NOT NULL DEFAULT ((1)), 
+	[AccesoFinanciero] BIT NOT NULL DEFAULT ((0)), 
+	[AccesoIndicadores] BIT NOT NULL DEFAULT ((0)), 
 	CONSTRAINT [PK__Usuarios__2B3DE7B817C4236F] PRIMARY KEY CLUSTERED ([UsuarioId]), 
 	CONSTRAINT [FK_Usuarios_Roles] FOREIGN KEY([RolId]) REFERENCES dbo.[Roles] ([RolId])
 );

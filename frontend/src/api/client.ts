@@ -41,6 +41,9 @@ interface JwtPayload {
   puede_exportar: boolean;
   nombre_completo: string | null;
   email: string | null;
+  acceso_importaciones: boolean;
+  acceso_financiero: boolean;
+  acceso_indicadores: boolean;
   exp: number;
 }
 
@@ -65,6 +68,9 @@ export interface Sesion {
   email: string | null;
   rol: string;
   puedeExportar: boolean;
+  accesoImportaciones: boolean;
+  accesoFinanciero: boolean;
+  accesoIndicadores: boolean;
 }
 
 export function leerSesion(): Sesion | null {
@@ -87,6 +93,9 @@ export function leerSesion(): Sesion | null {
     email: payload.email,
     rol: payload.rol,
     puedeExportar: payload.puede_exportar,
+    accesoImportaciones: payload.acceso_importaciones,
+    accesoFinanciero: payload.acceso_financiero,
+    accesoIndicadores: payload.acceso_indicadores,
   };
 }
 

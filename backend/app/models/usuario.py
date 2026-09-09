@@ -25,3 +25,6 @@ class Usuario(Base):
     FechaCreacion = Column(DateTime, server_default=func.getdate())
     UltimoLogin = Column(DateTime)
     Tema = Column(String(10), nullable=False, default="Claro")
+    AccesoImportaciones = Column(Boolean, nullable=False, default=True)
+    AccesoFinanciero = Column(Boolean, nullable=False, default=False)
+    AccesoIndicadores = Column(Boolean, nullable=False, default=False)

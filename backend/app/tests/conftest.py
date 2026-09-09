@@ -48,15 +48,23 @@ def seed_usuarios_prueba():
         # ver dbo.Usuarios.PuedeExportar): se incluyen a propósito una
         # combinación "cruzada" (Usuario que sí exporta, Administrador
         # que no) para que los tests de exportación no puedan colarse
-        # asumiendo que el permiso viene del rol.
+        # asumiendo que el permiso viene del rol. Mismo criterio para
+        # AccesoImportaciones/AccesoFinanciero (ver
+        # require_acceso_importaciones/require_acceso_financiero en
+        # deps.py): test_admin necesita AccesoFinanciero=1 para poder
+        # probar las cargas/dashboard de Financiero; test_admin_sin_
+        # financiero y test_usuario_sin_importaciones existen
+        # específicamente para probar el 403 de cada uno.
         password_hash = bcrypt.hashpw(CONTRASENA_PRUEBA.encode(), bcrypt.gensalt()).decode()
-        for nombre, rol_id, activo, puede_exportar in (
-            ("test_admin", rol_admin_id, 1, 1),
-            ("test_usuario", rol_usuario_id, 1, 0),
-            ("test_inactivo", rol_usuario_id, 0, 0),
-            ("test_usuario_exportador", rol_usuario_id, 1, 1),
-            ("test_admin_sin_exportar", rol_admin_id, 1, 0),
-            ("test_admin_usuarios", rol_admin_usuarios_id, 1, 0),
+        for nombre, rol_id, activo, puede_exportar, acceso_importaciones, acceso_financiero in (
+            ("test_admin", rol_admin_id, 1, 1, 1, 1),
+            ("test_usuario", rol_usuario_id, 1, 0, 1, 0),
+            ("test_inactivo", rol_usuario_id, 0, 0, 1, 0),
+            ("test_usuario_exportador", rol_usuario_id, 1, 1, 1, 0),
+            ("test_admin_sin_exportar", rol_admin_id, 1, 0, 1, 0),
+            ("test_admin_usuarios", rol_admin_usuarios_id, 1, 0, 1, 0),
+            ("test_admin_sin_financiero", rol_admin_id, 1, 0, 1, 0),
+            ("test_usuario_sin_importaciones", rol_usuario_id, 1, 0, 0, 0),
         ):
             existente = conn.execute(
                 text("SELECT UsuarioId FROM dbo.Usuarios WHERE NombreUsuario = :u"), {"u": nombre}
@@ -64,18 +72,26 @@ def seed_usuarios_prueba():
             if existente is None:
                 conn.execute(
                     text(
-                        "INSERT INTO dbo.Usuarios (NombreUsuario, PasswordHash, RolId, Activo, PuedeExportar) "
-                        "VALUES (:u, :p, :r, :a, :e)"
+                        "INSERT INTO dbo.Usuarios "
+                        "(NombreUsuario, PasswordHash, RolId, Activo, PuedeExportar, AccesoImportaciones, AccesoFinanciero) "
+                        "VALUES (:u, :p, :r, :a, :e, :ai, :af)"
                     ),
-                    {"u": nombre, "p": password_hash, "r": rol_id, "a": activo, "e": puede_exportar},
+                    {
+                        "u": nombre, "p": password_hash, "r": rol_id, "a": activo, "e": puede_exportar,
+                        "ai": acceso_importaciones, "af": acceso_financiero,
+                    },
                 )
             else:
                 conn.execute(
                     text(
-                        "UPDATE dbo.Usuarios SET PasswordHash = :p, RolId = :r, Activo = :a, PuedeExportar = :e "
+                        "UPDATE dbo.Usuarios SET PasswordHash = :p, RolId = :r, Activo = :a, PuedeExportar = :e, "
+                        "AccesoImportaciones = :ai, AccesoFinanciero = :af "
                         "WHERE UsuarioId = :id"
                     ),
-                    {"p": password_hash, "r": rol_id, "a": activo, "e": puede_exportar, "id": existente},
+                    {
+                        "p": password_hash, "r": rol_id, "a": activo, "e": puede_exportar,
+                        "ai": acceso_importaciones, "af": acceso_financiero, "id": existente,
+                    },
                 )
     yield
 
@@ -126,6 +142,28 @@ def admin_usuarios_headers(client):
     poder usar /admin/usuarios, nada de Carga/Nomenclatura."""
     r = client.post(
         "/api/auth/login", json={"nombre_usuario": "test_admin_usuarios", "password": CONTRASENA_PRUEBA}
+    )
+    assert r.status_code == 200, r.text
+    return {"Authorization": f"Bearer {r.json()['access_token']}"}
+
+
+@pytest.fixture(scope="session")
+def admin_sin_financiero_headers(client):
+    """Rol Administrador, pero con AccesoFinanciero=0: confirma que el rol
+    por sí solo no basta para usar los endpoints de Financiero."""
+    r = client.post(
+        "/api/auth/login", json={"nombre_usuario": "test_admin_sin_financiero", "password": CONTRASENA_PRUEBA}
+    )
+    assert r.status_code == 200, r.text
+    return {"Authorization": f"Bearer {r.json()['access_token']}"}
+
+
+@pytest.fixture(scope="session")
+def usuario_sin_importaciones_headers(client):
+    """Rol Usuario, pero con AccesoImportaciones=0: confirma que sin ese
+    acceso no puede ver los dashboards de Plaguicidas/Nutrientes."""
+    r = client.post(
+        "/api/auth/login", json={"nombre_usuario": "test_usuario_sin_importaciones", "password": CONTRASENA_PRUEBA}
     )
     assert r.status_code == 200, r.text
     return {"Authorization": f"Bearer {r.json()['access_token']}"}

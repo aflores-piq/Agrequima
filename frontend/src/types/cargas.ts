@@ -22,6 +22,17 @@ export interface ResumenCargaNutrientes {
   estado: "OK" | "ConExcepciones" | "Error";
 }
 
+export interface PeriodoCubierto {
+  anio: number;
+  mes: number;
+}
+
+export interface ResumenCargaFinanciero {
+  filas_cargadas: number;
+  periodos: PeriodoCubierto[];
+  estado: "OK" | "ConExcepciones" | "Error";
+}
+
 export interface AuditoriaCargaItem {
   carga_id: number;
   tipo_carga: string;

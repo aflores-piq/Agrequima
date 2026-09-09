@@ -10,6 +10,9 @@ export interface UsuarioOut {
   puede_exportar: boolean;
   fecha_creacion: string | null;
   ultimo_login: string | null;
+  acceso_importaciones: boolean;
+  acceso_financiero: boolean;
+  acceso_indicadores: boolean;
 }
 
 export interface UsuarioCreate {
@@ -19,12 +22,18 @@ export interface UsuarioCreate {
   email?: string;
   rol: Rol;
   puede_exportar?: boolean;
+  acceso_importaciones?: boolean;
+  acceso_financiero?: boolean;
+  acceso_indicadores?: boolean;
 }
 
 export interface UsuarioUpdate {
   rol?: Rol;
   activo?: boolean;
   puede_exportar?: boolean;
+  acceso_importaciones?: boolean;
+  acceso_financiero?: boolean;
+  acceso_indicadores?: boolean;
 }
 
 export interface CambiarPasswordRequest {

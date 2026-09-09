@@ -21,6 +21,9 @@ def create_access_token(
     puede_exportar: bool = False,
     nombre_completo: str | None = None,
     email: str | None = None,
+    acceso_importaciones: bool = True,
+    acceso_financiero: bool = False,
+    acceso_indicadores: bool = False,
 ) -> str:
     expira = datetime.now(timezone.utc) + timedelta(minutes=JWT_EXPIRE_MINUTES)
     payload = {
@@ -30,6 +33,9 @@ def create_access_token(
         "puede_exportar": puede_exportar,
         "nombre_completo": nombre_completo,
         "email": email,
+        "acceso_importaciones": acceso_importaciones,
+        "acceso_financiero": acceso_financiero,
+        "acceso_indicadores": acceso_indicadores,
         "exp": expira,
     }
     return jwt.encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)

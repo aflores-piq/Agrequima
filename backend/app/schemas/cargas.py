@@ -31,6 +31,21 @@ class ResumenCargaNutrientes(BaseModel):
     estado: str
 
 
+class PeriodoCubierto(BaseModel):
+    anio: int
+    mes: int
+
+
+class ResumenCargaFinanciero(BaseModel):
+    """Compartido por Saldos Bancarios y Otros Ingresos -- cargas
+    directas (sin cruce de catálogo), estrategia DELETE + INSERT por
+    cada período (año/mes) presente en el archivo."""
+
+    filas_cargadas: int
+    periodos: list[PeriodoCubierto]
+    estado: str
+
+
 class AuditoriaCargaItem(BaseModel):
     carga_id: int
     tipo_carga: str

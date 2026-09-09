@@ -2,7 +2,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.core.deps import UsuarioToken, get_current_user, require_export_permission
+from app.core.deps import (
+    UsuarioToken,
+    get_current_user,
+    require_acceso_importaciones,
+    require_export_permission,
+)
 from app.schemas.dashboard import (
     DashboardNutrientesResponse,
     DashboardPlaguicidasResponse,
@@ -36,6 +41,7 @@ def dashboard_plaguicidas(
     tamano_pagina: int = Query(50, ge=1, le=200),
     db: Session = Depends(get_db),
     _usuario: UsuarioToken = Depends(get_current_user),
+    _acceso: UsuarioToken = Depends(require_acceso_importaciones),
 ) -> DashboardPlaguicidasResponse:
     return obtener_dashboard_plaguicidas(
         db, anio, mes, origen, ingrediente_act, aplicacion, producto, pagina, tamano_pagina
@@ -46,6 +52,7 @@ def dashboard_plaguicidas(
 def opciones_dashboard_plaguicidas(
     db: Session = Depends(get_db),
     _usuario: UsuarioToken = Depends(get_current_user),
+    _acceso: UsuarioToken = Depends(require_acceso_importaciones),
 ) -> OpcionesFiltroPlaguicidas:
     return obtener_opciones_filtro_plaguicidas(db)
 
@@ -62,6 +69,7 @@ def dashboard_nutrientes(
     tamano_pagina: int = Query(50, ge=1, le=200),
     db: Session = Depends(get_db),
     _usuario: UsuarioToken = Depends(get_current_user),
+    _acceso: UsuarioToken = Depends(require_acceso_importaciones),
 ) -> DashboardNutrientesResponse:
     return obtener_dashboard_nutrientes(
         db, anio, mes, nombre_comercial, origen, componente, pagina, tamano_pagina, nombre_comercial_raw
@@ -72,6 +80,7 @@ def dashboard_nutrientes(
 def opciones_dashboard_nutrientes(
     db: Session = Depends(get_db),
     _usuario: UsuarioToken = Depends(get_current_user),
+    _acceso: UsuarioToken = Depends(require_acceso_importaciones),
 ) -> OpcionesFiltroNutrientes:
     return obtener_opciones_filtro_nutrientes(db)
 
@@ -95,6 +104,7 @@ def exportar_plaguicidas_elemento(
     producto: list[str] | None = Query(None),
     db: Session = Depends(get_db),
     _usuario: UsuarioToken = Depends(require_export_permission),
+    _acceso: UsuarioToken = Depends(require_acceso_importaciones),
 ) -> Response:
     registro = export_service.PLAGUICIDAS_ELEMENTOS.get(elemento)
     if registro is None:
@@ -115,6 +125,7 @@ def exportar_plaguicidas_todo(
     producto: list[str] | None = Query(None),
     db: Session = Depends(get_db),
     _usuario: UsuarioToken = Depends(require_export_permission),
+    _acceso: UsuarioToken = Depends(require_acceso_importaciones),
 ) -> Response:
     ctx = construir_contexto_plaguicidas(db, anio, mes, origen, ingrediente_act, aplicacion, producto)
     contenido = export_service.generar_excel_todo(ctx, export_service.PLAGUICIDAS_ELEMENTOS)
@@ -133,6 +144,7 @@ def exportar_nutrientes_elemento(
     nombre_comercial_raw: list[str] | None = Query(None),
     db: Session = Depends(get_db),
     _usuario: UsuarioToken = Depends(require_export_permission),
+    _acceso: UsuarioToken = Depends(require_acceso_importaciones),
 ) -> Response:
     registro = export_service.NUTRIENTES_ELEMENTOS.get(elemento)
     if registro is None:
@@ -153,6 +165,7 @@ def exportar_nutrientes_todo(
     nombre_comercial_raw: list[str] | None = Query(None),
     db: Session = Depends(get_db),
     _usuario: UsuarioToken = Depends(require_export_permission),
+    _acceso: UsuarioToken = Depends(require_acceso_importaciones),
 ) -> Response:
     ctx = construir_contexto_nutrientes(db, anio, mes, nombre_comercial, origen, componente, nombre_comercial_raw)
     contenido = export_service.generar_excel_todo(ctx, export_service.NUTRIENTES_ELEMENTOS)

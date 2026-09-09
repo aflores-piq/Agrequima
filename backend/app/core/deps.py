@@ -66,3 +66,43 @@ def require_export_permission(
             detail="No tiene permiso para exportar.",
         )
     return usuario
+
+
+def _verificar_acceso_modulo(db: Session, usuario: UsuarioToken, columna, nombre_modulo: str) -> None:
+    """Compartido por require_acceso_importaciones/financiero/indicadores
+    -- mismo criterio que require_export_permission: permiso individual
+    por usuario, consultado fresco en cada request (no embebido de forma
+    estática), así que un cambio de acceso aplica de inmediato sin
+    esperar a que el usuario vuelva a loguearse."""
+    tiene_acceso = db.query(columna).filter(Usuario.UsuarioId == usuario.usuario_id).scalar()
+    if not tiene_acceso:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"No tiene acceso al módulo {nombre_modulo}.",
+        )
+
+
+def require_acceso_importaciones(
+    usuario: UsuarioToken = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> UsuarioToken:
+    _verificar_acceso_modulo(db, usuario, Usuario.AccesoImportaciones, "Importaciones")
+    return usuario
+
+
+def require_acceso_financiero(
+    usuario: UsuarioToken = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> UsuarioToken:
+    _verificar_acceso_modulo(db, usuario, Usuario.AccesoFinanciero, "Financiero")
+    return usuario
+
+
+def require_acceso_indicadores(
+    usuario: UsuarioToken = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> UsuarioToken:
+    """Todavía sin endpoints propios (Indicadores no tiene pantallas) --
+    lista para usarse en cuanto ese proyecto arranque."""
+    _verificar_acceso_modulo(db, usuario, Usuario.AccesoIndicadores, "Indicadores")
+    return usuario

@@ -46,6 +46,9 @@ def _a_usuario_out(usuario: Usuario, rol_nombre: str) -> UsuarioOut:
         puede_exportar=usuario.PuedeExportar,
         fecha_creacion=usuario.FechaCreacion,
         ultimo_login=usuario.UltimoLogin,
+        acceso_importaciones=usuario.AccesoImportaciones,
+        acceso_financiero=usuario.AccesoFinanciero,
+        acceso_indicadores=usuario.AccesoIndicadores,
     )
 
 
@@ -99,6 +102,9 @@ def crear_usuario(
         RolId=rol.RolId,
         Activo=True,
         PuedeExportar=payload.puede_exportar,
+        AccesoImportaciones=payload.acceso_importaciones,
+        AccesoFinanciero=payload.acceso_financiero,
+        AccesoIndicadores=payload.acceso_indicadores,
     )
     db.add(usuario)
     db.commit()
@@ -136,6 +142,12 @@ def actualizar_usuario(
         usuario.Activo = payload.activo
     if payload.puede_exportar is not None:
         usuario.PuedeExportar = payload.puede_exportar
+    if payload.acceso_importaciones is not None:
+        usuario.AccesoImportaciones = payload.acceso_importaciones
+    if payload.acceso_financiero is not None:
+        usuario.AccesoFinanciero = payload.acceso_financiero
+    if payload.acceso_indicadores is not None:
+        usuario.AccesoIndicadores = payload.acceso_indicadores
 
     db.commit()
     db.refresh(usuario)

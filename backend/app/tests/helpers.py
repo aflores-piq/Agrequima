@@ -91,6 +91,42 @@ def construir_csv_importaciones(filas: list[dict], titulo: str | None = None) ->
     return ("﻿" + texto).encode("utf-8")
 
 
+def limpiar_saldo_bancario_periodo(anio: int, mes: int) -> None:
+    with engine.begin() as conn:
+        conn.execute(
+            text("DELETE FROM dbo.SaldoBancario WHERE Anio = :anio AND Mes = :mes"),
+            {"anio": anio, "mes": mes},
+        )
+
+
+def limpiar_otro_ingreso_periodo(anio: int, mes: int) -> None:
+    with engine.begin() as conn:
+        conn.execute(
+            text("DELETE FROM dbo.OtroIngreso WHERE Anio = :anio AND Mes = :mes"),
+            {"anio": anio, "mes": mes},
+        )
+
+
+def construir_excel_saldo_bancario(filas: list[dict]) -> bytes:
+    """filas: [{"Concepto": ..., "Año": ..., "Mes": ..., "Banco": ..., "Valor": ...}, ...]"""
+    df = pd.DataFrame(filas)
+    buffer = BytesIO()
+    with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
+        df.to_excel(writer, sheet_name="Saldos", index=False)
+    buffer.seek(0)
+    return buffer.read()
+
+
+def construir_excel_otro_ingreso(filas: list[dict]) -> bytes:
+    """filas: [{"Tipo": ..., "Concepto": ..., "Anio": ..., "Mes": ..., "Valor": ...}, ...]"""
+    df = pd.DataFrame(filas)
+    buffer = BytesIO()
+    with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
+        df.to_excel(writer, sheet_name="OtrosIngresos", index=False)
+    buffer.seek(0)
+    return buffer.read()
+
+
 def construir_excel_hoja_ambigua() -> bytes:
     buffer = BytesIO()
     with pd.ExcelWriter(buffer, engine="openpyxl") as writer:

@@ -2,12 +2,16 @@ import { NavLink, Outlet } from "react-router-dom";
 import { Header } from "../../components/layout/Header";
 import { useAuth } from "../../auth/AuthContext";
 
-const ITEMS_ADMINISTRADOR = [
+const ITEMS_IMPORTACIONES = [
   { to: "/admin/cargas/plaguicidas", label: "Carga de plaguicidas" },
   { to: "/admin/cargas/nutrientes", label: "Carga de nutrientes" },
   { to: "/admin/nomenclatura/plaguicidas", label: "Nomenclatura plaguicidas" },
   { to: "/admin/nomenclatura/nutrientes", label: "Agrupador nutrientes" },
-  { to: "/admin/usuarios", label: "Usuarios" },
+];
+
+const ITEMS_FINANCIERO = [
+  { to: "/admin/cargas/saldos-bancarios", label: "Carga de Saldos Bancarios" },
+  { to: "/admin/cargas/otros-ingresos", label: "Carga de Otros Ingresos" },
 ];
 
 // "Administrador de Usuarios" (personal de Agrequima) solo ve/usa la
@@ -20,7 +24,17 @@ const ITEMS_ADMINISTRADOR_USUARIOS = [{ to: "/admin/usuarios", label: "Usuarios"
 export function AdminLayout() {
   const { sesion } = useAuth();
   const esAdministradorDeUsuarios = sesion?.rol === "Administrador de Usuarios";
-  const items = esAdministradorDeUsuarios ? ITEMS_ADMINISTRADOR_USUARIOS : ITEMS_ADMINISTRADOR;
+  // El backend igual exige AccesoFinanciero/AccesoImportaciones en cada
+  // endpoint (ver require_acceso_financiero/require_acceso_importaciones
+  // en deps.py) -- esto solo evita mostrar un formulario que terminaría
+  // en 403 al enviarlo.
+  const items = esAdministradorDeUsuarios
+    ? ITEMS_ADMINISTRADOR_USUARIOS
+    : [
+        ...(sesion?.accesoImportaciones ? ITEMS_IMPORTACIONES : []),
+        ...(sesion?.accesoFinanciero ? ITEMS_FINANCIERO : []),
+        { to: "/admin/usuarios", label: "Usuarios" },
+      ];
 
   return (
     <div className="min-h-screen bg-app">

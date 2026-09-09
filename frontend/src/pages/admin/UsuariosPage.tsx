@@ -24,6 +24,9 @@ export function UsuariosPage() {
   const [nombreCompleto, setNombreCompleto] = useState("");
   const [rol, setRol] = useState<Rol>("Usuario");
   const [puedeExportar, setPuedeExportar] = useState(false);
+  const [accesoImportaciones, setAccesoImportaciones] = useState(true);
+  const [accesoFinanciero, setAccesoFinanciero] = useState(false);
+  const [accesoIndicadores, setAccesoIndicadores] = useState(false);
   const [creando, setCreando] = useState(false);
   const [errorForm, setErrorForm] = useState<string | null>(null);
 
@@ -53,12 +56,18 @@ export function UsuariosPage() {
         nombre_completo: nombreCompleto || undefined,
         rol,
         puede_exportar: puedeExportar,
+        acceso_importaciones: accesoImportaciones,
+        acceso_financiero: accesoFinanciero,
+        acceso_indicadores: accesoIndicadores,
       });
       setNombreUsuario("");
       setPassword("");
       setNombreCompleto("");
       setRol("Usuario");
       setPuedeExportar(false);
+      setAccesoImportaciones(true);
+      setAccesoFinanciero(false);
+      setAccesoIndicadores(false);
       cargar();
     } catch (err) {
       setErrorForm(mensajeError(err));
@@ -123,6 +132,33 @@ export function UsuariosPage() {
     }
   }
 
+  async function alternarAccesoImportaciones(usuario: UsuarioOut) {
+    try {
+      await actualizarUsuario(usuario.usuario_id, { acceso_importaciones: !usuario.acceso_importaciones });
+      cargar();
+    } catch (err) {
+      setError(mensajeError(err));
+    }
+  }
+
+  async function alternarAccesoFinanciero(usuario: UsuarioOut) {
+    try {
+      await actualizarUsuario(usuario.usuario_id, { acceso_financiero: !usuario.acceso_financiero });
+      cargar();
+    } catch (err) {
+      setError(mensajeError(err));
+    }
+  }
+
+  async function alternarAccesoIndicadores(usuario: UsuarioOut) {
+    try {
+      await actualizarUsuario(usuario.usuario_id, { acceso_indicadores: !usuario.acceso_indicadores });
+      cargar();
+    } catch (err) {
+      setError(mensajeError(err));
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -165,6 +201,33 @@ export function UsuariosPage() {
               className="h-4 w-4 rounded border-line-strong bg-surface-hover text-teal-500 focus:ring-teal-500"
             />
             Puede exportar a Excel
+          </label>
+          <label className="flex items-center gap-2 pb-2 text-sm text-ink-muted">
+            <input
+              type="checkbox"
+              checked={accesoImportaciones}
+              onChange={(e) => setAccesoImportaciones(e.target.checked)}
+              className="h-4 w-4 rounded border-line-strong bg-surface-hover text-teal-500 focus:ring-teal-500"
+            />
+            Acceso a Importaciones
+          </label>
+          <label className="flex items-center gap-2 pb-2 text-sm text-ink-muted">
+            <input
+              type="checkbox"
+              checked={accesoFinanciero}
+              onChange={(e) => setAccesoFinanciero(e.target.checked)}
+              className="h-4 w-4 rounded border-line-strong bg-surface-hover text-teal-500 focus:ring-teal-500"
+            />
+            Acceso a Financiero
+          </label>
+          <label className="flex items-center gap-2 pb-2 text-sm text-ink-muted">
+            <input
+              type="checkbox"
+              checked={accesoIndicadores}
+              onChange={(e) => setAccesoIndicadores(e.target.checked)}
+              className="h-4 w-4 rounded border-line-strong bg-surface-hover text-teal-500 focus:ring-teal-500"
+            />
+            Acceso a Indicadores
           </label>
           <Button type="submit" loading={creando} disabled={creando || !nombreUsuario || !password}>
             Crear usuario
@@ -223,6 +286,39 @@ export function UsuariosPage() {
                     />
                     {r.puede_exportar ? "Sí" : "No"}
                   </label>
+                ),
+              },
+              {
+                header: "Importaciones",
+                accessor: (r: UsuarioOut) => (
+                  <input
+                    type="checkbox"
+                    checked={r.acceso_importaciones}
+                    onChange={() => alternarAccesoImportaciones(r)}
+                    className="h-4 w-4 rounded border-line-strong bg-surface-hover text-teal-500 focus:ring-teal-500"
+                  />
+                ),
+              },
+              {
+                header: "Financiero",
+                accessor: (r: UsuarioOut) => (
+                  <input
+                    type="checkbox"
+                    checked={r.acceso_financiero}
+                    onChange={() => alternarAccesoFinanciero(r)}
+                    className="h-4 w-4 rounded border-line-strong bg-surface-hover text-teal-500 focus:ring-teal-500"
+                  />
+                ),
+              },
+              {
+                header: "Indicadores",
+                accessor: (r: UsuarioOut) => (
+                  <input
+                    type="checkbox"
+                    checked={r.acceso_indicadores}
+                    onChange={() => alternarAccesoIndicadores(r)}
+                    className="h-4 w-4 rounded border-line-strong bg-surface-hover text-teal-500 focus:ring-teal-500"
+                  />
                 ),
               },
               {

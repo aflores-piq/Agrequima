@@ -2,17 +2,20 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, 
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.core.deps import UsuarioToken, require_role
+from app.core.deps import UsuarioToken, require_acceso_financiero, require_acceso_importaciones, require_role
 from app.models.auditoria import AuditoriaCarga
 from app.models.usuario import Usuario
 from app.schemas.cargas import (
     AuditoriaCargaItem,
     PaginaAuditoriaCargas,
+    ResumenCargaFinanciero,
     ResumenCargaNutrientes,
     ResumenCargaPlaguicidas,
 )
 from app.services.etl_nutrientes import procesar_carga_nutrientes
+from app.services.etl_otro_ingreso import procesar_carga_otro_ingreso
 from app.services.etl_plaguicidas import procesar_carga_plaguicidas
+from app.services.etl_saldo_bancario import procesar_carga_saldo_bancario
 
 router = APIRouter(prefix="/admin/cargas", tags=["admin-cargas"])
 
@@ -42,6 +45,7 @@ async def cargar_plaguicidas(
     archivo_importaciones: UploadFile = File(...),
     archivo_nomenclatura: UploadFile | None = File(None),
     usuario: UsuarioToken = Depends(require_role("Administrador")),
+    _acceso: UsuarioToken = Depends(require_acceso_importaciones),
 ) -> ResumenCargaPlaguicidas:
     _validar_extension_excel_o_csv(archivo_importaciones, "importaciones")
     if archivo_nomenclatura is not None:
@@ -113,6 +117,7 @@ async def cargar_nutrientes(
     archivo_nutrientes: UploadFile = File(...),
     archivo_agrupador: UploadFile | None = File(None),
     usuario: UsuarioToken = Depends(require_role("Administrador")),
+    _acceso: UsuarioToken = Depends(require_acceso_importaciones),
 ) -> ResumenCargaNutrientes:
     _validar_extension_excel_o_csv(archivo_nutrientes, "licencias de nutrientes")
     if archivo_agrupador is not None:
@@ -129,6 +134,42 @@ async def cargar_nutrientes(
             nombre_archivo_nutrientes=archivo_nutrientes.filename,
             contenido_agrupador=contenido_agrupador,
             usuario_id=usuario.usuario_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+        ) from exc
+
+
+@router.post("/saldos-bancarios", response_model=ResumenCargaFinanciero)
+async def cargar_saldos_bancarios(
+    archivo: UploadFile = File(...),
+    usuario: UsuarioToken = Depends(require_role("Administrador")),
+    _acceso: UsuarioToken = Depends(require_acceso_financiero),
+) -> ResumenCargaFinanciero:
+    _validar_extension_excel(archivo, "Saldos Bancarios")
+    contenido = await archivo.read()
+    try:
+        return procesar_carga_saldo_bancario(
+            contenido=contenido, nombre_archivo=archivo.filename, usuario_id=usuario.usuario_id
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+        ) from exc
+
+
+@router.post("/otros-ingresos", response_model=ResumenCargaFinanciero)
+async def cargar_otros_ingresos(
+    archivo: UploadFile = File(...),
+    usuario: UsuarioToken = Depends(require_role("Administrador")),
+    _acceso: UsuarioToken = Depends(require_acceso_financiero),
+) -> ResumenCargaFinanciero:
+    _validar_extension_excel(archivo, "Otros Ingresos")
+    contenido = await archivo.read()
+    try:
+        return procesar_carga_otro_ingreso(
+            contenido=contenido, nombre_archivo=archivo.filename, usuario_id=usuario.usuario_id
         )
     except ValueError as exc:
         raise HTTPException(

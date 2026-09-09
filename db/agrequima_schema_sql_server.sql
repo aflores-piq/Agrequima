@@ -617,3 +617,46 @@ BEGIN
     ALTER TABLE dbo.Usuarios ADD Tema VARCHAR(10) NOT NULL DEFAULT 'Claro';
 END
 GO
+
+/* =====================================================================
+   10. CONTROL DE ACCESO POR MÓDULO (Importaciones/Financiero/Indicadores)
+   Mismo criterio que PuedeExportar: permiso individual por usuario (no
+   por rol), consultado fresco en cada request (ver
+   require_acceso_importaciones/require_acceso_financiero/
+   require_acceso_indicadores en deps.py), no embebido de forma estática
+   -- si un administrador se lo da/quita a alguien, aplica de inmediato.
+
+   AccesoImportaciones arranca en 1 (no en 0 como los otros dos) para no
+   romper el acceso de las cuentas que ya existen hoy -- todas seguían
+   viendo Plaguicidas/Nutrientes antes de que este control existiera.
+   AccesoIndicadores se agrega ahora aunque ese proyecto todavía no tiene
+   pantallas propias -- mismo criterio "genérico desde el inicio" que ya
+   se usó en sync_piq_ia.py (SYNC_VISTAS_CONTACC), para no tener que
+   volver a tocar el esquema ni el JWT cuando Indicadores arranque.
+   ===================================================================== */
+IF NOT EXISTS (
+    SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_NAME = 'Usuarios' AND COLUMN_NAME = 'AccesoImportaciones'
+)
+BEGIN
+    ALTER TABLE dbo.Usuarios ADD AccesoImportaciones BIT NOT NULL DEFAULT 1;
+END
+GO
+
+IF NOT EXISTS (
+    SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_NAME = 'Usuarios' AND COLUMN_NAME = 'AccesoFinanciero'
+)
+BEGIN
+    ALTER TABLE dbo.Usuarios ADD AccesoFinanciero BIT NOT NULL DEFAULT 0;
+END
+GO
+
+IF NOT EXISTS (
+    SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_NAME = 'Usuarios' AND COLUMN_NAME = 'AccesoIndicadores'
+)
+BEGIN
+    ALTER TABLE dbo.Usuarios ADD AccesoIndicadores BIT NOT NULL DEFAULT 0;
+END
+GO

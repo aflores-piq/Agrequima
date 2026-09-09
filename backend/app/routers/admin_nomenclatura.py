@@ -19,7 +19,7 @@ from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
-from app.core.deps import require_role
+from app.core.deps import require_acceso_importaciones, require_role
 from app.models.importacion import Importacion
 from app.models.nomenclatura import CatalogoAgrupadorNutrientes, CatalogoNomenclaturaPlaguicidas
 from app.models.nutriente import NutrienteActivo
@@ -48,7 +48,7 @@ from app.services.text_utils import normalizar, parece_error_captura
 router = APIRouter(
     prefix="/admin/nomenclatura",
     tags=["admin-nomenclatura"],
-    dependencies=[Depends(require_role("Administrador"))],
+    dependencies=[Depends(require_role("Administrador")), Depends(require_acceso_importaciones)],
 )
 
 

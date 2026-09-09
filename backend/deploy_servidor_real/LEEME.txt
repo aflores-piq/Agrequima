@@ -17,6 +17,7 @@ Archivos que vas a usar:
   07_vista_nutrientes_activos.sql -> lo abris tambien en SSMS, crea la vista que oculta productos excluidos en todo dashboard/reporte/export (ver Paso 3E)
   08_formulas_excluidas_nutrientes.sql -> lo abris tambien en SSMS, excluye por formula completa (Mancozeb, Propamocarbhydrocloride) en vez de por producto puntual (ver Paso 3F)
   10_simplificar_exclusion_formulas.sql -> lo abris tambien en SSMS, simplifica la exclusion por formula para que ya no dependa de una tabla (ver Paso 3G)
+  11_control_acceso_por_modulo.sql -> lo abris tambien en SSMS, agrega el control de acceso por modulo (Importaciones/Financiero/Indicadores) a Usuarios (ver Paso 3H)
   generar_hash_password.py       -> genera el valor que necesita 02_seed_roles_y_admin.sql
   sync_piq_ia.py                 -> el programa que trae los datos cada noche
   .env.ejemplo                   -> plantilla de configuracion (la vas a copiar y completar)
@@ -430,6 +431,40 @@ Para agregar una fórmula nueva más adelante: pedir que se genere un
 script nuevo que agregue una línea "OR s.Componentes LIKE
 '%NuevaFormula%'" al CASE de usp_CargarNutrientes (y, si hace falta
 aplicarlo a datos ya cargados, el UPDATE de backfill correspondiente).
+
+
+====================================================================
+ PASO 3H -- Control de acceso por módulo (Importaciones/Financiero/
+ Indicadores -- con SSMS)
+====================================================================
+
+Hasta ahora, cualquier cuenta con rol "Administrador" o "Usuario" veía
+todos los dashboards que existieran. Este paso agrega 3 columnas BIT a
+dbo.Usuarios (AccesoImportaciones, AccesoFinanciero, AccesoIndicadores)
+para poder combinar el acceso por usuario, igual que ya funciona
+"Puede exportar a Excel" -- se activa/desactiva por cuenta, sin
+depender del rol.
+
+1. Abrir "11_control_acceso_por_modulo.sql" (de esta carpeta) en SSMS,
+   igual que los pasos anteriores.
+
+2. Presionar F5 (o "¡ Ejecutar") con la conexión a PIQ_IA activa.
+
+3. En la pestaña "Mensajes", confirmar que no haya ninguna línea en
+   ROJO. Al final aparece una tabla de verificación con 3 filas
+   (cuántos usuarios quedaron con cada acceso en 1).
+
+Importante: AccesoImportaciones queda en 1 para TODAS las cuentas que
+ya existían (para no cortarles el acceso a Plaguicidas/Nutrientes que
+ya tenían) -- AccesoFinanciero y AccesoIndicadores quedan en 0 para
+todas, se activan a mano por cuenta desde la pantalla de Usuarios
+(columna "Acceso a Financiero"/"Acceso a Indicadores"). Indicadores
+todavía no tiene pantallas propias -- la columna se deja lista para
+cuando ese proyecto arranque.
+
+Es seguro volver a correr este script las veces que haga falta: cada
+ALTER TABLE está protegido, solo agrega la columna si no existe
+todavía.
 
 
 ====================================================================

@@ -1,6 +1,7 @@
 import { apiClient } from "./client";
 import type {
   PaginaAuditoriaCargas,
+  ResumenCargaFinanciero,
   ResumenCargaNutrientes,
   ResumenCargaPlaguicidas,
 } from "../types/cargas";
@@ -20,6 +21,26 @@ export async function cargarNutrientes(archivoNutrientes: File): Promise<Resumen
   formData.append("archivo_nutrientes", archivoNutrientes);
   const { data } = await apiClient.post<ResumenCargaNutrientes>(
     "/admin/cargas/nutrientes",
+    formData
+  );
+  return data;
+}
+
+export async function cargarSaldosBancarios(archivo: File): Promise<ResumenCargaFinanciero> {
+  const formData = new FormData();
+  formData.append("archivo", archivo);
+  const { data } = await apiClient.post<ResumenCargaFinanciero>(
+    "/admin/cargas/saldos-bancarios",
+    formData
+  );
+  return data;
+}
+
+export async function cargarOtrosIngresos(archivo: File): Promise<ResumenCargaFinanciero> {
+  const formData = new FormData();
+  formData.append("archivo", archivo);
+  const { data } = await apiClient.post<ResumenCargaFinanciero>(
+    "/admin/cargas/otros-ingresos",
     formData
   );
   return data;

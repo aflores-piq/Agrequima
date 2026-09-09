@@ -16,6 +16,9 @@ class TokenResponse(BaseModel):
     rol: str
     puede_exportar: bool
     tema: Tema
+    acceso_importaciones: bool
+    acceso_financiero: bool
+    acceso_indicadores: bool
 
 
 class ActualizarPreferenciasRequest(BaseModel):
