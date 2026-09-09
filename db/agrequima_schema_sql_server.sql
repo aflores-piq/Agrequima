@@ -660,3 +660,82 @@ BEGIN
     ALTER TABLE dbo.Usuarios ADD AccesoIndicadores BIT NOT NULL DEFAULT 0;
 END
 GO
+
+/* =====================================================================
+   11. AGRUPADOR DE CUENTAS CONTABLES (Financiero -- Estados Financieros)
+   Fuente de la columna "Grupo" en las 4 páginas de Estados Financieros
+   (ver services/dashboard_financiero.py). Emparejamiento jerárquico por
+   código de cuenta: primero Nivel 3 (código completo exacto), si no hay
+   coincidencia Nivel 2 (primeros 6 dígitos), si tampoco Nivel 1
+   (primeros 4 dígitos) -- ver services/agrupador_cuentas.py.
+
+   Hoy solo trae Egresos/Ingresos/Activo/Pasivo/Patrimonio (los grupos
+   que ya usan las 4 páginas construidas). Presupuestos/Importaciones/
+   Ingresos [sic, el grupo de Centros de Costo] quedan pendientes -- ese
+   agrupador viene de la hoja CC y Asociados del mismo Excel, todavía no
+   cargada.
+   ===================================================================== */
+IF OBJECT_ID('dbo.CatalogoAgrupadorCuentas') IS NULL
+BEGIN
+    CREATE TABLE dbo.CatalogoAgrupadorCuentas(
+        TipoAgrupador VARCHAR(20) NOT NULL,
+        Orden         INT NOT NULL,
+        Nivel         INT NOT NULL,
+        Codigo        VARCHAR(20) NOT NULL,
+        Nombre        VARCHAR(150) NOT NULL,
+        CONSTRAINT PK_CatalogoAgrupadorCuentas PRIMARY KEY CLUSTERED (TipoAgrupador, Codigo)
+    );
+END
+GO
+
+INSERT INTO dbo.CatalogoAgrupadorCuentas (TipoAgrupador, Orden, Nivel, Codigo, Nombre)
+SELECT v.TipoAgrupador, v.Orden, v.Nivel, v.Codigo, v.Nombre
+FROM (VALUES
+    ('Egresos', 1, 1, '5101', 'Sueldos Bonificaciones y Prestaciones de Ley'),
+    ('Egresos', 2, 1, '5102', 'Gastos Generales de Funcionamiento'),
+    ('Egresos', 3, 3, '510201011', 'Cuentas Incobrables'),
+    ('Egresos', 4, 2, '510206', 'Suscripciones y Membresías'),
+    ('Egresos', 5, 1, '5106', 'Gastos de Viaje al Exterior'),
+    ('Egresos', 6, 1, '5103', 'Literatura y Material para Capacitación Programa Educación'),
+    ('Egresos', 7, 1, '5105', 'Viáticos e Insumos Programa Cuidagro'),
+    ('Egresos', 7, 1, '5104', 'Viáticos e Insumos Programa Cuidagro'),
+    ('Egresos', 8, 1, '5107', 'Imagen y Divulgación'),
+    ('Egresos', 9, 1, '5108', 'Auditoria'),
+    ('Egresos', 10, 1, '5109', 'Honorarios Profesionales'),
+    ('Egresos', 11, 1, '5110', 'Viáticos Mantenimiento Incineración Programa CampoLimpio'),
+    ('Egresos', 12, 1, '5111', 'Imprevistos'),
+    ('Egresos', 13, 1, '5112', 'Gastos de Apoyo a Instituciones'),
+    ('Egresos', 14, 1, '5113', 'Proyectos / Fundacion Mayan Field'),
+    ('Egresos', 15, 1, '5114', 'Gastos Proyectos de Investigación'),
+    ('Egresos', 16, 1, '5115', 'Provisión de Indemnización'),
+    ('Egresos', 17, 1, '5116', 'Provisión de Depreciaciones'),
+    ('Egresos', 18, 1, '5117', 'Donaciones'),
+    ('Egresos', 19, 1, '5201', 'Gastos Financieros'),
+    ('Egresos', 19, 1, '5202', 'Gastos Financieros'),
+    ('Egresos', 20, 3, '510701017', 'Proyecto SPMF Croplife'),
+    ('Ingresos', 1, 2, '410101', 'Cuotas Asociados'),
+    ('Ingresos', 2, 2, '410104', 'Cuotas 4.5 por Millar'),
+    ('Ingresos', 3, 2, '410103', 'Ingresos Facturados'),
+    ('Ingresos', 4, 2, '410102', 'Donación'),
+    ('Ingresos', 5, 2, '410105', 'Intereses bancarios e inversiones'),
+    ('Activo', 6, 1, '1101', 'Caja y Bancos'),
+    ('Activo', 7, 2, '110201', 'Cuentas por Cobrar Asociados'),
+    ('Activo', 8, 3, '110204001', 'Cuentas por Cobrar BANRURAL'),
+    ('Activo', 9, 1, '1102', 'Cuentas por Cobrar'),
+    ('Activo', 10, 1, '1104', 'Inventario Sellos'),
+    ('Activo', 11, 1, '1201', 'Propiedad y equipo'),
+    ('Activo', 12, 1, '1202', 'Gastos diferidos'),
+    ('Activo', 13, 1, '1103', 'Impuestos por cobrar'),
+    ('Pasivo', 1, 2, '210102', 'Impuestos por pagar'),
+    ('Pasivo', 2, 2, '210101', 'Cuentas por pagar'),
+    ('Pasivo', 3, 2, '210103', 'Prestaciones laborales'),
+    ('Pasivo', 4, 2, '210104', 'Ingresos anticipados'),
+    ('Pasivo', 5, 3, '210105001', 'Fondos por aplicar acumulado'),
+    ('Pasivo', 6, 3, '210105002', 'Fondos por aplicar caso judicial BANRURAL'),
+    ('Patrimonio', 1, 3, '310101001', 'Patrimonio activos fijos')
+) AS v(TipoAgrupador, Orden, Nivel, Codigo, Nombre)
+WHERE NOT EXISTS (
+    SELECT 1 FROM dbo.CatalogoAgrupadorCuentas x
+    WHERE x.TipoAgrupador = v.TipoAgrupador AND x.Codigo = v.Codigo
+);
+GO

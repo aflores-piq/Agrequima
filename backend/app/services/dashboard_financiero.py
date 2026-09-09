@@ -5,14 +5,22 @@ páginas), sobre las vistas espejadas desde CONTACC:
         Sal_Mes, Debitos, Creditos, Saldo, Cod_Centro)
     vw_piq_balance_general(emp_nit, Cod_n1, Nom_n1, cod_n5, nom_n5,
         Sal_Ano, Sal_Mes, Debitos, Creditos, Saldo, Inicial)
-    vw_catalogo_cuentas(cta_nivel, Codigo_N1, Nombre_n1, Codigo_N5,
-        Nombre_N5)
 
-Estas 3 tablas no son modelos de la app (no viven en app/models/): son
-espejos de solo lectura que crea sync_piq_ia.py reflejando el esquema
-real de CONTACC -- por eso las consultas de acá son SQL crudo (SQLAlchemy
-text()) en vez de ORM, igual que dashboard_plaguicidas.py hace con
-dbo.Importacion pero sin un modelo declarado para estas.
+más dbo.CatalogoAgrupadorCuentas (tabla propia de la app, no espejada
+desde CONTACC -- ver agrupador_cuentas.py), que es la fuente real de la
+columna "Grupo" en las 4 páginas. vw_catalogo_cuentas (otra vista
+espejada, con Nombre_n1/Codigo_N5) YA NO se usa para esto -- se probó
+y esa columna quedaba mal; CatalogoAgrupadorCuentas es el agrupador de
+cuentas contables real que dio el cliente, con emparejamiento
+jerárquico por código (Nivel 3 exacto -> Nivel 2 primeros 6 dígitos ->
+Nivel 1 primeros 4 dígitos).
+
+vw_piq_balance_saldos/vw_piq_balance_general no son modelos de la app
+(no viven en app/models/): son espejos de solo lectura que crea
+sync_piq_ia.py reflejando el esquema real de CONTACC -- por eso las
+consultas de acá son SQL crudo (SQLAlchemy text()) en vez de ORM, igual
+que dashboard_plaguicidas.py hace con dbo.Importacion pero sin un
+modelo declarado para estas.
 
 Semántica asumida (confirmada por el cliente para la clasificación
 Activo/Pasivo/Patrimonio -- sacada del DAX real del .pbix original; el
@@ -56,6 +64,7 @@ from app.schemas.dashboard_financiero import (
     KpisIngresosDesembolsosAcumulado,
     KpisIngresosDesembolsosMensual,
 )
+from app.services.agrupador_cuentas import MapasAgrupador, cargar_mapas_agrupador, grupo_de_cuenta
 
 # CASE compartido por todas las consultas de vw_piq_balance_general que
 # necesitan la clasificación contable -- ver semántica en el docstring.
@@ -121,40 +130,61 @@ def _saldo_acumulado_ytd(db: Session, anio: int, mes: int) -> float:
     return _num(valor)
 
 
-def _cascada_por_grupo(db: Session, anio: int, mes: int, columna: str) -> list[GrupoMontoItem]:
+def _cascada_por_grupo(
+    db: Session, anio: int, mes: int, columna: str, mapas: MapasAgrupador, ordenes: dict[str, int]
+) -> list[GrupoMontoItem]:
+    """Por cuenta (Cta_Codigo), el grupo lo da dbo.CatalogoAgrupadorCuentas
+    (emparejamiento jerárquico, ver agrupador_cuentas.py) -- ya no
+    vw_catalogo_cuentas/Nombre_n1. Se agrega en Python porque el
+    emparejamiento en sí es Python, y el orden final de la cascada sigue
+    el Orden real del catálogo (pensado como secuencia de "cascada"), no
+    la magnitud del monto."""
     filas = db.execute(
         text(
             f"""
-            SELECT COALESCE(c.Nombre_n1, 'Sin clasificar') AS grupo, SUM(b.{columna}) AS monto
-            FROM dbo.vw_piq_balance_saldos b
-            LEFT JOIN dbo.vw_catalogo_cuentas c ON c.Codigo_N5 = b.Cta_Codigo
-            WHERE b.Sal_Ano = :anio AND b.Sal_Mes = :mes
-            GROUP BY c.Nombre_n1
-            HAVING SUM(b.{columna}) <> 0
-            ORDER BY monto DESC
+            SELECT Cta_Codigo AS codigo, SUM({columna}) AS monto
+            FROM dbo.vw_piq_balance_saldos
+            WHERE Sal_Ano = :anio AND Sal_Mes = :mes
+            GROUP BY Cta_Codigo
+            HAVING SUM({columna}) <> 0
             """
         ),
         {"anio": anio, "mes": mes},
     ).mappings().all()
-    return [GrupoMontoItem(grupo=f["grupo"], monto=_num(f["monto"])) for f in filas]
+
+    acumulado_por_grupo: dict[str, float] = {}
+    for f in filas:
+        grupo = grupo_de_cuenta(mapas, f["codigo"]) or "Sin clasificar"
+        acumulado_por_grupo[grupo] = acumulado_por_grupo.get(grupo, 0.0) + _num(f["monto"])
+
+    items = [GrupoMontoItem(grupo=g, monto=m) for g, m in acumulado_por_grupo.items()]
+    items.sort(key=lambda it: ordenes.get(it.grupo, 999))
+    return items
 
 
 def _detalle_movimiento_por_cuenta(
-    db: Session, anio: int, mes: int, anio_ant: int, mes_ant: int, columna_movimiento: str
+    db: Session,
+    anio: int,
+    mes: int,
+    anio_ant: int,
+    mes_ant: int,
+    columna_movimiento: str,
+    mapas: MapasAgrupador,
 ) -> list[DetalleCuentaMovimiento]:
     """columna_movimiento: 'Debitos' (Egresos) o 'Creditos' (Ingresos).
     Por cuenta: valor de esa columna en el mes ANTERIOR + Saldo
-    acumulado (YTD) en el período seleccionado."""
+    acumulado (YTD) en el período seleccionado. El grupo lo da
+    dbo.CatalogoAgrupadorCuentas (ver agrupador_cuentas.py), no
+    vw_catalogo_cuentas."""
     filas = db.execute(
         text(
             f"""
             SELECT
-                MAX(c.Nombre_n1) AS grupo,
-                COALESCE(MAX(c.Nombre_N5), MAX(b.Cta_Descripcion)) AS nombre_cuenta_n5,
+                b.Cta_Codigo AS codigo,
+                MAX(b.Cta_Descripcion) AS nombre_cuenta_n5,
                 SUM(CASE WHEN b.Sal_Ano = :anio_ant AND b.Sal_Mes = :mes_ant THEN b.{columna_movimiento} ELSE 0 END) AS mes_anterior,
                 SUM(CASE WHEN b.Sal_Ano = :anio AND b.Sal_Mes <= :mes THEN b.Saldo ELSE 0 END) AS saldo_acumulado
             FROM dbo.vw_piq_balance_saldos b
-            LEFT JOIN dbo.vw_catalogo_cuentas c ON c.Codigo_N5 = b.Cta_Codigo
             WHERE (b.Sal_Ano = :anio_ant AND b.Sal_Mes = :mes_ant)
                OR (b.Sal_Ano = :anio AND b.Sal_Mes <= :mes)
             GROUP BY b.Cta_Codigo
@@ -171,7 +201,7 @@ def _detalle_movimiento_por_cuenta(
     ).mappings().all()
     return [
         DetalleCuentaMovimiento(
-            grupo=f["grupo"],
+            grupo=grupo_de_cuenta(mapas, f["codigo"]),
             nombre_cuenta_n5=f["nombre_cuenta_n5"],
             mes_anterior=_num(f["mes_anterior"]),
             saldo_acumulado=_num(f["saldo_acumulado"]),
@@ -196,12 +226,15 @@ def _pagina_ingresos_desembolsos_mensual(db: Session, anio: int, mes: int) -> In
         saldo_mes_anterior=anterior["saldo"],
     )
 
+    mapas_ingresos, ordenes_ingresos = cargar_mapas_agrupador(db, "Ingresos")
+    mapas_egresos, ordenes_egresos = cargar_mapas_agrupador(db, "Egresos")
+
     return IngresosDesembolsosMensual(
         kpis=kpis,
-        cascada_ingresos_por_grupo=_cascada_por_grupo(db, anio, mes, "Creditos"),
-        cascada_egresos_por_grupo=_cascada_por_grupo(db, anio, mes, "Debitos"),
-        detalle_egresos=_detalle_movimiento_por_cuenta(db, anio, mes, anio_ant, mes_ant, "Debitos"),
-        detalle_ingresos=_detalle_movimiento_por_cuenta(db, anio, mes, anio_ant, mes_ant, "Creditos"),
+        cascada_ingresos_por_grupo=_cascada_por_grupo(db, anio, mes, "Creditos", mapas_ingresos, ordenes_ingresos),
+        cascada_egresos_por_grupo=_cascada_por_grupo(db, anio, mes, "Debitos", mapas_egresos, ordenes_egresos),
+        detalle_egresos=_detalle_movimiento_por_cuenta(db, anio, mes, anio_ant, mes_ant, "Debitos", mapas_egresos),
+        detalle_ingresos=_detalle_movimiento_por_cuenta(db, anio, mes, anio_ant, mes_ant, "Creditos", mapas_ingresos),
     )
 
 
@@ -220,20 +253,20 @@ def _totales_saldos_ytd(db: Session, anio: int, mes: int) -> dict:
 
 
 def _detalle_comparativo_por_cuenta(
-    db: Session, anio: int, anio_ant: int, mes: int, columna_movimiento: str
+    db: Session, anio: int, anio_ant: int, mes: int, columna_movimiento: str, mapas: MapasAgrupador
 ) -> list[DetalleCuentaComparativoMovimiento]:
     """Por cuenta: la columna (Debitos=Egresos, Creditos=Ingresos)
-    acumulada (YTD, Sal_Mes<=mes) del año anterior vs. del año actual."""
+    acumulada (YTD, Sal_Mes<=mes) del año anterior vs. del año actual.
+    El grupo lo da dbo.CatalogoAgrupadorCuentas."""
     filas = db.execute(
         text(
             f"""
             SELECT
-                MAX(c.Nombre_n1) AS grupo,
-                COALESCE(MAX(c.Nombre_N5), MAX(b.Cta_Descripcion)) AS cuenta,
+                b.Cta_Codigo AS codigo,
+                MAX(b.Cta_Descripcion) AS cuenta,
                 SUM(CASE WHEN b.Sal_Ano = :anio_ant AND b.Sal_Mes <= :mes THEN b.{columna_movimiento} ELSE 0 END) AS anio_anterior,
                 SUM(CASE WHEN b.Sal_Ano = :anio AND b.Sal_Mes <= :mes THEN b.{columna_movimiento} ELSE 0 END) AS anio_actual
             FROM dbo.vw_piq_balance_saldos b
-            LEFT JOIN dbo.vw_catalogo_cuentas c ON c.Codigo_N5 = b.Cta_Codigo
             WHERE (b.Sal_Ano = :anio_ant OR b.Sal_Ano = :anio) AND b.Sal_Mes <= :mes
             GROUP BY b.Cta_Codigo
             HAVING SUM(CASE WHEN b.Sal_Ano = :anio_ant AND b.Sal_Mes <= :mes THEN b.{columna_movimiento} ELSE 0 END) <> 0
@@ -246,7 +279,7 @@ def _detalle_comparativo_por_cuenta(
     return [
         DetalleCuentaComparativoMovimiento(
             cuenta=f["cuenta"],
-            grupo=f["grupo"],
+            grupo=grupo_de_cuenta(mapas, f["codigo"]),
             monto_anio_anterior=_num(f["anio_anterior"]),
             variacion=_num(f["anio_actual"]) - _num(f["anio_anterior"]),
             monto_anio_actual=_num(f["anio_actual"]),
@@ -278,10 +311,13 @@ def _pagina_ingresos_desembolsos_acumulado(
         acumulado_saldo_anio_anterior=ytd_anterior["saldo"],
     )
 
+    mapas_ingresos, _ = cargar_mapas_agrupador(db, "Ingresos")
+    mapas_egresos, _ = cargar_mapas_agrupador(db, "Egresos")
+
     return IngresosDesembolsosAcumulado(
         kpis=kpis,
-        detalle_egresos=_detalle_comparativo_por_cuenta(db, anio, anio_ant, mes, "Debitos"),
-        detalle_ingresos=_detalle_comparativo_por_cuenta(db, anio, anio_ant, mes, "Creditos"),
+        detalle_egresos=_detalle_comparativo_por_cuenta(db, anio, anio_ant, mes, "Debitos", mapas_egresos),
+        detalle_ingresos=_detalle_comparativo_por_cuenta(db, anio, anio_ant, mes, "Creditos", mapas_ingresos),
     )
 
 
@@ -312,18 +348,20 @@ def _totales_balance_general(db: Session, anio: int, mes: int) -> dict:
 
 
 def _detalle_balance_periodo_a_vs_b(
-    db: Session, clasificacion: str, anio_a: int, mes_a: int, anio_b: int, mes_b: int
+    db: Session, clasificacion: str, anio_a: int, mes_a: int, anio_b: int, mes_b: int, mapas: MapasAgrupador
 ) -> list[tuple]:
     """Fila por cuenta de esa clasificación: (nombre_n5, grupo, monto_a,
     monto_b) -- monto_a es el período "más nuevo" (mes/año seleccionado),
     monto_b el de comparación (mes anterior en pág. 3, año anterior en
-    pág. 4)."""
+    pág. 4). El grupo lo da dbo.CatalogoAgrupadorCuentas (clasificacion
+    coincide exactamente con TipoAgrupador: 'Activo'/'Pasivo'/
+    'Patrimonio'), no Nom_n1."""
     filas = db.execute(
         text(
             f"""
             SELECT
+                cod_n5 AS codigo,
                 MAX(nom_n5) AS nombre_n5,
-                MAX(Nom_n1) AS grupo,
                 SUM(CASE WHEN Sal_Ano = :anio_a AND Sal_Mes = :mes_a THEN Saldo ELSE 0 END) AS monto_a,
                 SUM(CASE WHEN Sal_Ano = :anio_b AND Sal_Mes = :mes_b THEN Saldo ELSE 0 END) AS monto_b
             FROM dbo.vw_piq_balance_general
@@ -337,7 +375,10 @@ def _detalle_balance_periodo_a_vs_b(
         ),
         {"anio_a": anio_a, "mes_a": mes_a, "anio_b": anio_b, "mes_b": mes_b, "clasificacion": clasificacion},
     ).mappings().all()
-    return [(f["nombre_n5"], f["grupo"], _num(f["monto_a"]), _num(f["monto_b"])) for f in filas]
+    return [
+        (f["nombre_n5"], grupo_de_cuenta(mapas, f["codigo"]), _num(f["monto_a"]), _num(f["monto_b"]))
+        for f in filas
+    ]
 
 
 def _pagina_balance_general_mensual(db: Session, anio: int, mes: int) -> BalanceGeneralMensual:
@@ -364,7 +405,8 @@ def _pagina_balance_general_mensual(db: Session, anio: int, mes: int) -> Balance
     ]
 
     def _detalle(clasificacion: str) -> list[DetalleCuentaBalance]:
-        filas = _detalle_balance_periodo_a_vs_b(db, clasificacion, anio, mes, anio_ant, mes_ant)
+        mapas, _ = cargar_mapas_agrupador(db, clasificacion)
+        filas = _detalle_balance_periodo_a_vs_b(db, clasificacion, anio, mes, anio_ant, mes_ant, mapas)
         return [
             DetalleCuentaBalance(
                 nombre_n5=nombre_n5,
@@ -410,7 +452,8 @@ def _pagina_balance_general_comparativo(db: Session, anio: int, mes: int) -> Bal
     )
 
     def _detalle(clasificacion: str) -> list[DetalleCuentaBalanceComparativo]:
-        filas = _detalle_balance_periodo_a_vs_b(db, clasificacion, anio, mes, anio_ant, mes)
+        mapas, _ = cargar_mapas_agrupador(db, clasificacion)
+        filas = _detalle_balance_periodo_a_vs_b(db, clasificacion, anio, mes, anio_ant, mes, mapas)
         return [
             DetalleCuentaBalanceComparativo(
                 nombre_n5=nombre_n5,

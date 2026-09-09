@@ -35,29 +35,28 @@ CREATE TABLE dbo.vw_catalogo_cuentas (
 
 _EMP_NIT = "TEST-FINANCIERO"
 
+# Códigos de cuenta elegidos para que emparejen de verdad contra
+# dbo.CatalogoAgrupadorCuentas (ver agrupador_cuentas.py):
+#   510100001 -> Nivel 1 '5101' -> "Sueldos Bonificaciones y Prestaciones de Ley"
+#   510200001 -> Nivel 1 '5102' -> "Gastos Generales de Funcionamiento"
+#   410101001 -> Nivel 2 '410101' -> "Cuotas Asociados"
+#   410103001 -> Nivel 2 '410103' -> "Ingresos Facturados"
 _SEED = f"""
-DELETE FROM dbo.vw_catalogo_cuentas WHERE Codigo_N5 IN ('410101001','410102001','510101001','510102001');
-INSERT INTO dbo.vw_catalogo_cuentas (cta_nivel, Codigo_N1, Nombre_n1, Codigo_N5, Nombre_N5) VALUES
-('5', '1', 'INGRESOS', '410101001', 'Cuotas de Asociados'),
-('5', '1', 'INGRESOS', '410102001', 'Venta de Sellos'),
-('5', '2', 'GASTOS DE OPERACION', '510101001', 'Sueldos y Salarios'),
-('5', '2', 'GASTOS DE OPERACION', '510102001', 'Servicios Basicos');
-
 DELETE FROM dbo.vw_piq_balance_saldos WHERE emp_nit = '{_EMP_NIT}';
 INSERT INTO dbo.vw_piq_balance_saldos
     (emp_nit, Cta_Codigo, Cta_Descripcion, Sal_Ano, Sal_Mes, Debitos, Creditos, Saldo, Cod_Centro) VALUES
 ('{_EMP_NIT}', '410101001', 'Cuotas de Asociados', 2026, 7, 0, 5000, 5000, '01'),
-('{_EMP_NIT}', '410102001', 'Venta de Sellos', 2026, 7, 0, 2000, 2000, '01'),
-('{_EMP_NIT}', '510101001', 'Sueldos y Salarios', 2026, 7, 3000, 0, -3000, '01'),
-('{_EMP_NIT}', '510102001', 'Servicios Basicos', 2026, 7, 500, 0, -500, '01'),
+('{_EMP_NIT}', '410103001', 'Venta de Sellos', 2026, 7, 0, 2000, 2000, '01'),
+('{_EMP_NIT}', '510100001', 'Sueldos y Salarios', 2026, 7, 3000, 0, -3000, '01'),
+('{_EMP_NIT}', '510200001', 'Servicios Basicos', 2026, 7, 500, 0, -500, '01'),
 ('{_EMP_NIT}', '410101001', 'Cuotas de Asociados', 2026, 8, 0, 6000, 6000, '01'),
-('{_EMP_NIT}', '410102001', 'Venta de Sellos', 2026, 8, 0, 2500, 2500, '01'),
-('{_EMP_NIT}', '510101001', 'Sueldos y Salarios', 2026, 8, 3200, 0, -3200, '01'),
-('{_EMP_NIT}', '510102001', 'Servicios Basicos', 2026, 8, 600, 0, -600, '01'),
+('{_EMP_NIT}', '410103001', 'Venta de Sellos', 2026, 8, 0, 2500, 2500, '01'),
+('{_EMP_NIT}', '510100001', 'Sueldos y Salarios', 2026, 8, 3200, 0, -3200, '01'),
+('{_EMP_NIT}', '510200001', 'Servicios Basicos', 2026, 8, 600, 0, -600, '01'),
 ('{_EMP_NIT}', '410101001', 'Cuotas de Asociados', 2025, 8, 0, 4500, 4500, '01'),
-('{_EMP_NIT}', '410102001', 'Venta de Sellos', 2025, 8, 0, 1800, 1800, '01'),
-('{_EMP_NIT}', '510101001', 'Sueldos y Salarios', 2025, 8, 2900, 0, -2900, '01'),
-('{_EMP_NIT}', '510102001', 'Servicios Basicos', 2025, 8, 450, 0, -450, '01');
+('{_EMP_NIT}', '410103001', 'Venta de Sellos', 2025, 8, 0, 1800, 1800, '01'),
+('{_EMP_NIT}', '510100001', 'Sueldos y Salarios', 2025, 8, 2900, 0, -2900, '01'),
+('{_EMP_NIT}', '510200001', 'Servicios Basicos', 2025, 8, 450, 0, -450, '01');
 
 DELETE FROM dbo.vw_piq_balance_general WHERE emp_nit = '{_EMP_NIT}';
 INSERT INTO dbo.vw_piq_balance_general
@@ -119,16 +118,39 @@ def test_dashboard_financiero_valores_conocidos(client, admin_headers):
     # encontró y corrigió durante el desarrollo: una cuenta con
     # Debitos=0 no debe aparecer solo porque su saldo acumulado no sea
     # cero).
-    nombres_egresos = {f["nombre_cuenta_n5"] for f in data["ingresos_desembolsos_mensual"]["detalle_egresos"]}
+    detalle_egresos = data["ingresos_desembolsos_mensual"]["detalle_egresos"]
+    nombres_egresos = {f["nombre_cuenta_n5"] for f in detalle_egresos}
     assert nombres_egresos == {"Servicios Basicos", "Sueldos y Salarios"}
-    nombres_ingresos = {f["nombre_cuenta_n5"] for f in data["ingresos_desembolsos_mensual"]["detalle_ingresos"]}
+    detalle_ingresos = data["ingresos_desembolsos_mensual"]["detalle_ingresos"]
+    nombres_ingresos = {f["nombre_cuenta_n5"] for f in detalle_ingresos}
     assert nombres_ingresos == {"Cuotas de Asociados", "Venta de Sellos"}
+
+    # "Grupo" ahora sale de dbo.CatalogoAgrupadorCuentas (emparejamiento
+    # jerárquico por código), no de vw_catalogo_cuentas/Nombre_n1.
+    grupo_por_cuenta_egresos = {f["nombre_cuenta_n5"]: f["grupo"] for f in detalle_egresos}
+    assert grupo_por_cuenta_egresos["Sueldos y Salarios"] == "Sueldos Bonificaciones y Prestaciones de Ley"
+    assert grupo_por_cuenta_egresos["Servicios Basicos"] == "Gastos Generales de Funcionamiento"
+    grupo_por_cuenta_ingresos = {f["nombre_cuenta_n5"]: f["grupo"] for f in detalle_ingresos}
+    assert grupo_por_cuenta_ingresos["Cuotas de Asociados"] == "Cuotas Asociados"
+    assert grupo_por_cuenta_ingresos["Venta de Sellos"] == "Ingresos Facturados"
+
+    grupos_cascada_egresos = {f["grupo"] for f in data["ingresos_desembolsos_mensual"]["cascada_egresos_por_grupo"]}
+    assert grupos_cascada_egresos == {"Sueldos Bonificaciones y Prestaciones de Ley", "Gastos Generales de Funcionamiento"}
 
     kpis3 = data["balance_general_mensual"]["kpis"]
     assert kpis3["activo"] == 65000.0
     assert kpis3["pasivo"] == 16000.0
     assert kpis3["patrimonio"] == 44000.0
     assert kpis3["balance_mensual"] == 0.0  # el balance contable debe cuadrar
+
+    detalle_activo = data["balance_general_mensual"]["detalle_activo"]
+    grupo_por_cuenta_activo = {f["nombre_n5"]: f["grupo"] for f in detalle_activo}
+    assert grupo_por_cuenta_activo["Caja y Bancos"] == "Caja y Bancos"
+    assert grupo_por_cuenta_activo["Mobiliario y Equipo"] == "Propiedad y equipo"
+    detalle_pasivo = data["balance_general_mensual"]["detalle_pasivo"]
+    assert detalle_pasivo[0]["grupo"] == "Cuentas por pagar"
+    detalle_patrimonio = data["balance_general_mensual"]["detalle_patrimonio"]
+    assert detalle_patrimonio[0]["grupo"] == "Patrimonio activos fijos"
 
     kpis4 = data["balance_general_comparativo"]["kpis"]
     assert kpis4["total_acumulado_anterior"] == 56000.0

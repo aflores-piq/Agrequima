@@ -18,6 +18,7 @@ Archivos que vas a usar:
   08_formulas_excluidas_nutrientes.sql -> lo abris tambien en SSMS, excluye por formula completa (Mancozeb, Propamocarbhydrocloride) en vez de por producto puntual (ver Paso 3F)
   10_simplificar_exclusion_formulas.sql -> lo abris tambien en SSMS, simplifica la exclusion por formula para que ya no dependa de una tabla (ver Paso 3G)
   11_control_acceso_por_modulo.sql -> lo abris tambien en SSMS, agrega el control de acceso por modulo (Importaciones/Financiero/Indicadores) a Usuarios (ver Paso 3H)
+  12_agrupador_cuentas_financiero.sql -> lo abris tambien en SSMS, carga el agrupador real de cuentas contables que arma la columna "Grupo" en Estados Financieros (ver Paso 3I)
   generar_hash_password.py       -> genera el valor que necesita 02_seed_roles_y_admin.sql
   sync_piq_ia.py                 -> el programa que trae los datos cada noche
   .env.ejemplo                   -> plantilla de configuracion (la vas a copiar y completar)
@@ -465,6 +466,36 @@ cuando ese proyecto arranque.
 Es seguro volver a correr este script las veces que haga falta: cada
 ALTER TABLE está protegido, solo agrega la columna si no existe
 todavía.
+
+
+====================================================================
+ PASO 3I -- Agrupador de cuentas contables (columna "Grupo" en Estados
+ Financieros -- con SSMS)
+====================================================================
+
+Hasta ahora la columna "Grupo" de las 4 páginas de Estados Financieros
+salía de una vista espejada (Nom_n1/Nombre_n1) que no es el agrupador
+contable real del cliente -- quedaba mal. Este paso carga el agrupador
+real (Egresos, Ingresos, Activo, Pasivo, Patrimonio) en una tabla nueva
+propia de la app, dbo.CatalogoAgrupadorCuentas.
+
+1. Abrir "12_agrupador_cuentas_financiero.sql" (de esta carpeta) en
+   SSMS, igual que los pasos anteriores.
+
+2. Presionar F5 (o "¡ Ejecutar") con la conexión a PIQ_IA activa.
+
+3. En la pestaña "Mensajes", confirmar que no haya ninguna línea en
+   ROJO. Al final aparece una tabla con 5 filas (una por
+   TipoAgrupador) -- los totales esperados son: Egresos 22, Ingresos 5,
+   Activo 8, Pasivo 6, Patrimonio 1 (42 en total).
+
+Importante: Presupuestos, Importaciones y el grupo de Centros de
+Costo/Asociados quedan pendientes -- ese agrupador viene de otra hoja
+del mismo Excel, todavía no cargada. No hace falta correr este script
+de nuevo cuando eso se agregue, se va a pedir un script nuevo.
+
+Es seguro volver a correr este script las veces que haga falta: el
+INSERT no duplica filas ya cargadas.
 
 
 ====================================================================
