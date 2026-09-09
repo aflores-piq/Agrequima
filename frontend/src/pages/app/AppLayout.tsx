@@ -13,22 +13,36 @@ export function AppLayout() {
       <Header
         nav={
           <nav className="flex items-center gap-1">
-            <NavLink
-              to="/app/plaguicidas"
-              className={({ isActive }) =>
-                `${linkBase} ${isActive ? "bg-teal-500/15 text-teal-600 dark:text-teal-300" : "text-ink-muted hover:text-ink"}`
-              }
-            >
-              Plaguicidas
-            </NavLink>
-            <NavLink
-              to="/app/nutrientes"
-              className={({ isActive }) =>
-                `${linkBase} ${isActive ? "bg-orange-500/15 text-orange-600 dark:text-orange-300" : "text-ink-muted hover:text-ink"}`
-              }
-            >
-              Nutrientes
-            </NavLink>
+            {sesion?.accesoImportaciones && (
+              <>
+                <NavLink
+                  to="/app/plaguicidas"
+                  className={({ isActive }) =>
+                    `${linkBase} ${isActive ? "bg-teal-500/15 text-teal-600 dark:text-teal-300" : "text-ink-muted hover:text-ink"}`
+                  }
+                >
+                  Plaguicidas
+                </NavLink>
+                <NavLink
+                  to="/app/nutrientes"
+                  className={({ isActive }) =>
+                    `${linkBase} ${isActive ? "bg-orange-500/15 text-orange-600 dark:text-orange-300" : "text-ink-muted hover:text-ink"}`
+                  }
+                >
+                  Nutrientes
+                </NavLink>
+              </>
+            )}
+            {sesion?.accesoFinanciero && (
+              <NavLink
+                to="/app/financiero"
+                className={({ isActive }) =>
+                  `${linkBase} ${isActive ? "bg-blue-500/15 text-blue-600 dark:text-blue-300" : "text-ink-muted hover:text-ink"}`
+                }
+              >
+                Financiero
+              </NavLink>
+            )}
             {(sesion?.rol === "Administrador" || sesion?.rol === "Administrador de Usuarios") && (
               <NavLink
                 to="/admin"

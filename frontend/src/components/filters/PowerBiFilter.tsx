@@ -6,7 +6,7 @@ import { useEffect, useRef, useState, type ChangeEvent } from "react";
  * Plaguicidas usa el teal original; Nutrientes usa naranja para combinar
  * con el acento propio de sus gráficos (antes ambos dashboards
  * compartían el mismo teal en la fila de filtros). */
-export type FilterTheme = "teal" | "orange";
+export type FilterTheme = "teal" | "orange" | "blue";
 
 // En modo claro, el chip de cabecera usa un tono más suave (500 en vez
 // de 900): el 900 original se veía demasiado fuerte/oscuro sobre el
@@ -24,6 +24,10 @@ const TEMAS: Record<FilterTheme, { wrapper: string; header: string }> = {
   orange: {
     wrapper: "overflow-hidden rounded-sm bg-orange-500 dark:bg-orange-900",
     header: "px-2 pt-1 pb-1 text-[10px] font-semibold uppercase tracking-wide text-orange-950 dark:text-orange-300",
+  },
+  blue: {
+    wrapper: "overflow-hidden rounded-sm bg-blue-500 dark:bg-blue-900",
+    header: "px-2 pt-1 pb-1 text-[10px] font-semibold uppercase tracking-wide text-blue-950 dark:text-blue-300",
   },
 };
 

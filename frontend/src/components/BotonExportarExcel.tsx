@@ -10,6 +10,7 @@ import type { DashboardTheme } from "../theme/colors";
 const COLOR_HOVER: Record<DashboardTheme, string> = {
   plaguicidas: "hover:bg-teal-600",
   nutrientes: "hover:bg-orange-600",
+  financiero: "hover:bg-blue-600",
 };
 
 function IconoDescarga() {

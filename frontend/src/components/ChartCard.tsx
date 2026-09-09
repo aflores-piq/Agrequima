@@ -11,6 +11,7 @@ import type { DashboardTheme } from "../theme/colors";
 const COLOR_SELECCION: Record<DashboardTheme, string> = {
   plaguicidas: "bg-teal-600",
   nutrientes: "bg-orange-600",
+  financiero: "bg-blue-600",
 };
 
 /** Tarjeta de gráfico con vista de tabla equivalente (accesibilidad):

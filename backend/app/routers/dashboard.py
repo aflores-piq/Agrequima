@@ -5,6 +5,7 @@ from app.core.db import get_db
 from app.core.deps import (
     UsuarioToken,
     get_current_user,
+    require_acceso_financiero,
     require_acceso_importaciones,
     require_export_permission,
 )
@@ -14,7 +15,9 @@ from app.schemas.dashboard import (
     OpcionesFiltroNutrientes,
     OpcionesFiltroPlaguicidas,
 )
+from app.schemas.dashboard_financiero import DashboardFinancieroResponse
 from app.services import export as export_service
+from app.services.dashboard_financiero import obtener_dashboard_financiero
 from app.services.dashboard_nutrientes import (
     construir_contexto_nutrientes,
     obtener_dashboard_nutrientes,
@@ -83,6 +86,17 @@ def opciones_dashboard_nutrientes(
     _acceso: UsuarioToken = Depends(require_acceso_importaciones),
 ) -> OpcionesFiltroNutrientes:
     return obtener_opciones_filtro_nutrientes(db)
+
+
+@router.get("/financiero/estados-financieros", response_model=DashboardFinancieroResponse)
+def dashboard_financiero_estados_financieros(
+    anio: int | None = None,
+    mes: int | None = Query(None, ge=1, le=12),
+    db: Session = Depends(get_db),
+    _usuario: UsuarioToken = Depends(get_current_user),
+    _acceso: UsuarioToken = Depends(require_acceso_financiero),
+) -> DashboardFinancieroResponse:
+    return obtener_dashboard_financiero(db, anio, mes)
 
 
 def _respuesta_xlsx(contenido: bytes, nombre_archivo: str) -> Response:

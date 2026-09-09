@@ -3,7 +3,7 @@
 
 import type { Color } from "@tremor/react";
 
-export type DashboardTheme = "plaguicidas" | "nutrientes";
+export type DashboardTheme = "plaguicidas" | "nutrientes" | "financiero";
 
 export const dashboardAccent: Record<
   DashboardTheme,
@@ -31,6 +31,14 @@ export const dashboardAccent: Record<
     chip: "bg-orange-500/10 text-orange-300 ring-1 ring-orange-500/30",
     light: "#fed7aa", // orange-200
     dark: "#c2410c", // orange-700
+  },
+  financiero: {
+    tremor: "blue",
+    text: "text-blue-400",
+    ring: "ring-blue-500/40",
+    chip: "bg-blue-500/10 text-blue-300 ring-1 ring-blue-500/30",
+    light: "#bfdbfe", // blue-200
+    dark: "#1d4ed8", // blue-700
   },
 };
 
