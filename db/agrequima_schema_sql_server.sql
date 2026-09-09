@@ -466,16 +466,24 @@ BEGIN
             s.CIF_dolares, s.CIF_Q, s.TimbresQ, s.Exportador, s.Concentraciones,
             s.Componentes, s.VENTANILLA, c.ProductoAgrupado, c.Codigo,
             -- Excluido=1 si el catálogo ya lo marca para este producto, O
-            -- si la fórmula/componente de la fila coincide con alguna de
-            -- dbo.FormulasExcluidasNutrientes -- esto último aplica
-            -- automáticamente a CUALQUIER producto (nuevo o ya
-            -- catalogado) que use esa fórmula, sin depender de que
-            -- alguien lo agregue al catálogo a mano.
+            -- si la fórmula/componente de la fila contiene alguna de las
+            -- fórmulas excluidas -- esto último aplica automáticamente a
+            -- CUALQUIER producto (nuevo o ya catalogado) que use esa
+            -- fórmula, sin depender de que alguien lo agregue al catálogo
+            -- a mano. Las fórmulas van hardcodeadas como literales (no
+            -- contra dbo.FormulasExcluidasNutrientes, que se dejó de usar
+            -- acá) porque comparar una columna contra un LITERAL de texto
+            -- nunca genera conflicto de collation -- solo lo genera
+            -- comparar columna contra columna (como pasaba antes al
+            -- comparar contra FormulasExcluidasNutrientes.Formula, ver
+            -- 08_formulas_excluidas_nutrientes.sql). Agregar una fórmula
+            -- nueva requiere modificar este CASE y desplegar un script
+            -- nuevo (no un INSERT en una tabla).
             CASE
-                WHEN EXISTS (
-                    SELECT 1 FROM dbo.FormulasExcluidasNutrientes f
-                    WHERE s.Componentes COLLATE DATABASE_DEFAULT LIKE CONCAT('%', f.Formula, '%') COLLATE DATABASE_DEFAULT
-                ) THEN 1
+                WHEN s.Componentes LIKE '%Mancozeb%'
+                  OR s.Componentes LIKE '%Propamocarbhydrocloride%'
+                  OR s.Componentes LIKE '%paraq%'
+                THEN 1
                 ELSE ISNULL(c.Excluido, 0)
             END,
             GETDATE(), @UserId

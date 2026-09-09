@@ -16,6 +16,7 @@ Archivos que vas a usar:
   06_fix_colacion_procedimientos_restantes.sql -> lo abris tambien en SSMS, preventivo -- mismo error en Plaguicidas/Nomenclatura/Agrupador (ver Paso 3D)
   07_vista_nutrientes_activos.sql -> lo abris tambien en SSMS, crea la vista que oculta productos excluidos en todo dashboard/reporte/export (ver Paso 3E)
   08_formulas_excluidas_nutrientes.sql -> lo abris tambien en SSMS, excluye por formula completa (Mancozeb, Propamocarbhydrocloride) en vez de por producto puntual (ver Paso 3F)
+  10_simplificar_exclusion_formulas.sql -> lo abris tambien en SSMS, simplifica la exclusion por formula para que ya no dependa de una tabla (ver Paso 3G)
   generar_hash_password.py       -> genera el valor que necesita 02_seed_roles_y_admin.sql
   sync_piq_ia.py                 -> el programa que trae los datos cada noche
   .env.ejemplo                   -> plantilla de configuracion (la vas a copiar y completar)
@@ -374,6 +375,61 @@ nuevo): en SSMS, conectado a PIQ_IA,
 y después correr el backfill de los pasos 2 y 3 de este mismo script
 (o pedir que se genere un script nuevo si hace falta dejarlo
 documentado).
+
+NOTA (ver Paso 3G): este mecanismo basado en tabla se reemplazó
+después por comparaciones literales directas dentro de
+usp_CargarNutrientes -- dbo.FormulasExcluidasNutrientes sigue
+existiendo pero ya no se usa. Para agregar una fórmula nueva de acá en
+adelante, seguir las instrucciones del Paso 3G, no las de este párrafo.
+
+
+====================================================================
+ PASO 3G -- Simplificar la exclusión por fórmula: literales en vez de
+ tabla de referencia (con SSMS)
+====================================================================
+
+El Paso 3F resolvió la exclusión por fórmula comparando Componentes
+contra dbo.FormulasExcluidasNutrientes.Formula (columna contra
+columna). Esa comparación volvió a generar el mismo error de collation
+del Paso 3C/3D ("Cannot resolve the collation conflict..."), esta vez
+en las comparaciones LIKE de ese mecanismo -- se corrigió agregando
+COLLATE DATABASE_DEFAULT (ver el propio 08_formulas_excluidas_nutrientes.sql).
+
+El jefe del cliente encontró un enfoque más simple: comparar Componentes
+contra un LITERAL de texto (ej. 'LIKE %paraq%') en vez de contra una
+columna de una tabla de referencia. Una columna comparada contra un
+literal NUNCA genera conflicto de collation, así que ni siquiera hace
+falta COLLATE. Este paso adopta ese enfoque para las 3 fórmulas
+excluidas hasta ahora (Mancozeb, Propamocarbhydrocloride, Paraquat).
+
+1. Abrir "10_simplificar_exclusion_formulas.sql" (de esta carpeta) en
+   SSMS, igual que los pasos anteriores.
+
+2. Presionar F5 (o "¡ Ejecutar") con la conexión a PIQ_IA activa.
+
+3. En la pestaña "Mensajes", confirmar que no haya ninguna línea en
+   ROJO y que aparezca "usp_CargarNutrientes actualizado -- exclusion
+   por formula ahora usa literales...".
+
+Importante: este script SOLO reemplaza el procedimiento
+usp_CargarNutrientes -- no toca los datos ya cargados ni la tabla
+dbo.FormulasExcluidasNutrientes (queda como está, sin usarse). Si en
+este servidor real Paraquat todavía no está marcado como Excluido=1 en
+los datos ya cargados, correr a mano (una sola vez, no lo repite este
+script):
+    UPDATE dbo.Nutrientes SET Excluido = 1
+    WHERE Excluido = 0 AND Componentes LIKE '%paraq%';
+y, si corresponde también en el catálogo, el mismo patrón que usa el
+Paso 3F para CatalogoAgrupadorNutrientes pero comparando contra
+'%paraq%' en vez de la tabla de fórmulas.
+
+Es seguro volver a correr este script las veces que haga falta:
+CREATE OR ALTER PROCEDURE reemplaza la definición completa cada vez.
+
+Para agregar una fórmula nueva más adelante: pedir que se genere un
+script nuevo que agregue una línea "OR s.Componentes LIKE
+'%NuevaFormula%'" al CASE de usp_CargarNutrientes (y, si hace falta
+aplicarlo a datos ya cargados, el UPDATE de backfill correspondiente).
 
 
 ====================================================================

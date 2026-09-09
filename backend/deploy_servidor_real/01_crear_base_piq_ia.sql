@@ -395,10 +395,10 @@ BEGIN
             s.CIF_dolares, s.CIF_Q, s.TimbresQ, s.Exportador, s.Concentraciones,
             s.Componentes, s.VENTANILLA, c.ProductoAgrupado, c.Codigo,
             CASE
-                WHEN EXISTS (
-                    SELECT 1 FROM dbo.FormulasExcluidasNutrientes f
-                    WHERE s.Componentes COLLATE DATABASE_DEFAULT LIKE CONCAT('%', f.Formula, '%') COLLATE DATABASE_DEFAULT
-                ) THEN 1
+                WHEN s.Componentes LIKE '%Mancozeb%'
+                  OR s.Componentes LIKE '%Propamocarbhydrocloride%'
+                  OR s.Componentes LIKE '%paraq%'
+                THEN 1
                 ELSE ISNULL(c.Excluido, 0)
             END,
             GETDATE(), @UserId
