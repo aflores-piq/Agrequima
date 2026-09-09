@@ -24,6 +24,7 @@ class ResumenCargaNutrientes(BaseModel):
     meses_nuevos: list[int]
     filas_ya_cargadas: int
     filas_truncadas: int
+    filas_descartadas_sin_f: int
     filas_sin_agrupador: int
     agrupador_actualizado: bool
     claves_agrupador_nuevas: int | None = None

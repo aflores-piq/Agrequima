@@ -22,7 +22,7 @@ from app.core.db import get_db
 from app.core.deps import require_role
 from app.models.importacion import Importacion
 from app.models.nomenclatura import CatalogoAgrupadorNutrientes, CatalogoNomenclaturaPlaguicidas
-from app.models.nutriente import Nutriente
+from app.models.nutriente import NutrienteActivo
 from app.schemas.nomenclatura import (
     AgrupadorNutrienteItem,
     AgrupadorNutrienteUpdate,
@@ -250,19 +250,25 @@ def sin_agrupador_nutrientes(
     db: Session = Depends(get_db),
 ) -> SinAgrupadorNutrientesResponse:
     """Igual que sin_agrupador_plaguicidas, pero contra licencias de
-    nutrientes sin producto agrupado (Nutrientes.ProductoAgrupado IS
-    NULL)."""
-    sin_agrupador = db.query(Nutriente).filter(
-        Nutriente.ProductoAgrupado.is_(None), Nutriente.NombreComercial.isnot(None)
+    nutrientes sin producto agrupado (NombreComercial.ProductoAgrupado IS
+    NULL). Lee de NutrienteActivo (vw_NutrientesActivos), no de
+    Nutriente directo: un producto marcado Excluido=1 no debe aparecer
+    tampoco en esta pantalla de gestión, aunque en la práctica no debería
+    darse (si está en el catálogo con Excluido=1, ya tiene un
+    ProductoAgrupado asignado) -- se filtra igual, por las dudas de un
+    caso futuro donde alguien marque Excluido=1 sin completar el
+    agrupador."""
+    sin_agrupador = db.query(NutrienteActivo).filter(
+        NutrienteActivo.ProductoAgrupado.is_(None), NutrienteActivo.NombreComercial.isnot(None)
     )
 
     filas_sql = (
         sin_agrupador.with_entities(
-            Nutriente.NombreComercial,
-            func.count(Nutriente.nutrienteid),
-            func.sum(Nutriente.CIF_dolares),
+            NutrienteActivo.NombreComercial,
+            func.count(NutrienteActivo.nutrienteid),
+            func.sum(NutrienteActivo.CIF_dolares),
         )
-        .group_by(Nutriente.NombreComercial)
+        .group_by(NutrienteActivo.NombreComercial)
         .all()
     )
 
@@ -288,9 +294,9 @@ def sin_agrupador_nutrientes(
         for clave, datos in sorted(agregados.items(), key=lambda kv: -kv[1]["transacciones"])
     ]
 
-    total_detalle = sin_agrupador.with_entities(func.count(Nutriente.nutrienteid)).scalar() or 0
+    total_detalle = sin_agrupador.with_entities(func.count(NutrienteActivo.nutrienteid)).scalar() or 0
     filas_detalle = (
-        sin_agrupador.order_by(Nutriente.NombreComercial, Nutriente.nutrienteid)
+        sin_agrupador.order_by(NutrienteActivo.NombreComercial, NutrienteActivo.nutrienteid)
         .offset((pagina - 1) * tamano_pagina)
         .limit(tamano_pagina)
         .all()

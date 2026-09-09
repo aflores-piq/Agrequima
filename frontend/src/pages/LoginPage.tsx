@@ -49,17 +49,14 @@ export function LoginPage() {
       className="relative flex min-h-screen flex-col items-center px-4"
       style={{
         backgroundImage: `url(${agrequimaPortada})`,
-        // Ancho y alto se fijan como porcentajes INDEPENDIENTES del propio
-        // contenedor (nada de "auto", que ata el ancho renderizado al
-        // aspect ratio nativo de la imagen vía el alto elegido — ese era
-        // el bug: a 128% de alto, "auto" solo cubría el ancho completo en
-        // relaciones de aspecto cercanas a 16:9, dejando barras en
-        // ventanas más anchas). Con 100% de ancho la imagen siempre cubre
-        // el ancho completo del viewport sin importar su relación de
-        // aspecto. El alto (128%) es independiente del ancho, así que el
-        // encuadre vertical (ícono/eslogan) depende solo del alto de la
-        // ventana, nunca del ancho — validado en 1280–2560px de ancho.
-        backgroundSize: "100% 128%",
+        // "cover" (no dos porcentajes independientes de ancho/alto):
+        // eso estiraba la imagen fuera de su relación de aspecto nativa
+        // (1536x1024) cada vez que la ventana no coincidía exactamente
+        // con esa proporción -- el logo y el eslogan se veían
+        // "aplastados". "cover" siempre recorta, nunca deforma; con
+        // backgroundPosition "center top" se sigue viendo el logo
+        // completo en la parte de arriba, igual que antes.
+        backgroundSize: "cover",
         backgroundPosition: "center top",
         backgroundRepeat: "no-repeat",
       }}

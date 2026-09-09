@@ -85,7 +85,7 @@ def test_admin_usuarios_rechazado_en_carga_nutrientes(client, admin_usuarios_hea
     contenido = construir_excel_nutrientes(
         [
             {
-                "Tipo": "LICENCIAS", "No_Licencia": "1-91", "No_Registro": "REG-1",
+                "Tipo": "LICENCIAS", "No_Licencia": "1-91", "No_Registro": "REG-F-1",
                 "NombreComercial": "X", "EmpresaImportadora": "X",
                 "FechaEmision": "15/01/2091", "UMedida": "Kilogramos", "Cantidad": 100,
                 "PaisProcedencia": "X", "PaisOrigen": "X",

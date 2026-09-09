@@ -100,10 +100,20 @@ export function CargaNutrientesPage() {
               <dd className="text-ink">{formatNumber(resumen.filas_truncadas)}</dd>
             </div>
             <div>
+              <dt className="text-ink-faint">Descartadas (No_Registro sin "F")</dt>
+              <dd className="text-ink">{formatNumber(resumen.filas_descartadas_sin_f)}</dd>
+            </div>
+            <div>
               <dt className="text-ink-faint">Sin agrupador encontrado</dt>
               <dd className="text-ink">{formatNumber(resumen.filas_sin_agrupador)}</dd>
             </div>
           </dl>
+          {resumen.filas_descartadas_sin_f > 0 && (
+            <Text className="mt-3 text-amber-400">
+              Se descartaron {formatNumber(resumen.filas_descartadas_sin_f)} filas cuyo No_Registro
+              no contiene la letra "F" — no se cargaron a la base.
+            </Text>
+          )}
           {resumen.filas_sin_agrupador > 0 && (
             <Text className="mt-3 text-amber-400">
               Hay licencias sin agrupador — revísalas en la pantalla de Nomenclatura.

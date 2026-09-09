@@ -147,10 +147,11 @@ CREATE TABLE dbo.[Nutrientes] (
 	[Concentraciones] NVARCHAR(150) COLLATE Modern_Spanish_CI_AS NULL, 
 	[Componentes] NVARCHAR(500) COLLATE Modern_Spanish_CI_AS NULL, 
 	[VENTANILLA] NVARCHAR(50) COLLATE Modern_Spanish_CI_AS NULL, 
-	[ProductoAgrupado] NVARCHAR(150) COLLATE Modern_Spanish_CI_AS NULL, 
-	[CodigoAgrupador] VARCHAR(20) COLLATE Modern_Spanish_CI_AS NULL, 
-	fechamod DATETIME NULL, 
-	userid INTEGER NULL, 
+	[ProductoAgrupado] NVARCHAR(150) COLLATE Modern_Spanish_CI_AS NULL,
+	[CodigoAgrupador] VARCHAR(20) COLLATE Modern_Spanish_CI_AS NULL,
+	[Excluido] BIT NOT NULL DEFAULT (0),
+	fechamod DATETIME NULL,
+	userid INTEGER NULL,
 	CONSTRAINT [PK_Nutrientes] PRIMARY KEY CLUSTERED (nutrienteid)
 );
 END
@@ -171,13 +172,30 @@ GO
 IF OBJECT_ID('dbo.CatalogoAgrupadorNutrientes', 'U') IS NULL
 BEGIN
 CREATE TABLE dbo.[CatalogoAgrupadorNutrientes] (
-	[NombreComercial_Key] VARCHAR(400) COLLATE Modern_Spanish_CI_AS NOT NULL, 
-	[ProductoAgrupado] NVARCHAR(150) COLLATE Modern_Spanish_CI_AS NULL, 
-	[Codigo] VARCHAR(20) COLLATE Modern_Spanish_CI_AS NULL, 
-	[FechaMod] DATETIME NOT NULL DEFAULT (getdate()), 
+	[NombreComercial_Key] VARCHAR(400) COLLATE Modern_Spanish_CI_AS NOT NULL,
+	[ProductoAgrupado] NVARCHAR(150) COLLATE Modern_Spanish_CI_AS NULL,
+	[Codigo] VARCHAR(20) COLLATE Modern_Spanish_CI_AS NULL,
+	[FechaMod] DATETIME NOT NULL DEFAULT (getdate()),
+	[Excluido] BIT NOT NULL DEFAULT (0),
 	CONSTRAINT [PK__Catalogo__5F0245891384BB33] PRIMARY KEY CLUSTERED ([NombreComercial_Key])
 );
 END
+GO
+
+IF OBJECT_ID('dbo.FormulasExcluidasNutrientes', 'U') IS NULL
+BEGIN
+CREATE TABLE dbo.[FormulasExcluidasNutrientes] (
+	[Formula] VARCHAR(200) COLLATE Modern_Spanish_CI_AS NOT NULL,
+	[FechaCreacion] DATETIME NOT NULL DEFAULT (getdate()),
+	CONSTRAINT [PK_FormulasExcluidasNutrientes] PRIMARY KEY CLUSTERED ([Formula])
+);
+END
+GO
+
+IF NOT EXISTS (SELECT 1 FROM dbo.FormulasExcluidasNutrientes WHERE Formula = 'Mancozeb')
+    INSERT INTO dbo.FormulasExcluidasNutrientes (Formula) VALUES ('Mancozeb');
+IF NOT EXISTS (SELECT 1 FROM dbo.FormulasExcluidasNutrientes WHERE Formula = 'Propamocarbhydrocloride')
+    INSERT INTO dbo.FormulasExcluidasNutrientes (Formula) VALUES ('Propamocarbhydrocloride');
 GO
 
 IF OBJECT_ID('dbo.log_ExcepcionesAgrupador', 'U') IS NULL
@@ -325,7 +343,10 @@ BEGIN
             GETDATE(), @UserId, c.Agrupador, c.Codigo
         FROM dbo.stg_Importacion s
         LEFT JOIN dbo.CatalogoNomenclaturaPlaguicidas c
-               ON c.IngredienteActivo_Key = s.ingrediente_key;
+               -- COLLATE DATABASE_DEFAULT: mismo fix de collation que
+               -- usp_CargarNutrientes (stg_Importacion tambien la recrea
+               -- pandas sin especificar collation).
+               ON c.IngredienteActivo_Key COLLATE DATABASE_DEFAULT = s.ingrediente_key COLLATE DATABASE_DEFAULT;
 
         INSERT INTO dbo.log_ExcepcionesAgrupador
             (recibointerno, ingrediente_act, ingrediente_key, producto, cantidad, cif_USD)
@@ -333,7 +354,7 @@ BEGIN
                CAST(s.cantidad AS DECIMAL(18,2)), CAST(s.cif_USD AS DECIMAL(18,2))
         FROM dbo.stg_Importacion s
         LEFT JOIN dbo.CatalogoNomenclaturaPlaguicidas c
-               ON c.IngredienteActivo_Key = s.ingrediente_key
+               ON c.IngredienteActivo_Key COLLATE DATABASE_DEFAULT = s.ingrediente_key COLLATE DATABASE_DEFAULT
         WHERE c.IngredienteActivo_Key IS NULL AND s.ingrediente_key IS NOT NULL;
 
         COMMIT TRANSACTION;
@@ -365,24 +386,44 @@ BEGIN
             anio, Tipo, No_Licencia, No_Registro, NombreComercial, EmpresaImportadora,
             FechaEmision, UMedida, Cantidad, PaisProcedencia, PaisOrigen, AduanadeIngreso,
             CIF_dolares, CIF_Q, TimbresQ, Exportador, Concentraciones, Componentes,
-            VENTANILLA, ProductoAgrupado, CodigoAgrupador, fechamod, userid
+            VENTANILLA, ProductoAgrupado, CodigoAgrupador, Excluido, fechamod, userid
         )
         SELECT
             CAST(s.anio AS INT), s.Tipo, s.No_Licencia, s.No_Registro, s.NombreComercial,
             s.EmpresaImportadora, TRY_CAST(s.FechaEmision AS DATE), s.UMedida,
             s.Cantidad, s.PaisProcedencia, s.PaisOrigen, s.AduanadeIngreso,
             s.CIF_dolares, s.CIF_Q, s.TimbresQ, s.Exportador, s.Concentraciones,
-            s.Componentes, s.VENTANILLA, c.ProductoAgrupado, c.Codigo, GETDATE(), @UserId
+            s.Componentes, s.VENTANILLA, c.ProductoAgrupado, c.Codigo,
+            CASE
+                WHEN s.Componentes LIKE '%Mancozeb%'
+                  OR s.Componentes LIKE '%Propamocarbhydrocloride%'
+                  OR s.Componentes LIKE '%paraq%'
+                THEN 1
+                ELSE ISNULL(c.Excluido, 0)
+            END,
+            GETDATE(), @UserId
         FROM dbo.stg_Nutrientes s
         LEFT JOIN dbo.CatalogoAgrupadorNutrientes c
-               ON c.NombreComercial_Key = s.NombreComercial_Key;
+               -- COLLATE DATABASE_DEFAULT en ambos lados: stg_Nutrientes lo recrea
+               -- pandas (to_sql if_exists="replace") en cada carga sin especificar
+               -- collation, asi que sus columnas de texto quedan con el collation
+               -- default DE LA BASE (PIQ_IA/AGREQUIMA), mientras que
+               -- CatalogoAgrupadorNutrientes.NombreComercial_Key quedo fijo en
+               -- COLLATE Modern_Spanish_CI_AS. Si el collation default de la base
+               -- del servidor real no es Modern_Spanish_CI_AS (ej.
+               -- SQL_Latin1_General_CP1_CI_AS, el default de fabrica de SQL
+               -- Server), este JOIN sin COLLATE explicito falla con el error 468
+               -- "Cannot resolve the collation conflict..." -- paso en produccion al
+               -- cargar Nutrientes de julio 2026, nunca en desarrollo porque ahi el
+               -- collation de la instancia y el de la base coinciden.
+               ON c.NombreComercial_Key COLLATE DATABASE_DEFAULT = s.NombreComercial_Key COLLATE DATABASE_DEFAULT;
 
         INSERT INTO dbo.log_ExcepcionesAgrupadorNutrientes
             (No_Licencia, NombreComercial, NombreComercial_Key, Cantidad, CIF_dolares)
         SELECT s.No_Licencia, s.NombreComercial, s.NombreComercial_Key, s.Cantidad, s.CIF_dolares
         FROM dbo.stg_Nutrientes s
         LEFT JOIN dbo.CatalogoAgrupadorNutrientes c
-               ON c.NombreComercial_Key = s.NombreComercial_Key
+               ON c.NombreComercial_Key COLLATE DATABASE_DEFAULT = s.NombreComercial_Key COLLATE DATABASE_DEFAULT
         WHERE c.NombreComercial_Key IS NULL AND s.NombreComercial_Key IS NOT NULL;
 
         COMMIT TRANSACTION;
@@ -413,7 +454,10 @@ BEGIN
         FROM dbo.stg_Nomenclatura
         WHERE IngredienteActivo_Key IS NOT NULL
     ) AS origen
-    ON destino.IngredienteActivo_Key = origen.IngredienteActivo_Key
+    -- COLLATE DATABASE_DEFAULT: mismo fix de collation que
+    -- usp_CargarNutrientes (stg_Nomenclatura tambien la recrea pandas
+    -- sin especificar collation).
+    ON destino.IngredienteActivo_Key COLLATE DATABASE_DEFAULT = origen.IngredienteActivo_Key COLLATE DATABASE_DEFAULT
     WHEN MATCHED AND (
             ISNULL(destino.Agrupador,'') <> ISNULL(origen.Agrupador,'')
          OR ISNULL(destino.Codigo,'')    <> ISNULL(origen.Codigo,'')
@@ -444,7 +488,10 @@ BEGIN
         FROM dbo.stg_AgrupadorNutrientes
         WHERE NombreComercial_Key IS NOT NULL
     ) AS origen
-    ON destino.NombreComercial_Key = origen.NombreComercial_Key
+    -- COLLATE DATABASE_DEFAULT: mismo fix de collation que
+    -- usp_CargarNutrientes (stg_AgrupadorNutrientes tambien la recrea
+    -- pandas sin especificar collation).
+    ON destino.NombreComercial_Key COLLATE DATABASE_DEFAULT = origen.NombreComercial_Key COLLATE DATABASE_DEFAULT
     WHEN MATCHED AND (
             ISNULL(destino.ProductoAgrupado,'') <> ISNULL(origen.ProductoAgrupado,'')
          OR ISNULL(destino.Codigo,'')            <> ISNULL(origen.Codigo,'')

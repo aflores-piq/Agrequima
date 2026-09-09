@@ -178,6 +178,7 @@ BEGIN
         VENTANILLA          NVARCHAR(50) NULL,
         ProductoAgrupado    NVARCHAR(150) NULL,     -- resultado del cruce con el catálogo
         CodigoAgrupador     VARCHAR(20) NULL,
+        Excluido            BIT NOT NULL DEFAULT 0,  -- copiado de CatalogoAgrupadorNutrientes.Excluido
         fechamod            DATETIME NULL,
         userid              INT NULL,
         CONSTRAINT PK_Nutrientes PRIMARY KEY CLUSTERED (nutrienteid ASC)
@@ -228,9 +229,51 @@ BEGIN
         NombreComercial_Key VARCHAR(400) NOT NULL PRIMARY KEY,
         ProductoAgrupado    NVARCHAR(150) NULL,
         Codigo               VARCHAR(20) NULL,
-        FechaMod             DATETIME NOT NULL DEFAULT GETDATE()
+        FechaMod             DATETIME NOT NULL DEFAULT GETDATE(),
+        Excluido             BIT NOT NULL DEFAULT 0  -- productos que el cliente confirmó que NO corresponden a Nutrientes
     );
 END
+GO
+
+-- Vista de solo lectura: dbo.Nutrientes sin las filas Excluido=1 --
+-- solución ESTRUCTURAL a la exclusión de productos (en vez de que cada
+-- dashboard/reporte/export se acuerde de agregar WHERE Excluido = 0 por
+-- su cuenta, todo ese código lee de esta vista -- ver NutrienteActivo
+-- en app/models/nutriente.py). dbo.Nutrientes (la tabla real) sigue
+-- siendo la que usan la carga (usp_CargarNutrientes) y la
+-- sincronización del catálogo, que sí necesitan ver las filas
+-- excluidas también.
+CREATE OR ALTER VIEW dbo.vw_NutrientesActivos AS
+SELECT
+    nutrienteid, anio, Tipo, No_Licencia, No_Registro, NombreComercial,
+    EmpresaImportadora, FechaEmision, UMedida, Cantidad, PaisProcedencia,
+    PaisOrigen, AduanadeIngreso, CIF_dolares, CIF_Q, TimbresQ, Exportador,
+    Concentraciones, Componentes, VENTANILLA, ProductoAgrupado,
+    CodigoAgrupador, Excluido, fechamod, userid
+FROM dbo.Nutrientes
+WHERE Excluido = 0;
+GO
+
+-- Fórmulas/componentes que el cliente confirmó que deben excluirse de
+-- Nutrientes por completo (no un producto puntual -- CUALQUIER producto
+-- cuyo Componentes contenga alguna de estas fórmulas). Agregar una
+-- fórmula nueva en el futuro es un INSERT acá, no un cambio de código
+-- -- ver usp_CargarNutrientes (la aplica automáticamente en cada carga)
+-- y el backfill correspondiente en
+-- deploy_servidor_real/08_formulas_excluidas_nutrientes.sql.
+IF OBJECT_ID('dbo.FormulasExcluidasNutrientes') IS NULL
+BEGIN
+    CREATE TABLE dbo.FormulasExcluidasNutrientes(
+        Formula       VARCHAR(200) NOT NULL PRIMARY KEY,
+        FechaCreacion DATETIME NOT NULL DEFAULT GETDATE()
+    );
+END
+GO
+
+IF NOT EXISTS (SELECT 1 FROM dbo.FormulasExcluidasNutrientes WHERE Formula = 'Mancozeb')
+    INSERT INTO dbo.FormulasExcluidasNutrientes (Formula) VALUES ('Mancozeb');
+IF NOT EXISTS (SELECT 1 FROM dbo.FormulasExcluidasNutrientes WHERE Formula = 'Propamocarbhydrocloride')
+    INSERT INTO dbo.FormulasExcluidasNutrientes (Formula) VALUES ('Propamocarbhydrocloride');
 GO
 
 /* =====================================================================
@@ -299,7 +342,13 @@ BEGIN
         FROM dbo.stg_Nomenclatura
         WHERE IngredienteActivo_Key IS NOT NULL
     ) AS origen
-    ON destino.IngredienteActivo_Key = origen.IngredienteActivo_Key
+    -- COLLATE DATABASE_DEFAULT en los dos lados: stg_Nomenclatura la
+    -- recrea pandas (to_sql if_exists="replace") en cada carga sin
+    -- especificar collation -- mismo problema resuelto en
+    -- usp_CargarNutrientes (ver ese procedimiento para la causa
+    -- completa: error 468 si el collation default de la base no
+    -- coincide con el de las columnas del catálogo permanente).
+    ON destino.IngredienteActivo_Key COLLATE DATABASE_DEFAULT = origen.IngredienteActivo_Key COLLATE DATABASE_DEFAULT
     WHEN MATCHED AND (
             ISNULL(destino.Agrupador,'') <> ISNULL(origen.Agrupador,'')
          OR ISNULL(destino.Codigo,'')    <> ISNULL(origen.Codigo,'')
@@ -341,7 +390,10 @@ BEGIN
             GETDATE(), @UserId, c.Agrupador, c.Codigo
         FROM dbo.stg_Importacion s
         LEFT JOIN dbo.CatalogoNomenclaturaPlaguicidas c
-               ON c.IngredienteActivo_Key = s.ingrediente_key;
+               -- COLLATE DATABASE_DEFAULT: mismo fix de collation que
+               -- usp_CargarNutrientes (stg_Importacion también la
+               -- recrea pandas sin especificar collation).
+               ON c.IngredienteActivo_Key COLLATE DATABASE_DEFAULT = s.ingrediente_key COLLATE DATABASE_DEFAULT;
 
         INSERT INTO dbo.log_ExcepcionesAgrupador
             (recibointerno, ingrediente_act, ingrediente_key, producto, cantidad, cif_USD)
@@ -349,7 +401,7 @@ BEGIN
                CAST(s.cantidad AS DECIMAL(18,2)), CAST(s.cif_USD AS DECIMAL(18,2))
         FROM dbo.stg_Importacion s
         LEFT JOIN dbo.CatalogoNomenclaturaPlaguicidas c
-               ON c.IngredienteActivo_Key = s.ingrediente_key
+               ON c.IngredienteActivo_Key COLLATE DATABASE_DEFAULT = s.ingrediente_key COLLATE DATABASE_DEFAULT
         WHERE c.IngredienteActivo_Key IS NULL AND s.ingrediente_key IS NOT NULL;
 
         COMMIT TRANSACTION;
@@ -375,7 +427,10 @@ BEGIN
         FROM dbo.stg_AgrupadorNutrientes
         WHERE NombreComercial_Key IS NOT NULL
     ) AS origen
-    ON destino.NombreComercial_Key = origen.NombreComercial_Key
+    -- COLLATE DATABASE_DEFAULT: mismo fix de collation que
+    -- usp_CargarNutrientes (stg_AgrupadorNutrientes también la recrea
+    -- pandas sin especificar collation).
+    ON destino.NombreComercial_Key COLLATE DATABASE_DEFAULT = origen.NombreComercial_Key COLLATE DATABASE_DEFAULT
     WHEN MATCHED AND (
             ISNULL(destino.ProductoAgrupado,'') <> ISNULL(origen.ProductoAgrupado,'')
          OR ISNULL(destino.Codigo,'')            <> ISNULL(origen.Codigo,'')
@@ -402,24 +457,62 @@ BEGIN
             anio, Tipo, No_Licencia, No_Registro, NombreComercial, EmpresaImportadora,
             FechaEmision, UMedida, Cantidad, PaisProcedencia, PaisOrigen, AduanadeIngreso,
             CIF_dolares, CIF_Q, TimbresQ, Exportador, Concentraciones, Componentes,
-            VENTANILLA, ProductoAgrupado, CodigoAgrupador, fechamod, userid
+            VENTANILLA, ProductoAgrupado, CodigoAgrupador, Excluido, fechamod, userid
         )
         SELECT
             CAST(s.anio AS INT), s.Tipo, s.No_Licencia, s.No_Registro, s.NombreComercial,
             s.EmpresaImportadora, TRY_CAST(s.FechaEmision AS DATE), s.UMedida,
             s.Cantidad, s.PaisProcedencia, s.PaisOrigen, s.AduanadeIngreso,
             s.CIF_dolares, s.CIF_Q, s.TimbresQ, s.Exportador, s.Concentraciones,
-            s.Componentes, s.VENTANILLA, c.ProductoAgrupado, c.Codigo, GETDATE(), @UserId
+            s.Componentes, s.VENTANILLA, c.ProductoAgrupado, c.Codigo,
+            -- Excluido=1 si el catálogo ya lo marca para este producto, O
+            -- si la fórmula/componente de la fila contiene alguna de las
+            -- fórmulas excluidas -- esto último aplica automáticamente a
+            -- CUALQUIER producto (nuevo o ya catalogado) que use esa
+            -- fórmula, sin depender de que alguien lo agregue al catálogo
+            -- a mano. Las fórmulas van hardcodeadas como literales (no
+            -- contra dbo.FormulasExcluidasNutrientes, que se dejó de usar
+            -- acá) porque comparar una columna contra un LITERAL de texto
+            -- nunca genera conflicto de collation -- solo lo genera
+            -- comparar columna contra columna (como pasaba antes al
+            -- comparar contra FormulasExcluidasNutrientes.Formula, ver
+            -- 08_formulas_excluidas_nutrientes.sql). Agregar una fórmula
+            -- nueva requiere modificar este CASE y desplegar un script
+            -- nuevo (no un INSERT en una tabla).
+            CASE
+                WHEN s.Componentes LIKE '%Mancozeb%'
+                  OR s.Componentes LIKE '%Propamocarbhydrocloride%'
+                  OR s.Componentes LIKE '%paraq%'
+                THEN 1
+                ELSE ISNULL(c.Excluido, 0)
+            END,
+            GETDATE(), @UserId
         FROM dbo.stg_Nutrientes s
         LEFT JOIN dbo.CatalogoAgrupadorNutrientes c
-               ON c.NombreComercial_Key = s.NombreComercial_Key;
+               -- COLLATE DATABASE_DEFAULT en ambos lados: stg_Nutrientes lo
+               -- recrea pandas (to_sql if_exists="replace") en cada carga,
+               -- sin especificar collation -- sus columnas de texto quedan
+               -- con el collation DEFAULT DE LA BASE donde vive PIQ_IA/
+               -- AGREQUIMA. CatalogoAgrupadorNutrientes.NombreComercial_Key
+               -- en cambio quedó con COLLATE Modern_Spanish_CI_AS fijo desde
+               -- que se generó este script. Si el collation default de la
+               -- base del servidor real no es Modern_Spanish_CI_AS (ej.
+               -- SQL_Latin1_General_CP1_CI_AS, el default de fábrica de SQL
+               -- Server), este JOIN sin COLLATE explícito falla con el error
+               -- 468 "Cannot resolve the collation conflict..." -- pasó en
+               -- producción al cargar Nutrientes de julio 2026, nunca en
+               -- desarrollo porque ahí el collation de la instancia y el de
+               -- la base coinciden (los dos Modern_Spanish_CI_AS). Forzar
+               -- DATABASE_DEFAULT en los dos lados hace la comparación
+               -- funcionar sin importar cuál sea ese default.
+               ON c.NombreComercial_Key COLLATE DATABASE_DEFAULT = s.NombreComercial_Key COLLATE DATABASE_DEFAULT;
 
         INSERT INTO dbo.log_ExcepcionesAgrupadorNutrientes
             (No_Licencia, NombreComercial, NombreComercial_Key, Cantidad, CIF_dolares)
         SELECT s.No_Licencia, s.NombreComercial, s.NombreComercial_Key, s.Cantidad, s.CIF_dolares
         FROM dbo.stg_Nutrientes s
         LEFT JOIN dbo.CatalogoAgrupadorNutrientes c
-               ON c.NombreComercial_Key = s.NombreComercial_Key
+               ON c.NombreComercial_Key COLLATE DATABASE_DEFAULT = s.NombreComercial_Key COLLATE DATABASE_DEFAULT
         WHERE c.NombreComercial_Key IS NULL AND s.NombreComercial_Key IS NOT NULL;
 
         COMMIT TRANSACTION;
