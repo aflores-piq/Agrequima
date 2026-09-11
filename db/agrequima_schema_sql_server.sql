@@ -739,3 +739,243 @@ WHERE NOT EXISTS (
     WHERE x.TipoAgrupador = v.TipoAgrupador AND x.Codigo = v.Codigo
 );
 GO
+
+/* =====================================================================
+   12. FINANCIERO -- CONTACC (7 tablas finales + su stg_ correspondiente)
+   Reflejan la estructura real de las vistas del cliente (vw_piq_*).
+   Mismo patrón que Importacion/stg_Importacion: stg_ con tipos sueltos
+   (VARCHAR(MAX)/FLOAT) para la carga cruda desde CSV/Excel, tabla final
+   tipada con IDENTITY + fechamod/userid de auditoría. Cargadas por
+   primera vez con datos reales vía
+   backend/app/services/cargar_datos_financiero_inicial.py (carga
+   manual de una sola vez, NO es el sync nocturno -- ver
+   sync_piq_ia.py, que todavía no toca estas tablas).
+   ===================================================================== */
+IF OBJECT_ID('dbo.BalanceSaldos') IS NULL
+BEGIN
+    CREATE TABLE dbo.BalanceSaldos(
+        balancesaldoid  INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+        emp_nit         VARCHAR(20) NULL,
+        Cta_Codigo      VARCHAR(20) NULL,
+        Cta_Descripcion VARCHAR(250) NULL,
+        Sal_Ano         INT NULL,
+        Sal_Mes         INT NULL,
+        Debitos         DECIMAL(18,2) NULL,
+        Creditos        DECIMAL(18,2) NULL,
+        Saldo           DECIMAL(18,2) NULL,
+        Cod_Centro      VARCHAR(20) NULL,
+        fechamod        DATETIME NULL,
+        userid          INT NULL
+    );
+END
+GO
+
+IF OBJECT_ID('dbo.stg_BalanceSaldos') IS NULL
+BEGIN
+    CREATE TABLE dbo.stg_BalanceSaldos(
+        emp_nit         VARCHAR(MAX) NULL,
+        Cta_Codigo      VARCHAR(MAX) NULL,
+        Cta_Descripcion VARCHAR(MAX) NULL,
+        Sal_Ano         FLOAT NULL,
+        Sal_Mes         FLOAT NULL,
+        Debitos         FLOAT NULL,
+        Creditos        FLOAT NULL,
+        Saldo           FLOAT NULL,
+        Cod_Centro      VARCHAR(MAX) NULL
+    );
+END
+GO
+
+IF OBJECT_ID('dbo.BalanceGeneral') IS NULL
+BEGIN
+    CREATE TABLE dbo.BalanceGeneral(
+        balancegeneralid INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+        emp_nit          VARCHAR(20) NULL,
+        Cod_n1           VARCHAR(20) NULL,
+        Nom_n1           VARCHAR(250) NULL,
+        cod_n5           VARCHAR(20) NULL,
+        nom_n5           VARCHAR(250) NULL,
+        Sal_Ano          INT NULL,
+        Sal_Mes          INT NULL,
+        Debitos          DECIMAL(18,2) NULL,
+        Creditos         DECIMAL(18,2) NULL,
+        Saldo            DECIMAL(18,2) NULL,
+        Inicial          DECIMAL(18,2) NULL,
+        fechamod         DATETIME NULL,
+        userid           INT NULL
+    );
+END
+GO
+
+IF OBJECT_ID('dbo.stg_BalanceGeneral') IS NULL
+BEGIN
+    CREATE TABLE dbo.stg_BalanceGeneral(
+        emp_nit  VARCHAR(MAX) NULL,
+        Cod_n1   VARCHAR(MAX) NULL,
+        Nom_n1   VARCHAR(MAX) NULL,
+        cod_n5   VARCHAR(MAX) NULL,
+        nom_n5   VARCHAR(MAX) NULL,
+        Sal_Ano  FLOAT NULL,
+        Sal_Mes  FLOAT NULL,
+        Debitos  FLOAT NULL,
+        Creditos FLOAT NULL,
+        Saldo    FLOAT NULL,
+        Inicial  FLOAT NULL
+    );
+END
+GO
+
+IF OBJECT_ID('dbo.CatalogoCuentas') IS NULL
+BEGIN
+    CREATE TABLE dbo.CatalogoCuentas(
+        catalogocuentaid INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+        cta_nivel        INT NULL,
+        Codigo_N1        VARCHAR(20) NULL,
+        Nombre_n1        VARCHAR(250) NULL,
+        Codigo_N5        VARCHAR(20) NULL,
+        Nombre_N5        VARCHAR(250) NULL,
+        fechamod         DATETIME NULL,
+        userid           INT NULL
+    );
+END
+GO
+
+IF OBJECT_ID('dbo.stg_CatalogoCuentas') IS NULL
+BEGIN
+    CREATE TABLE dbo.stg_CatalogoCuentas(
+        cta_nivel FLOAT NULL,
+        Codigo_N1 VARCHAR(MAX) NULL,
+        Nombre_n1 VARCHAR(MAX) NULL,
+        Codigo_N5 VARCHAR(MAX) NULL,
+        Nombre_N5 VARCHAR(MAX) NULL
+    );
+END
+GO
+
+IF OBJECT_ID('dbo.CentrosDeCosto') IS NULL
+BEGIN
+    CREATE TABLE dbo.CentrosDeCosto(
+        centrodecostoid INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+        emp_nit         VARCHAR(20) NULL,
+        Cod_centro      VARCHAR(20) NULL,
+        Des_centro      VARCHAR(250) NULL,
+        nivel           INT NULL,
+        CC_Grupo1       VARCHAR(20) NULL,
+        fechamod        DATETIME NULL,
+        userid          INT NULL
+    );
+END
+GO
+
+IF OBJECT_ID('dbo.stg_CentrosDeCosto') IS NULL
+BEGIN
+    CREATE TABLE dbo.stg_CentrosDeCosto(
+        emp_nit    VARCHAR(MAX) NULL,
+        Cod_centro VARCHAR(MAX) NULL,
+        Des_centro VARCHAR(MAX) NULL,
+        nivel      FLOAT NULL,
+        CC_Grupo1  VARCHAR(MAX) NULL
+    );
+END
+GO
+
+IF OBJECT_ID('dbo.Presupuestos') IS NULL
+BEGIN
+    CREATE TABLE dbo.Presupuestos(
+        presupuestoid   INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+        emp_nit         VARCHAR(20) NULL,
+        par_ano         INT NULL,
+        par_mes         INT NULL,
+        cta_codigo      VARCHAR(20) NULL,
+        pre_presupuesto DECIMAL(18,2) NULL,
+        cod_centro      VARCHAR(20) NULL,
+        fechamod        DATETIME NULL,
+        userid          INT NULL
+    );
+END
+GO
+
+IF OBJECT_ID('dbo.stg_Presupuestos') IS NULL
+BEGIN
+    CREATE TABLE dbo.stg_Presupuestos(
+        emp_nit         VARCHAR(MAX) NULL,
+        par_ano         FLOAT NULL,
+        par_mes         FLOAT NULL,
+        cta_codigo      VARCHAR(MAX) NULL,
+        pre_presupuesto FLOAT NULL,
+        cod_centro      VARCHAR(MAX) NULL
+    );
+END
+GO
+
+IF OBJECT_ID('dbo.AsociadosCuota') IS NULL
+BEGIN
+    CREATE TABLE dbo.AsociadosCuota(
+        asociadocuotaid INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+        emp_nit         VARCHAR(20) NULL,
+        Sal_Ano         INT NULL,
+        cod_n5          VARCHAR(20) NULL,
+        nom_n5          VARCHAR(250) NULL,
+        grupo           VARCHAR(20) NULL,
+        nombre_mostrar  VARCHAR(250) NULL,
+        cuota           DECIMAL(18,2) NULL,
+        fechamod        DATETIME NULL,
+        userid          INT NULL
+    );
+END
+GO
+
+IF OBJECT_ID('dbo.stg_AsociadosCuota') IS NULL
+BEGIN
+    CREATE TABLE dbo.stg_AsociadosCuota(
+        emp_nit        VARCHAR(MAX) NULL,
+        Sal_Ano        FLOAT NULL,
+        cod_n5         VARCHAR(MAX) NULL,
+        nom_n5         VARCHAR(MAX) NULL,
+        grupo          VARCHAR(MAX) NULL,
+        nombre_mostrar VARCHAR(MAX) NULL,
+        cuota          FLOAT NULL
+    );
+END
+GO
+
+IF OBJECT_ID('dbo.ChequesCirculacion') IS NULL
+BEGIN
+    CREATE TABLE dbo.ChequesCirculacion(
+        chequecirculacionid INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+        ban_codigo          VARCHAR(50) NULL,
+        cta_numero          VARCHAR(50) NULL,
+        cta_nombre          VARCHAR(250) NULL,
+        Cta_Codigo          VARCHAR(20) NULL,
+        par_ano             INT NULL,
+        par_mes             INT NULL,
+        doc_numero          VARCHAR(50) NULL,
+        doc_fecha           DATETIME NULL,
+        doc_fchcobro        DATETIME NULL,
+        doc_nombre          VARCHAR(250) NULL,
+        doc_motivo          VARCHAR(MAX) NULL,
+        doc_monto           DECIMAL(18,2) NULL,
+        fechamod            DATETIME NULL,
+        userid              INT NULL
+    );
+END
+GO
+
+IF OBJECT_ID('dbo.stg_ChequesCirculacion') IS NULL
+BEGIN
+    CREATE TABLE dbo.stg_ChequesCirculacion(
+        ban_codigo   VARCHAR(MAX) NULL,
+        cta_numero   VARCHAR(MAX) NULL,
+        cta_nombre   VARCHAR(MAX) NULL,
+        Cta_Codigo   VARCHAR(MAX) NULL,
+        par_ano      FLOAT NULL,
+        par_mes      FLOAT NULL,
+        doc_numero   VARCHAR(MAX) NULL,
+        doc_fecha    VARCHAR(MAX) NULL,
+        doc_fchcobro VARCHAR(MAX) NULL,
+        doc_nombre   VARCHAR(MAX) NULL,
+        doc_motivo   VARCHAR(MAX) NULL,
+        doc_monto    FLOAT NULL
+    );
+END
+GO
