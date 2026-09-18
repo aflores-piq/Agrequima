@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { Card, Title, Text } from "@tremor/react";
 import type { DashboardTheme } from "../theme/colors";
 
@@ -23,6 +23,7 @@ export function ChartCard({
   chart,
   table,
   exportar,
+  estiloTarjeta,
 }: {
   theme: DashboardTheme;
   title: string;
@@ -30,12 +31,17 @@ export function ChartCard({
   chart: ReactNode;
   table: ReactNode;
   exportar?: ReactNode;
+  /** Override puntual del fondo de la tarjeta (ej. Financiero, que
+   * necesita un gris más claro que bg-surface para distinguirse del
+   * fondo general muy oscuro de la app) -- no afecta a Plaguicidas ni
+   * Nutrientes, que no lo pasan y siguen usando bg-surface. */
+  estiloTarjeta?: CSSProperties;
 }) {
   const [vista, setVista] = useState<"grafico" | "tabla">("grafico");
   const colorSeleccion = COLOR_SELECCION[theme];
 
   return (
-    <Card className="flex h-full flex-col bg-surface ring-1 ring-line">
+    <Card className="flex h-full flex-col bg-surface ring-1 ring-line" style={estiloTarjeta}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <Title className="text-ink">{title}</Title>

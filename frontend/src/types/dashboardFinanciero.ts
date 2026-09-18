@@ -1,41 +1,89 @@
-export interface GrupoMontoItem {
-  grupo: string;
-  monto: number;
+export interface PeriodoDisponible {
+  anio: number;
+  mes: number;
 }
 
-export interface DetalleCuentaMovimiento {
-  grupo: string | null;
-  nombre_cuenta_n5: string | null;
+export interface FilaCuentaMensual {
+  cuenta: string;
   mes_anterior: number;
-  saldo_acumulado: number;
+  mes_actual: number;
+  acumulado_anio: number;
 }
 
-export interface DetalleCuentaComparativoMovimiento {
-  cuenta: string | null;
-  grupo: string | null;
-  monto_anio_anterior: number;
+export interface FilaGrupoMensual {
+  grupo: string;
+  mes_anterior: number;
+  mes_actual: number;
+  acumulado_anio: number;
+  cuentas: FilaCuentaMensual[];
+}
+
+export interface TotalMensual {
+  mes_anterior: number;
+  mes_actual: number;
+  acumulado_anio: number;
+}
+
+export interface FilaCuentaComparativa {
+  cuenta: string;
+  anio_anterior: number;
+  anio_actual: number;
   variacion: number;
-  monto_anio_actual: number;
 }
 
-export interface DistribucionBalanceItem {
-  etiqueta: string;
-  monto: number;
+export interface FilaGrupoComparativa {
+  grupo: string;
+  anio_anterior: number;
+  anio_actual: number;
+  variacion: number;
+  cuentas: FilaCuentaComparativa[];
 }
 
-export interface DetalleCuentaBalance {
-  nombre_n5: string | null;
-  grupo: string | null;
-  saldo_mes_anterior: number;
-  saldo_acumulado_actual: number;
+export interface TotalComparativo {
+  anio_anterior: number;
+  anio_actual: number;
   variacion: number;
 }
 
-export interface DetalleCuentaBalanceComparativo {
-  nombre_n5: string | null;
-  grupo: string | null;
-  saldo_acumulado_actual: number;
-  saldo_acumulado_anterior: number;
+export interface FilaCuentaBalanceMensual {
+  cuenta: string;
+  mes_anterior: number;
+  mes_actual: number;
+  diferencia: number;
+}
+
+export interface FilaGrupoBalanceMensual {
+  grupo: string;
+  mes_anterior: number;
+  mes_actual: number;
+  diferencia: number;
+  cuentas: FilaCuentaBalanceMensual[];
+}
+
+export interface TotalBalanceMensual {
+  mes_anterior: number;
+  mes_actual: number;
+  diferencia: number;
+}
+
+export interface FilaCuentaBalanceComparativa {
+  cuenta: string;
+  anio_anterior: number;
+  anio_actual: number;
+  variacion: number;
+}
+
+export interface FilaGrupoBalanceComparativa {
+  grupo: string;
+  anio_anterior: number;
+  anio_actual: number;
+  variacion: number;
+  cuentas: FilaCuentaBalanceComparativa[];
+}
+
+export interface TotalBalanceComparativo {
+  anio_anterior: number;
+  anio_actual: number;
   variacion: number;
 }
 
@@ -43,79 +91,120 @@ export interface KpisIngresosDesembolsosMensual {
   ingresos: number;
   egresos: number;
   resultado: number;
-  saldo_mes_corriente: number;
-  acumulado_saldo_mes_corriente: number;
-  saldo_mes_anterior: number;
+}
+
+export interface BarraTresCategorias {
+  ingresos: number;
+  egresos: number;
+  resultado: number;
 }
 
 export interface IngresosDesembolsosMensual {
   kpis: KpisIngresosDesembolsosMensual;
-  cascada_ingresos_por_grupo: GrupoMontoItem[];
-  cascada_egresos_por_grupo: GrupoMontoItem[];
-  detalle_egresos: DetalleCuentaMovimiento[];
-  detalle_ingresos: DetalleCuentaMovimiento[];
+  etiqueta_mes_anterior: string;
+  etiqueta_mes_actual: string;
+  etiqueta_acumulado: string;
+  titulo_grafico_mes: string;
+  titulo_grafico_acumulado: string;
+  grafico_mes: BarraTresCategorias;
+  grafico_acumulado: BarraTresCategorias;
+  detalle_ingresos: FilaGrupoMensual[];
+  total_ingresos: TotalMensual;
+  detalle_egresos: FilaGrupoMensual[];
+  total_egresos: TotalMensual;
+  resultado_del_ejercicio: TotalMensual;
 }
 
 export interface KpisIngresosDesembolsosAcumulado {
   ingresos: number;
   egresos: number;
-  saldo_acumulado: number;
-  resultado_anio_actual: number;
-  variacion_resultado: number;
-  er_anio_anterior: number;
-  er_anio_actual: number;
-  er_mensual: number;
-  acumulado_saldo_anio_anterior: number;
+  saldo: number;
+}
+
+export interface SerieAnioTresCategorias {
+  anio: number;
+  ingresos: number;
+  egresos: number;
+  resultado: number;
 }
 
 export interface IngresosDesembolsosAcumulado {
   kpis: KpisIngresosDesembolsosAcumulado;
-  detalle_egresos: DetalleCuentaComparativoMovimiento[];
-  detalle_ingresos: DetalleCuentaComparativoMovimiento[];
+  etiqueta_anio_anterior: string;
+  etiqueta_anio_actual: string;
+  titulo_grafico: string;
+  grafico: SerieAnioTresCategorias[];
+  detalle_ingresos: FilaGrupoComparativa[];
+  total_ingresos: TotalComparativo;
+  detalle_egresos: FilaGrupoComparativa[];
+  total_egresos: TotalComparativo;
+  resultado_del_ejercicio: TotalComparativo;
 }
 
 export interface KpisBalanceGeneralMensual {
   activo: number;
   pasivo: number;
   patrimonio: number;
-  porcentaje_activo: number;
-  porcentaje_pasivo: number;
-  porcentaje_patrimonio: number;
-  porcentaje_fondos_por_aplicar: number;
-  balance_mensual: number;
+}
+
+export interface DistribucionBalanceItem {
+  etiqueta: string;
+  monto: number;
+  porcentaje: number;
 }
 
 export interface BalanceGeneralMensual {
   kpis: KpisBalanceGeneralMensual;
+  etiqueta_mes_anterior: string;
+  etiqueta_mes_actual: string;
   distribucion_balance: DistribucionBalanceItem[];
-  detalle_activo: DetalleCuentaBalance[];
-  detalle_pasivo: DetalleCuentaBalance[];
-  detalle_patrimonio: DetalleCuentaBalance[];
+  activo_referencia: number;
+  detalle_activo: FilaGrupoBalanceMensual[];
+  total_activo: TotalBalanceMensual;
+  detalle_pasivo: FilaGrupoBalanceMensual[];
+  total_pasivo: TotalBalanceMensual;
+  detalle_patrimonio: FilaGrupoBalanceMensual[];
+  total_patrimonio: TotalBalanceMensual;
+  total_pasivo_y_patrimonio: TotalBalanceMensual;
+}
+
+export interface KpiComparativoActivoPasivoPatrimonio {
+  diferencia_porcentaje: number;
+  variacion_q: number;
 }
 
 export interface KpisBalanceGeneralComparativo {
-  diferencia_porcentaje_activo: number;
-  variacion_q_activo: number;
-  diferencia_porcentaje_pasivo: number;
-  variacion_q_pasivo: number;
-  diferencia_porcentaje_patrimonio: number;
-  variacion_q_patrimonio: number;
-  total_acumulado_anterior: number;
-  total_acumulado_actual: number;
-  total_variacion: number;
-  balance_acumulado: number;
+  activo: KpiComparativoActivoPasivoPatrimonio;
+  pasivo: KpiComparativoActivoPasivoPatrimonio;
+  patrimonio: KpiComparativoActivoPasivoPatrimonio;
+}
+
+export interface SerieAnioBalance {
+  anio: number;
+  activo: number;
+  pasivo: number;
+  patrimonio: number;
 }
 
 export interface BalanceGeneralComparativo {
   kpis: KpisBalanceGeneralComparativo;
-  detalle_activo: DetalleCuentaBalanceComparativo[];
-  detalle_pasivo: DetalleCuentaBalanceComparativo[];
-  detalle_patrimonio: DetalleCuentaBalanceComparativo[];
+  etiqueta_anio_anterior: string;
+  etiqueta_anio_actual: string;
+  titulo_grafico: string;
+  grafico: SerieAnioBalance[];
+  detalle_activo: FilaGrupoBalanceComparativa[];
+  total_activo: TotalBalanceComparativo;
+  detalle_pasivo: FilaGrupoBalanceComparativa[];
+  total_pasivo: TotalBalanceComparativo;
+  detalle_patrimonio: FilaGrupoBalanceComparativa[];
+  total_patrimonio: TotalBalanceComparativo;
+  total_pasivo_y_patrimonio: TotalBalanceComparativo;
 }
 
 export interface DashboardFinancieroResponse {
   anio: number;
   mes: number;
+  periodos_disponibles: PeriodoDisponible[];
   ingresos_desembolsos_mensual: IngresosDesembolsosMensual;
   ingresos_desembolsos_acumulado: IngresosDesembolsosAcumulado;
   balance_general_mensual: BalanceGeneralMensual;

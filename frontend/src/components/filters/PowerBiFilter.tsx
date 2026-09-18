@@ -6,7 +6,7 @@ import { useEffect, useRef, useState, type ChangeEvent } from "react";
  * Plaguicidas usa el teal original; Nutrientes usa naranja para combinar
  * con el acento propio de sus gráficos (antes ambos dashboards
  * compartían el mismo teal en la fila de filtros). */
-export type FilterTheme = "teal" | "orange" | "blue";
+export type FilterTheme = "teal" | "orange" | "gris";
 
 // En modo claro, el chip de cabecera usa un tono más suave (500 en vez
 // de 900): el 900 original se veía demasiado fuerte/oscuro sobre el
@@ -25,9 +25,16 @@ const TEMAS: Record<FilterTheme, { wrapper: string; header: string }> = {
     wrapper: "overflow-hidden rounded-sm bg-orange-500 dark:bg-orange-900",
     header: "px-2 pt-1 pb-1 text-[10px] font-semibold uppercase tracking-wide text-orange-950 dark:text-orange-300",
   },
-  blue: {
-    wrapper: "overflow-hidden rounded-sm bg-blue-500 dark:bg-blue-900",
-    header: "px-2 pt-1 pb-1 text-[10px] font-semibold uppercase tracking-wide text-blue-950 dark:text-blue-300",
+  // Financiero -- gris neutro, mismo tono que las tarjetas KPI
+  // (FINANCIERO_SURFACE, ver TablaGrupoExpandible.tsx), NO azul
+  // (confirmado comparando 3 versiones contra la referencia). Antes era
+  // un hex fijo (#1e293b) que se quedaba oscuro en modo claro, igual
+  // que las tarjetas -- ahora sigue el mismo patrón claro/oscuro que
+  // teal/orange (chip claro + texto oscuro en modo claro, #444444 +
+  // texto claro en oscuro).
+  gris: {
+    wrapper: "overflow-hidden rounded-sm bg-slate-300 dark:bg-[#444444]",
+    header: "px-2 pt-1 pb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-900 dark:text-slate-300",
   },
 };
 
@@ -101,7 +108,7 @@ export function FilterYearMonth({
           <Chevron />
         </div>
         <span className="text-xs text-ink-faint">+</span>
-        <div className="relative min-w-0 flex-[1.4]">
+        <div className="relative min-w-[112px] flex-[1.4]">
           <select
             value={mes}
             onChange={(e: ChangeEvent<HTMLSelectElement>) => onChangeMes(e.target.value)}

@@ -1,64 +1,45 @@
-import { NavLink, Outlet } from "react-router-dom";
-import { useAuth } from "../../auth/AuthContext";
+import { Outlet, useLocation } from "react-router-dom";
 import { Header } from "../../components/layout/Header";
+import { Sidebar } from "../../components/layout/Sidebar";
 
-const linkBase =
-  "rounded-tremor-small px-3 py-1.5 text-sm font-medium transition-colors";
-
+/** Financiero e Importaciones (Plaguicidas/Nutrientes) comparten este
+ * layout -- antes navegaban por un nav superior (Plaguicidas/
+ * Nutrientes/Financiero/Administración), reemplazado por el sidebar
+ * estilo Power BI (ver Sidebar.tsx), que decide qué secciones mostrar
+ * con los mismos flags de sesión (accesoFinanciero/accesoImportaciones/
+ * rol) que ya usaba el nav superior -- ningún sistema de permisos nuevo.
+ *
+ * Financiero usa un `max-w` más ancho (1658px, medido del .pbix) que
+ * Plaguicidas/Nutrientes (1280px, sin tocar) -- ver DashboardFinancieroPage,
+ * que ya NO se "escapa" de este contenedor por su cuenta (como hacía
+ * antes con un truco de viewport): ahora que existe un sidebar real,
+ * calcular el ancho relativo al viewport crudo quedaba mal (el sidebar
+ * cambia de ancho al hacer hover, y ese truco no lo tenía en cuenta) --
+ * `main` ya excluye el sidebar automáticamente por ser hermanos flex,
+ * así que centrar ACÁ, relativo al espacio real que le queda a `main`,
+ * es correcto sin importar si el sidebar está expandido o no.
+ *
+ * Financiero también tiene su propio fondo (--color-financiero-app, ver
+ * index.css): gris neutro fijo #1c1c1c en oscuro (medido de la captura
+ * real de Power BI, distinto del slate-950 general de la app), igual
+ * que bg-app en claro -- Plaguicidas/Nutrientes siguen con bg-app sin
+ * cambios. */
 export function AppLayout() {
-  const { sesion } = useAuth();
+  const location = useLocation();
+  const esFinanciero = location.pathname.startsWith("/app/financiero");
 
   return (
-    <div className="min-h-screen bg-app">
-      <Header
-        nav={
-          <nav className="flex items-center gap-1">
-            {sesion?.accesoImportaciones && (
-              <>
-                <NavLink
-                  to="/app/plaguicidas"
-                  className={({ isActive }) =>
-                    `${linkBase} ${isActive ? "bg-teal-500/15 text-teal-600 dark:text-teal-300" : "text-ink-muted hover:text-ink"}`
-                  }
-                >
-                  Plaguicidas
-                </NavLink>
-                <NavLink
-                  to="/app/nutrientes"
-                  className={({ isActive }) =>
-                    `${linkBase} ${isActive ? "bg-orange-500/15 text-orange-600 dark:text-orange-300" : "text-ink-muted hover:text-ink"}`
-                  }
-                >
-                  Nutrientes
-                </NavLink>
-              </>
-            )}
-            {sesion?.accesoFinanciero && (
-              <NavLink
-                to="/app/financiero"
-                className={({ isActive }) =>
-                  `${linkBase} ${isActive ? "bg-blue-500/15 text-blue-600 dark:text-blue-300" : "text-ink-muted hover:text-ink"}`
-                }
-              >
-                Financiero
-              </NavLink>
-            )}
-            {(sesion?.rol === "Administrador" || sesion?.rol === "Administrador de Usuarios") && (
-              <NavLink
-                to="/admin"
-                className={({ isActive }) =>
-                  `${linkBase} ${isActive ? "bg-accent-subtle text-accent-emphasis" : "text-ink-muted hover:text-ink"}`
-                }
-              >
-                Administración
-              </NavLink>
-            )}
-          </nav>
-        }
-      />
-      <main className="mx-auto max-w-7xl px-4 py-6">
-        <Outlet />
-      </main>
+    <div
+      className={`flex min-h-screen ${esFinanciero ? "" : "bg-app"}`}
+      style={esFinanciero ? { backgroundColor: "rgb(var(--color-financiero-app))" } : undefined}
+    >
+      <Sidebar />
+      <div className="min-w-0 flex-1">
+        <Header />
+        <main className={`mx-auto px-4 py-6 ${esFinanciero ? "max-w-[1658px]" : "max-w-7xl"}`}>
+          <Outlet />
+        </main>
+      </div>
     </div>
   );
 }
