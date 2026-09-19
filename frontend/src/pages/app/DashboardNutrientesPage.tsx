@@ -343,7 +343,7 @@ export function DashboardNutrientesPage() {
                 nombreArchivoPorDefecto={`nutrientes_top_formulas_${sufijoArchivo}.xlsx`}
               />
             }
-            chart={<RankingBarChart theme="nutrientes" data={data.top_formulas} valueKey="cif_usd" />}
+            chart={<RankingBarChart theme="nutrientes" data={data.top_formulas} />}
             table={
               <SimpleDataTable
                 sinLimiteAltura
@@ -376,7 +376,7 @@ export function DashboardNutrientesPage() {
                   nombreArchivoPorDefecto={`nutrientes_top_aduanas_${sufijoArchivo}.xlsx`}
                 />
               }
-              chart={<RankingBarChart theme="nutrientes" data={data.top_aduanas} valueKey="cif_usd" />}
+              chart={<RankingBarChart theme="nutrientes" data={data.top_aduanas} />}
               table={
                 <SimpleDataTable
                   sinLimiteAltura

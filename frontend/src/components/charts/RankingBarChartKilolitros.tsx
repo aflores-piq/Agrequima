@@ -12,8 +12,8 @@ import {
 } from "recharts";
 import type { DashboardTheme } from "../../theme/colors";
 import { colorIntensidad } from "../../theme/colors";
-import { formatUSD, formatUSDAbrev, formatUSDCorto } from "../../utils/format";
-import type { RankingItem } from "../../types/dashboard";
+import { formatNumber, formatNumeroAbrev, formatNumeroCorto } from "../../utils/format";
+import type { RankingItemKilolitros } from "../../types/dashboard";
 
 const ANCHO_ETIQUETA_MAX = 190;
 const FUENTE_TICK = "10px sans-serif";
@@ -60,7 +60,7 @@ function EtiquetaValorFija({ x, y, width, height, value, max }: any) {
       fontSize={10}
       fill="rgb(var(--color-ink-faint))"
     >
-      {formatUSDCorto(value)}
+      {formatNumeroCorto(value)}
     </text>
   );
 }
@@ -93,17 +93,20 @@ function TickEtiquetaTruncada({ x, y, payload, anchoEtiqueta }: any) {
   );
 }
 
-/** Ranking de magnitud (top ingredientes/importadores/países/fórmulas):
- * un solo hue en escala de intensidad según el valor relativo de cada
- * barra, NO un color distinto por categoría. Tremor's BarChart no expone
- * color por barra individual, así que este caso puntual usa Recharts
- * directamente. */
-export function RankingBarChart({ theme, data }: { theme: DashboardTheme; data: RankingItem[] }) {
+/** Ranking de magnitud por Kilolitros (SUM(cantidad) crudo, sin filtrar
+ * ni convertir por unidad_medida -- ver df_top_moleculas_kilolitros en
+ * el backend): copia deliberada de RankingBarChart.tsx (que es el
+ * mismo gráfico pero por CIF USD) en vez de generalizar ese componente
+ * compartido -- así un cambio en esta gráfica puntual de Kilolitros no
+ * puede romper las 4 gráficas de CIF USD que ya funcionaban (Plaguicidas
+ * y Nutrientes). Mismo criterio que ahí: un solo hue en escala de
+ * intensidad según el valor relativo de cada barra. */
+export function RankingBarChartKilolitros({ theme, data }: { theme: DashboardTheme; data: RankingItemKilolitros[] }) {
   if (data.length === 0) {
     return <p className="py-10 text-center text-sm text-ink-faint">Sin datos para los filtros actuales.</p>;
   }
 
-  const max = Math.max(1, ...data.map((d) => d.cif_usd));
+  const max = Math.max(1, ...data.map((d) => d.kilolitros));
   const alto = Math.max(ALTO_MINIMO, data.length * ALTO_POR_FILA + ALTO_MARGENES);
   // Ancho de la columna de etiquetas ajustado al nombre MÁS LARGO de
   // ESTE gráfico en particular (no un valor fijo compartido entre
@@ -117,13 +120,12 @@ export function RankingBarChart({ theme, data }: { theme: DashboardTheme; data: 
     const anchoMaximoNecesario = Math.max(...data.map((d) => medirAnchoTexto(d.etiqueta)));
     return Math.min(ANCHO_ETIQUETA_MAX, Math.ceil(anchoMaximoNecesario) + 2);
   }, [data]);
-  // Margen derecho ajustado al valor MÁS ANCHO de este gráfico (ej.
-  // "$13.8M" ~7 caracteres) — igual que anchoEtiqueta, no un valor fijo:
-  // solo reserva el espacio real que la etiqueta de valor necesita para
-  // no recortarse contra el borde del SVG, sin quitarle más espacio del
-  // necesario a las barras.
+  // Margen derecho ajustado al valor MÁS ANCHO de este gráfico -- igual
+  // que anchoEtiqueta, no un valor fijo: solo reserva el espacio real
+  // que la etiqueta de valor necesita para no recortarse contra el
+  // borde del SVG, sin quitarle más espacio del necesario a las barras.
   const margenDerecho = useMemo(() => {
-    const anchoValorMasAncho = Math.max(...data.map((d) => medirAnchoTexto(formatUSDCorto(d.cif_usd))));
+    const anchoValorMasAncho = Math.max(...data.map((d) => medirAnchoTexto(formatNumeroCorto(d.kilolitros))));
     return Math.max(MARGEN_DERECHO_MINIMO, Math.ceil(anchoValorMasAncho) + 4);
   }, [data]);
 
@@ -148,7 +150,7 @@ export function RankingBarChart({ theme, data }: { theme: DashboardTheme; data: 
           <XAxis
             type="number"
             domain={[0, "dataMax"]}
-            tickFormatter={(v: number) => formatUSDAbrev(v)}
+            tickFormatter={(v: number) => formatNumeroAbrev(v)}
             stroke="rgb(var(--color-ink-faint))"
             fontSize={12}
             tickLine={false}
@@ -166,13 +168,13 @@ export function RankingBarChart({ theme, data }: { theme: DashboardTheme; data: 
             contentStyle={{ background: "rgb(var(--color-bg-surface))", border: "1px solid rgb(var(--color-line))", borderRadius: 8 }}
             labelStyle={{ color: "rgb(var(--color-ink))" }}
             itemStyle={{ color: "rgb(var(--color-ink))" }}
-            formatter={(value: number) => [formatUSD(value), "CIF USD"]}
+            formatter={(value: number) => [formatNumber(value), "Kilolitros"]}
           />
-          <Bar dataKey="cif_usd" radius={[0, 4, 4, 0]}>
+          <Bar dataKey="kilolitros" radius={[0, 4, 4, 0]}>
             {data.map((d, i) => (
-              <Cell key={`${d.etiqueta}-${i}`} fill={colorIntensidad(theme, d.cif_usd / max)} />
+              <Cell key={`${d.etiqueta}-${i}`} fill={colorIntensidad(theme, d.kilolitros / max)} />
             ))}
-            <LabelList dataKey="cif_usd" content={<EtiquetaValorFija max={max} />} />
+            <LabelList dataKey="kilolitros" content={<EtiquetaValorFija max={max} />} />
           </Bar>
         </RechartsBarChart>
       </ResponsiveContainer>

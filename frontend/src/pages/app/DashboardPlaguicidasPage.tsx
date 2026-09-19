@@ -13,15 +13,8 @@ import { CategoricalDonut } from "../../components/charts/CategoricalDonut";
 import { ComparativeBarChart } from "../../components/charts/ComparativeBarChart";
 import { MultiAnnualLineChart } from "../../components/charts/MultiAnnualLineChart";
 import { RankingBarChart } from "../../components/charts/RankingBarChart";
-import {
-  formatNumber,
-  formatNumeroAbrev,
-  formatNumeroCorto,
-  formatQAbrev,
-  formatUSDAbrev,
-  MESES,
-  MESES_LARGOS,
-} from "../../utils/format";
+import { RankingBarChartKilolitros } from "../../components/charts/RankingBarChartKilolitros";
+import { formatNumber, formatNumeroAbrev, formatQAbrev, formatUSDAbrev, MESES, MESES_LARGOS } from "../../utils/format";
 import { claseBadgeCategoria, dashboardAccent } from "../../theme/colors";
 import type {
   DashboardPlaguicidasResponse,
@@ -399,7 +392,7 @@ export function DashboardPlaguicidasPage() {
                   nombreArchivoPorDefecto={`plaguicidas_top_moleculas_${sufijoArchivo}.xlsx`}
                 />
               }
-              chart={<RankingBarChart theme="plaguicidas" data={data.top_ingredientes} valueKey="cif_usd" />}
+              chart={<RankingBarChart theme="plaguicidas" data={data.top_ingredientes} />}
               table={
                 <SimpleDataTable
                   sinLimiteAltura
@@ -421,22 +414,16 @@ export function DashboardPlaguicidasPage() {
            * (dbo.Importacion mezcla volumen y masa, ver df_top_moleculas_
            * kilolitros en el backend) -- ya validada por el cliente contra
            * sus propios registros, por eso se replica tal cual y no se
-           * reinventa una conversión nueva acá. */}
+           * reinventa una conversión nueva acá.
+           *
+           * Título DISTINTO al de la gráfica de CIF USD (no "Top 20
+           * moléculas plaguicidas" + subtitle) a propósito: con el mismo
+           * título, las dos tarjetas se ven como una gráfica duplicada al
+           * ojo -- el subtitle por sí solo no bastaba para distinguirlas. */}
           <ChartCard
             theme="plaguicidas"
-            title="Top 20 moléculas plaguicidas"
-            subtitle="Kilolitros"
-            chart={
-              <RankingBarChart
-                theme="plaguicidas"
-                data={data.top_ingredientes_kilolitros}
-                valueKey="kilolitros"
-                formatValor={formatNumber}
-                formatValorCorto={formatNumeroCorto}
-                formatValorAbrev={formatNumeroAbrev}
-                etiquetaTooltip="Kilolitros"
-              />
-            }
+            title="Top 20 moléculas plaguicidas — Kilolitros"
+            chart={<RankingBarChartKilolitros theme="plaguicidas" data={data.top_ingredientes_kilolitros} />}
             table={
               <SimpleDataTable
                 sinLimiteAltura
@@ -464,7 +451,7 @@ export function DashboardPlaguicidasPage() {
                   nombreArchivoPorDefecto={`plaguicidas_top_importadores_${sufijoArchivo}.xlsx`}
                 />
               }
-              chart={<RankingBarChart theme="plaguicidas" data={data.top_importadores} valueKey="cif_usd" />}
+              chart={<RankingBarChart theme="plaguicidas" data={data.top_importadores} />}
               table={
                 <SimpleDataTable
                   sinLimiteAltura
