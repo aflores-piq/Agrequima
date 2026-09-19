@@ -13,7 +13,15 @@ import { CategoricalDonut } from "../../components/charts/CategoricalDonut";
 import { ComparativeBarChart } from "../../components/charts/ComparativeBarChart";
 import { MultiAnnualLineChart } from "../../components/charts/MultiAnnualLineChart";
 import { RankingBarChart } from "../../components/charts/RankingBarChart";
-import { formatNumber, formatQAbrev, formatUSDAbrev, MESES, MESES_LARGOS } from "../../utils/format";
+import {
+  formatNumber,
+  formatNumeroAbrev,
+  formatNumeroCorto,
+  formatQAbrev,
+  formatUSDAbrev,
+  MESES,
+  MESES_LARGOS,
+} from "../../utils/format";
 import { claseBadgeCategoria, dashboardAccent } from "../../theme/colors";
 import type {
   DashboardPlaguicidasResponse,
@@ -391,7 +399,7 @@ export function DashboardPlaguicidasPage() {
                   nombreArchivoPorDefecto={`plaguicidas_top_moleculas_${sufijoArchivo}.xlsx`}
                 />
               }
-              chart={<RankingBarChart theme="plaguicidas" data={data.top_ingredientes} />}
+              chart={<RankingBarChart theme="plaguicidas" data={data.top_ingredientes} valueKey="cif_usd" />}
               table={
                 <SimpleDataTable
                   sinLimiteAltura
@@ -408,6 +416,41 @@ export function DashboardPlaguicidasPage() {
 
           </div>
 
+          {/* Réplica de la medida DAX "Kilolitros" del reporte de Power BI
+           * anterior: SUM(cantidad) sin filtrar/convertir por unidad_medida
+           * (dbo.Importacion mezcla volumen y masa, ver df_top_moleculas_
+           * kilolitros en el backend) -- ya validada por el cliente contra
+           * sus propios registros, por eso se replica tal cual y no se
+           * reinventa una conversión nueva acá. */}
+          <ChartCard
+            theme="plaguicidas"
+            title="Top 20 moléculas plaguicidas"
+            subtitle="Kilolitros"
+            chart={
+              <RankingBarChart
+                theme="plaguicidas"
+                data={data.top_ingredientes_kilolitros}
+                valueKey="kilolitros"
+                formatValor={formatNumber}
+                formatValorCorto={formatNumeroCorto}
+                formatValorAbrev={formatNumeroAbrev}
+                etiquetaTooltip="Kilolitros"
+              />
+            }
+            table={
+              <SimpleDataTable
+                sinLimiteAltura
+                compacto="px-1 py-1 text-xs"
+                columnas={[
+                  { header: "Ingrediente activo", accessor: (r) => r.etiqueta },
+                  { header: "Kilolitros", accessor: (r) => formatNumeroAbrev(r.kilolitros), align: "right" },
+                ]}
+                filas={data.top_ingredientes_kilolitros}
+                getKey={(r) => r.etiqueta}
+              />
+            }
+          />
+
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <ChartCard
               theme="plaguicidas"
@@ -421,7 +464,7 @@ export function DashboardPlaguicidasPage() {
                   nombreArchivoPorDefecto={`plaguicidas_top_importadores_${sufijoArchivo}.xlsx`}
                 />
               }
-              chart={<RankingBarChart theme="plaguicidas" data={data.top_importadores} />}
+              chart={<RankingBarChart theme="plaguicidas" data={data.top_importadores} valueKey="cif_usd" />}
               table={
                 <SimpleDataTable
                   sinLimiteAltura

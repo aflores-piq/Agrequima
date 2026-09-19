@@ -13,7 +13,6 @@ import {
 import type { DashboardTheme } from "../../theme/colors";
 import { colorIntensidad } from "../../theme/colors";
 import { formatUSD, formatUSDAbrev, formatUSDCorto } from "../../utils/format";
-import type { RankingItem } from "../../types/dashboard";
 
 const ANCHO_ETIQUETA_MAX = 190;
 const FUENTE_TICK = "10px sans-serif";
@@ -48,7 +47,7 @@ function medirAnchoTexto(texto: string): number {
  * CUALQUIER fila `x + width * (max / value)` da exactamente el borde
  * derecho de la barra más larga — la misma x para las 20, sin necesidad
  * de leer el scale interno de Recharts. */
-function EtiquetaValorFija({ x, y, width, height, value, max }: any) {
+function EtiquetaValorFija({ x, y, width, height, value, max, formatValorCorto }: any) {
   const escala = value > 0 ? max / value : 1;
   const xColumna = x + width * escala;
   return (
@@ -60,7 +59,7 @@ function EtiquetaValorFija({ x, y, width, height, value, max }: any) {
       fontSize={10}
       fill="rgb(var(--color-ink-faint))"
     >
-      {formatUSDCorto(value)}
+      {formatValorCorto(value)}
     </text>
   );
 }
@@ -97,13 +96,36 @@ function TickEtiquetaTruncada({ x, y, payload, anchoEtiqueta }: any) {
  * un solo hue en escala de intensidad según el valor relativo de cada
  * barra, NO un color distinto por categoría. Tremor's BarChart no expone
  * color por barra individual, así que este caso puntual usa Recharts
- * directamente. */
-export function RankingBarChart({ theme, data }: { theme: DashboardTheme; data: RankingItem[] }) {
+ * directamente.
+ *
+ * Genérico en T (RankingItem con "cif_usd", RankingItemKilolitros con
+ * "kilolitros", ...) porque la métrica y su formato cambian según el
+ * gráfico -- ver el uso con valueKey="kilolitros" en
+ * DashboardPlaguicidasPage para la gráfica de Kilolitros. */
+export function RankingBarChart<T extends { etiqueta: string }>({
+  theme,
+  data,
+  valueKey,
+  formatValor = formatUSD,
+  formatValorCorto = formatUSDCorto,
+  formatValorAbrev = formatUSDAbrev,
+  etiquetaTooltip = "CIF USD",
+}: {
+  theme: DashboardTheme;
+  data: T[];
+  valueKey: keyof T & string;
+  formatValor?: (v: number) => string;
+  formatValorCorto?: (v: number) => string;
+  formatValorAbrev?: (v: number) => string;
+  etiquetaTooltip?: string;
+}) {
   if (data.length === 0) {
     return <p className="py-10 text-center text-sm text-ink-faint">Sin datos para los filtros actuales.</p>;
   }
 
-  const max = Math.max(1, ...data.map((d) => d.cif_usd));
+  const valorDe = (d: T) => Number(d[valueKey]);
+
+  const max = Math.max(1, ...data.map(valorDe));
   const alto = Math.max(ALTO_MINIMO, data.length * ALTO_POR_FILA + ALTO_MARGENES);
   // Ancho de la columna de etiquetas ajustado al nombre MÁS LARGO de
   // ESTE gráfico en particular (no un valor fijo compartido entre
@@ -123,9 +145,10 @@ export function RankingBarChart({ theme, data }: { theme: DashboardTheme; data: 
   // no recortarse contra el borde del SVG, sin quitarle más espacio del
   // necesario a las barras.
   const margenDerecho = useMemo(() => {
-    const anchoValorMasAncho = Math.max(...data.map((d) => medirAnchoTexto(formatUSDCorto(d.cif_usd))));
+    const anchoValorMasAncho = Math.max(...data.map((d) => medirAnchoTexto(formatValorCorto(valorDe(d)))));
     return Math.max(MARGEN_DERECHO_MINIMO, Math.ceil(anchoValorMasAncho) + 4);
-  }, [data]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, formatValorCorto, valueKey]);
 
   return (
     // h-full deja que la tarjeta (ChartCard) estire el alto real de dibujo
@@ -148,7 +171,7 @@ export function RankingBarChart({ theme, data }: { theme: DashboardTheme; data: 
           <XAxis
             type="number"
             domain={[0, "dataMax"]}
-            tickFormatter={(v: number) => formatUSDAbrev(v)}
+            tickFormatter={(v: number) => formatValorAbrev(v)}
             stroke="rgb(var(--color-ink-faint))"
             fontSize={12}
             tickLine={false}
@@ -166,13 +189,13 @@ export function RankingBarChart({ theme, data }: { theme: DashboardTheme; data: 
             contentStyle={{ background: "rgb(var(--color-bg-surface))", border: "1px solid rgb(var(--color-line))", borderRadius: 8 }}
             labelStyle={{ color: "rgb(var(--color-ink))" }}
             itemStyle={{ color: "rgb(var(--color-ink))" }}
-            formatter={(value: number) => [formatUSD(value), "CIF USD"]}
+            formatter={(value: number) => [formatValor(value), etiquetaTooltip]}
           />
-          <Bar dataKey="cif_usd" radius={[0, 4, 4, 0]}>
+          <Bar dataKey={valueKey} radius={[0, 4, 4, 0]}>
             {data.map((d, i) => (
-              <Cell key={`${d.etiqueta}-${i}`} fill={colorIntensidad(theme, d.cif_usd / max)} />
+              <Cell key={`${d.etiqueta}-${i}`} fill={colorIntensidad(theme, valorDe(d) / max)} />
             ))}
-            <LabelList dataKey="cif_usd" content={<EtiquetaValorFija max={max} />} />
+            <LabelList dataKey={valueKey} content={<EtiquetaValorFija max={max} formatValorCorto={formatValorCorto} />} />
           </Bar>
         </RechartsBarChart>
       </ResponsiveContainer>

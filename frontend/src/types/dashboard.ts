@@ -3,6 +3,11 @@ export interface RankingItem {
   cif_usd: number;
 }
 
+export interface RankingItemKilolitros {
+  etiqueta: string;
+  kilolitros: number;
+}
+
 export interface ResumenItem {
   etiqueta: string;
   transacciones: number;
@@ -105,6 +110,7 @@ export interface DashboardPlaguicidasResponse {
   comparativo_acumulado_multianual: SerieAcumuladoAnual[];
   diversificacion_aplicacion: RankingItem[];
   top_ingredientes: RankingItem[];
+  top_ingredientes_kilolitros: RankingItemKilolitros[];
   top_importadores: RankingItem[];
   top_origenes: ResumenItem[];
   tabla_nombres_comerciales: NombreComercialItem[];

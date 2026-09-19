@@ -34,6 +34,7 @@ from app.schemas.dashboard import (
     PaginaDetallePlaguicidas,
     PuntoAcumuladoAnual,
     RankingItem,
+    RankingItemKilolitros,
     ResumenItem,
     SerieAcumuladoAnual,
 )
@@ -331,6 +332,33 @@ def df_top_moleculas(ctx: ContextoPlaguicidas) -> pd.DataFrame:
     return _df_ranking(ctx.base_actual, Importacion.Grupo, _TOP_N)
 
 
+def df_top_moleculas_kilolitros(ctx: ContextoPlaguicidas) -> pd.DataFrame:
+    """Gráfico: top ingredientes activos (moléculas) por Cantidad Unidad
+    (Kilolitros).
+
+    Replica tal cual la medida DAX "Kilolitros" del reporte de Power BI
+    que este sistema reemplaza: SUMX directo sobre Importacion.cantidad,
+    SIN filtrar ni convertir por unidad_medida. dbo.Importacion mezcla
+    volumen (LITROS/Litro) y masa (Kilogramos/KILOS/GRAMOS/MILIGRAMOS)
+    sin dato de densidad por producto para convertir entre sí -- pero
+    esa suma cruda es exactamente la que el cliente ya validó contra sus
+    propios registros bajo el reporte anterior, así que no se inventa
+    ninguna conversión nueva acá, se replica la misma metodología.
+    Mismo agrupamiento por Grupo que df_top_moleculas (ver ahí), para
+    que las dos gráficas listen las mismas moléculas."""
+    filas = (
+        ctx.base_actual.with_entities(Importacion.Grupo, func.sum(Importacion.cantidad))
+        .filter(Importacion.Grupo.isnot(None))
+        .group_by(Importacion.Grupo)
+        .order_by(func.sum(Importacion.cantidad).desc())
+        .limit(_TOP_N)
+        .all()
+    )
+    return pd.DataFrame(
+        [(fila[0], float(fila[1] or 0)) for fila in filas], columns=["etiqueta", "kilolitros"]
+    )
+
+
 def df_top_importadores(ctx: ContextoPlaguicidas) -> pd.DataFrame:
     """Gráfico 5: top importadores por CIF USD."""
     return _df_ranking(ctx.base_actual, Importacion.importador, _TOP_N)
@@ -521,6 +549,9 @@ def obtener_dashboard_plaguicidas(
     comparativo_acumulado_multianual = series_multianual_desde_df(df_acumulado_multianual(ctx))
     diversificacion_aplicacion = [RankingItem(**fila) for fila in df_por_aplicacion(ctx).to_dict("records")]
     top_ingredientes = [RankingItem(**fila) for fila in df_top_moleculas(ctx).to_dict("records")]
+    top_ingredientes_kilolitros = [
+        RankingItemKilolitros(**fila) for fila in df_top_moleculas_kilolitros(ctx).to_dict("records")
+    ]
     top_importadores = [RankingItem(**fila) for fila in df_top_importadores(ctx).to_dict("records")]
     top_origenes = [ResumenItem(**fila) for fila in df_top_paises(ctx).to_dict("records")]
     tabla_nombres_comerciales = [
@@ -580,6 +611,7 @@ def obtener_dashboard_plaguicidas(
         comparativo_acumulado_multianual=comparativo_acumulado_multianual,
         diversificacion_aplicacion=diversificacion_aplicacion,
         top_ingredientes=top_ingredientes,
+        top_ingredientes_kilolitros=top_ingredientes_kilolitros,
         top_importadores=top_importadores,
         top_origenes=top_origenes,
         tabla_nombres_comerciales=tabla_nombres_comerciales,
