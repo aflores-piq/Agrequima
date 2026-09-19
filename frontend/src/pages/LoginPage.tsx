@@ -16,12 +16,6 @@ export function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [cargando, setCargando] = useState(false);
-  // Aviso legal: se muestra tapando toda la pantalla al entrar a /login,
-  // antes de poder escribir usuario/contraseña -- se acepta una vez por
-  // carga de página (estado local, sin persistir en base de datos: no
-  // existe hoy ningún mecanismo similar de "confirmación" que reutilizar,
-  // así que se vuelve a mostrar en cada acceso, tal como se pidió).
-  const [avisoAceptado, setAvisoAceptado] = useState(false);
 
   useEffect(() => {
     if (sesion) {
@@ -76,45 +70,6 @@ export function LoginPage() {
        * detrás de la tarjeta, arriba — el logo del ave/hojas y el
        * eslogan quedan visibles completos y sin oscurecer más abajo. */}
       <div className="absolute inset-0 bg-gradient-to-b from-black/65 via-black/15 to-transparent" />
-
-      {/* Aviso legal: tapa toda la pantalla (fondo casi opaco, z-index por
-          encima de la tarjeta de login) hasta que se hace clic en el botón
-          -- recién ahí se desmonta y queda accesible el formulario de
-          usuario/contraseña de abajo. Texto exacto pedido por el cliente,
-          sin resumir ni parafrasear. */}
-      {!avisoAceptado && (
-        <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/80 px-4">
-          <Card className="w-full max-w-lg bg-surface ring-1 ring-line">
-            <Title className="text-ink">AVISO LEGAL Y CONDICIONES DE USO</Title>
-            <div className="mt-4 space-y-3 text-sm text-ink-muted">
-              <p>
-                La información contenida en esta plataforma es de uso exclusivo de los asociados de AGREQUIMA y se
-                proporciona con fines informativos, estadísticos y de análisis sectorial.
-              </p>
-              <p>
-                El usuario se obliga a utilizarla de manera lícita, responsable e independiente, quedando
-                expresamente prohibido utilizarla, directa o indirectamente, para fines de competencia desleal,
-                prácticas anticompetitivas, coordinación o fijación de precios, condiciones comerciales, clientes,
-                mercados, volúmenes, estrategias comerciales o cualquier otra conducta contraria a la legislación
-                guatemalteca.
-              </p>
-              <p>
-                AGREQUIMA no será responsable por la interpretación, reproducción, divulgación o utilización
-                indebida que el usuario o terceros hagan de la información, siendo el usuario exclusivamente
-                responsable por el uso que realice de la misma.
-              </p>
-              <p>
-                Al hacer clic en "ACEPTO", el usuario declara haber leído y aceptado estas condiciones y se
-                compromete a utilizar la información de conformidad con las leyes de la República de Guatemala,
-                incluyendo la normativa aplicable en materia de competencia y competencia desleal.
-              </p>
-            </div>
-            <Button type="button" className="mt-6 w-full" onClick={() => setAvisoAceptado(true)}>
-              ACEPTO Y CONTINUAR
-            </Button>
-          </Card>
-        </div>
-      )}
 
       <Card className="relative z-10 w-full max-w-sm bg-surface ring-1 ring-line">
         <Title className="text-ink">Agrequima</Title>

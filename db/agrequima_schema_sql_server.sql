@@ -50,6 +50,8 @@ BEGIN
         FechaCreacion   DATETIME NOT NULL DEFAULT GETDATE(),
         UltimoLogin     DATETIME NULL,
         PuedeExportar   BIT NOT NULL DEFAULT 0,  -- permiso para descargar Excel desde los dashboards
+        AvisoLegalAceptado         BIT NOT NULL DEFAULT 0,  -- aviso legal y condiciones de uso, se pide una sola vez por usuario
+        AvisoLegalFechaAceptacion  DATETIME NULL,           -- fecha/hora del SERVIDOR (GETDATE()), no del navegador -- respaldo ante reclamo
         CONSTRAINT FK_Usuarios_Roles FOREIGN KEY (RolId) REFERENCES dbo.Roles(RolId)
     );
 END

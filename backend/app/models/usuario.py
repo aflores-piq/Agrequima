@@ -25,3 +25,11 @@ class Usuario(Base):
     FechaCreacion = Column(DateTime, server_default=func.getdate())
     UltimoLogin = Column(DateTime)
     Tema = Column(String(10), nullable=False, default="Claro")
+    # Aviso legal y condiciones de uso -- se pide una sola vez por
+    # usuario, al primer login (ver LoginPage.tsx / endpoint
+    # /auth/aceptar-aviso-legal). FechaAceptacion se llena con la hora
+    # del SERVIDOR (func.getdate() del lado del backend), nunca con una
+    # fecha que mande el navegador, para que sirva de respaldo confiable
+    # ante un reclamo.
+    AvisoLegalAceptado = Column(Boolean, nullable=False, default=False)
+    AvisoLegalFechaAceptacion = Column(DateTime)

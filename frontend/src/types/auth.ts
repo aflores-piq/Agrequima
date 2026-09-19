@@ -7,10 +7,16 @@ export interface TokenResponse {
   rol: Rol;
   puede_exportar: boolean;
   tema: Tema;
+  aviso_legal_aceptado: boolean;
 }
 
 export interface PreferenciasResponse {
   tema: Tema;
+}
+
+export interface AvisoLegalResponse {
+  aceptado: boolean;
+  fecha_aceptacion: string | null;
 }
 
 export interface UsuarioSesion {

@@ -33,6 +33,14 @@ export const apiClient = axios.create({
 });
 
 const TOKEN_STORAGE_KEY = "agrequima_token";
+// Bandera aparte del token: el aviso legal se acepta una sola vez por
+// usuario (queda guardado en dbo.Usuarios, ver POST /auth/aviso-legal),
+// pero el JWT ya emitido no se actualiza a mitad de sesión (igual que
+// "Tema", ver AuthContext) -- por eso esta bandera vive en localStorage,
+// separada del token, para que sobreviva a un F5 sin tener que volver a
+// pedirle el aviso a alguien que ya lo aceptó hace un segundo. Se borra
+// junto con el token al cerrar sesión.
+const AVISO_LEGAL_STORAGE_KEY = "agrequima_aviso_legal_ok";
 
 interface JwtPayload {
   sub: string;
@@ -92,6 +100,15 @@ export function leerSesion(): Sesion | null {
 
 export function borrarSesion(): void {
   localStorage.removeItem(TOKEN_STORAGE_KEY);
+  localStorage.removeItem(AVISO_LEGAL_STORAGE_KEY);
+}
+
+export function marcarAvisoLegalAceptado(): void {
+  localStorage.setItem(AVISO_LEGAL_STORAGE_KEY, "1");
+}
+
+export function avisoLegalYaAceptado(): boolean {
+  return localStorage.getItem(AVISO_LEGAL_STORAGE_KEY) === "1";
 }
 
 apiClient.interceptors.request.use((config) => {
