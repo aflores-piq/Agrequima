@@ -76,7 +76,23 @@ const ALTO_TABLA_CUOTAS = 445;
 
 function TablaCuotasTipo({ tipo }: { tipo: TipoCuotaAsociados }) {
   return (
-    <div className="flex flex-col overflow-hidden rounded-tremor-default ring-1 ring-line" style={{ height: ALTO_TABLA_CUOTAS }}>
+    // backgroundColor en el contenedor EXTERNO -- BUG REAL encontrado
+    // midiendo pixel a pixel contra una captura real: getBoundingClientRect
+    // ya daba 445px iguales en las 3 cajas (la CAJA CSS sí era igual),
+    // pero ni este div ni el de scroll de abajo tenían fondo propio
+    // (ambos transparentes) -- así que el tramo vacío debajo de la
+    // última fila (445px menos el alto real del contenido: ~210px en
+    // Tipo A con 8 filas, ~313px en Tipo B con 13, ~414px en Tipo C con
+    // 18) dejaba ver el fondo de la PÁGINA por transparencia en vez del
+    // fondo de la tarjeta, y a simple vista -- sobre todo en tema oscuro,
+    // donde el fondo de página es bien distinto del gris de tarjeta --
+    // las 3 cajas se ven de alto distinto aunque midan lo mismo. Con
+    // fondo propio en todo el contenedor de 445px, la tarjeta se ve
+    // rellena completa sin importar cuántas filas tenga la tabla.
+    <div
+      className="flex flex-col overflow-hidden rounded-tremor-default ring-1 ring-line"
+      style={{ height: ALTO_TABLA_CUOTAS, backgroundColor: FINANCIERO_SURFACE }}
+    >
       <div className="flex-1 overflow-y-auto overflow-x-hidden">
         {/* table-fixed + colgroup: sin esto, un <table> en table-layout
             auto (el default) puede crecer MÁS ANCHO que su contenedor si
@@ -87,13 +103,16 @@ function TablaCuotasTipo({ tipo }: { tipo: TipoCuotaAsociados }) {
             vertical aunque las 18 filas ya entraban en los 445px. Con
             columnas de ancho fijo, las 3 tablas quedan con exactamente
             el mismo layout interno y ninguna arrastra un scroll que las
-            otras no tengan. */}
+            otras no tengan. Columna "Nombre" reducida de 40% a 32% --
+            los nombres de empresa no necesitan tanto ancho (ya van
+            truncados con "…" si hace falta) y el 40% original dejaba un
+            hueco en blanco de más en esa columna. */}
         <table className="w-full table-fixed text-[11px]">
           <colgroup>
-            <col className="w-[40%]" />
-            <col className="w-[20%]" />
-            <col className="w-[20%]" />
-            <col className="w-[20%]" />
+            <col className="w-[32%]" />
+            <col className="w-[23%]" />
+            <col className="w-[23%]" />
+            <col className="w-[22%]" />
           </colgroup>
           <thead>
             <tr style={{ backgroundColor: COLOR_POR_TIPO[tipo.tipo] }}>
@@ -133,27 +152,68 @@ function TablaCuotasTipo({ tipo }: { tipo: TipoCuotaAsociados }) {
 // h≈415 los 3 iguales entre sí).
 const ALTO_VISUAL_CUOTAS = 190;
 
+// Desglosada por Tipo (A/B/C) -- NO es solo el total del año, son datos
+// DISTINTOS: el .pbix real muestra 6 barras (Cuota y Cancelado de cada
+// Tipo, 3 pares agrupados), no 2 barras con el total agregado de los 3
+// tipos. El dato por tipo YA está disponible en data.tipos (mismo campo
+// que ya usan las 3 tablas de arriba, total_cuota/total_cancelado) --
+// no hace falta tocar el backend, ya trae el desglose.
 function GraficoCuotaVsCancelado({ data }: { data: CuotasAsociadosResponse }) {
-  const filas = [
-    { etiqueta: "Cuota del año", valor: data.kpis.total },
-    { etiqueta: "Cancelado", valor: data.kpis.cancelado },
-  ];
+  const filas = data.tipos.map((t) => ({
+    tipo: `Tipo ${t.tipo}`,
+    cuota: t.total_cuota,
+    cancelado: t.total_cancelado,
+  }));
   return (
     // SIN layout="vertical": layout="vertical" en Recharts pone el eje de
     // categoría en Y y las barras ACOSTADAS (horizontal) -- eso era el
     // bug. El default (sin el prop) es columnas PARADAS (verticales),
-    // que es lo que pide el .pbix real.
+    // que es lo que pide el .pbix real. 2 <Bar> con dataKey distinto bajo
+    // el mismo XAxis categórico = barras agrupadas de a pares (Recharts
+    // las dibuja lado a lado automáticamente, sin configuración extra).
     <ResponsiveContainer width="100%" height={ALTO_VISUAL_CUOTAS}>
-      <BarChart data={filas} margin={{ top: 8, right: 8, bottom: 4, left: 8 }}>
-        <XAxis dataKey="etiqueta" fontSize={10} tickLine={false} />
-        <YAxis type="number" tickFormatter={(v: number) => formatQ(v)} fontSize={10} width={55} stroke="rgb(var(--color-ink-faint))" />
+      <BarChart data={filas} margin={{ top: 16, right: 8, bottom: 4, left: 8 }}>
+        <XAxis dataKey="tipo" fontSize={10} tickLine={false} />
+        <YAxis type="number" tickFormatter={(v: number) => formatMiles(v)} fontSize={10} width={40} stroke="rgb(var(--color-ink-faint))" />
         <Tooltip formatter={(v: number) => formatQ(v)} contentStyle={{ background: "rgb(var(--color-bg-surface))", border: "1px solid rgb(var(--color-line))", borderRadius: 8 }} />
-        <Bar dataKey="valor" radius={[4, 4, 0, 0]}>
-          <Cell fill={COLOR_TEAL} />
-          <Cell fill={COLOR_AZUL} />
+        <Bar dataKey="cuota" name="Cuota del año" fill={COLOR_TEAL} radius={[3, 3, 0, 0]} isAnimationActive={false}>
+          <LabelList dataKey="cuota" position="top" formatter={(v: number) => formatMiles(v)} fontSize={9} fill="rgb(var(--color-ink))" />
+        </Bar>
+        <Bar dataKey="cancelado" name="Cancelado" fill={COLOR_AZUL} radius={[3, 3, 0, 0]} isAnimationActive={false}>
+          <LabelList dataKey="cancelado" position="top" formatter={(v: number) => formatMiles(v)} fontSize={9} fill="rgb(var(--color-ink))" />
         </Bar>
       </BarChart>
     </ResponsiveContainer>
+  );
+}
+
+// Etiqueta de porcentaje SOBRE el anillo de la dona (a mitad de camino
+// entre el radio interno y externo) -- calcado del .pbix real, que
+// muestra el % directamente sobre cada segmento, no solo en la leyenda
+// de abajo. Compartida por las 2 donas de esta página.
+const RADIAN = Math.PI / 180;
+function renderPorcentajeDona({
+  cx,
+  cy,
+  midAngle,
+  innerRadius,
+  outerRadius,
+  percent,
+}: {
+  cx: number;
+  cy: number;
+  midAngle: number;
+  innerRadius: number;
+  outerRadius: number;
+  percent: number;
+}) {
+  const radio = innerRadius + (outerRadius - innerRadius) * 0.5;
+  const x = cx + radio * Math.cos(-midAngle * RADIAN);
+  const y = cy + radio * Math.sin(-midAngle * RADIAN);
+  return (
+    <text x={x} y={y} fill="#ffffff" fontSize={11} fontWeight={700} textAnchor="middle" dominantBaseline="central">
+      {`${Math.round(percent * 100)}%`}
+    </text>
   );
 }
 
@@ -168,7 +228,17 @@ function DonutCuotasPorTipo({ data }: { data: CuotasAsociadosResponse }) {
   return (
     <ResponsiveContainer width="100%" height={ALTO_VISUAL_CUOTAS}>
       <PieChart>
-        <Pie data={filas} dataKey="valor" nameKey="nombre" innerRadius="50%" outerRadius="80%" paddingAngle={2}>
+        <Pie
+          data={filas}
+          dataKey="valor"
+          nameKey="nombre"
+          innerRadius="50%"
+          outerRadius="80%"
+          paddingAngle={2}
+          label={renderPorcentajeDona}
+          labelLine={false}
+          isAnimationActive={false}
+        >
           {filas.map((f) => (
             <Cell key={f.nombre} fill={f.color} />
           ))}
@@ -192,7 +262,17 @@ function DonutRecuperacion({ data }: { data: CuotasAsociadosResponse }) {
   return (
     <ResponsiveContainer width="100%" height={ALTO_VISUAL_CUOTAS}>
       <PieChart>
-        <Pie data={filas} dataKey="valor" nameKey="nombre" innerRadius="50%" outerRadius="80%" paddingAngle={2}>
+        <Pie
+          data={filas}
+          dataKey="valor"
+          nameKey="nombre"
+          innerRadius="50%"
+          outerRadius="80%"
+          paddingAngle={2}
+          label={renderPorcentajeDona}
+          labelLine={false}
+          isAnimationActive={false}
+        >
           {filas.map((f) => (
             <Cell key={f.nombre} fill={f.color} />
           ))}
@@ -294,16 +374,22 @@ function PaginaCuotasAsociados() {
 
       {data && (
         // Layout calcado del .pbix: las 3 tablas van LADO A LADO (no
-        // apiladas), ~27% de ancho cada una, ~34% del alto de la página;
-        // las gráficas van debajo, en la misma pantalla, sin scroll.
-        <div className="mx-auto space-y-3" style={{ width: "94%" }}>
+        // apiladas), compactas, con margen libre a los costados -- antes
+        // 94% (casi borde a borde), comparado en pantalla contra el
+        // .pbix real se veía demasiado estirado. Reducido al mismo
+        // espíritu de ANCHO_TABLA_FINANCIERO (patrón ya usado en
+        // Centro de Costo/Estados Financieros: bloque angosto y
+        // centrado, no de borde a borde) -- acá algo más ancho que el
+        // 55% de una tabla sola porque son 3 tablas de 4 columnas cada
+        // una lado a lado, pero con el mismo espíritu de margen visible.
+        <div className="mx-auto space-y-3" style={{ width: "72%" }}>
           {/* max-width en el wrapper de cada tarjeta -- KpiCardIcono es
               flex-1 (ancho variable) por diseño para la fila angosta de
-              55% donde vive en Estados Financieros; acá el contenedor de
-              la página es más ancho (94%, por las 3 tablas de abajo), y
-              sin este tope cada tarjeta se estira mucho más de lo que su
-              aspect-[4/1] compensa, dejando un hueco vacío grande entre
-              el ícono y el valor. */}
+              55% donde vive en Estados Financieros; acá, aunque el
+              contenedor de la página ya se angostó a 72%, sigue siendo
+              más ancho que esa fila original, y sin este tope cada
+              tarjeta se estira más de lo que su aspect-[4/1] compensa,
+              dejando un hueco vacío entre el ícono y el valor. */}
           <div className="flex flex-wrap justify-center gap-2">
             <div className="flex-1" style={{ maxWidth: 320 }}>
               <KpiCardIcono letra="T" color={COLOR_TEAL} label="Total" valor={formatQ(data.kpis.total)} />
@@ -325,26 +411,34 @@ function PaginaCuotasAsociados() {
           <div className="grid grid-cols-3 gap-3">
             <ChartCard
               theme="financiero"
+              colorSeleccionHex={COLOR_TEAL}
               estiloTarjeta={{ backgroundColor: FINANCIERO_SURFACE }}
               title="Cuota del año vs Cancelado"
               chart={<GraficoCuotaVsCancelado data={data} />}
               table={
                 <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-line">
+                      <th className="px-2 py-1 text-left text-ink-muted">Tipo</th>
+                      <th className="px-2 py-1 text-right text-ink-muted">Cuota del año</th>
+                      <th className="px-2 py-1 text-right text-ink-muted">Cancelado</th>
+                    </tr>
+                  </thead>
                   <tbody>
-                    <tr className="border-b border-line/50">
-                      <td className="px-2 py-1 text-ink">Cuota del año</td>
-                      <td className="px-2 py-1 text-right text-ink">{formatQ(data.kpis.total)}</td>
-                    </tr>
-                    <tr>
-                      <td className="px-2 py-1 text-ink">Cancelado</td>
-                      <td className="px-2 py-1 text-right text-ink">{formatQ(data.kpis.cancelado)}</td>
-                    </tr>
+                    {data.tipos.map((t) => (
+                      <tr key={t.tipo} className="border-b border-line/50">
+                        <td className="px-2 py-1 text-ink">{`Tipo ${t.tipo}`}</td>
+                        <td className="px-2 py-1 text-right text-ink">{formatQ(t.total_cuota)}</td>
+                        <td className="px-2 py-1 text-right text-ink">{formatQ(t.total_cancelado)}</td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               }
             />
             <ChartCard
               theme="financiero"
+              colorSeleccionHex={COLOR_TEAL}
               estiloTarjeta={{ backgroundColor: FINANCIERO_SURFACE }}
               title="Cuotas por Tipo"
               chart={<DonutCuotasPorTipo data={data} />}
@@ -363,6 +457,7 @@ function PaginaCuotasAsociados() {
             />
             <ChartCard
               theme="financiero"
+              colorSeleccionHex={COLOR_TEAL}
               estiloTarjeta={{ backgroundColor: FINANCIERO_SURFACE }}
               title="Recuperación Cuota Asociados"
               chart={<DonutRecuperacion data={data} />}

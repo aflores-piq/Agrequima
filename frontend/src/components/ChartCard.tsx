@@ -25,6 +25,7 @@ export function ChartCard({
   exportar,
   estiloTarjeta,
   controlesExtra,
+  colorSeleccionHex,
 }: {
   theme: DashboardTheme;
   title: string;
@@ -42,6 +43,14 @@ export function ChartCard({
   // al selector Gráfico/Tabla -- no afecta ningún ChartCard existente
   // que no lo use.
   controlesExtra?: ReactNode;
+  /** Override puntual del color de la pastilla seleccionada del
+   * interruptor Gráfico/Tabla, como color hex (via inline style en vez
+   * de la clase Tailwind de COLOR_SELECCION) -- para páginas como
+   * "Cuotas Asociados" donde el azul fijo de `financiero` (bg-blue-600)
+   * no forma parte de la paleta real del reporte (verde/azul/gris por
+   * Tipo) y se ve como un acento azul de más. No pasar este prop no
+   * cambia nada: sigue usando COLOR_SELECCION[theme] como siempre. */
+  colorSeleccionHex?: string;
 }) {
   const [vista, setVista] = useState<"grafico" | "tabla">("grafico");
   const colorSeleccion = COLOR_SELECCION[theme];
@@ -66,8 +75,9 @@ export function ChartCard({
               aria-pressed={vista === "grafico"}
               onClick={() => setVista("grafico")}
               className={`rounded-tremor-small px-2.5 py-1 transition-colors ${
-                vista === "grafico" ? `${colorSeleccion} text-white` : "text-ink-muted hover:text-ink"
+                vista === "grafico" ? `${colorSeleccionHex ? "" : colorSeleccion} text-white` : "text-ink-muted hover:text-ink"
               }`}
+              style={vista === "grafico" && colorSeleccionHex ? { backgroundColor: colorSeleccionHex } : undefined}
             >
               Gráfico
             </button>
@@ -76,8 +86,9 @@ export function ChartCard({
               aria-pressed={vista === "tabla"}
               onClick={() => setVista("tabla")}
               className={`rounded-tremor-small px-2.5 py-1 transition-colors ${
-                vista === "tabla" ? `${colorSeleccion} text-white` : "text-ink-muted hover:text-ink"
+                vista === "tabla" ? `${colorSeleccionHex ? "" : colorSeleccion} text-white` : "text-ink-muted hover:text-ink"
               }`}
+              style={vista === "tabla" && colorSeleccionHex ? { backgroundColor: colorSeleccionHex } : undefined}
             >
               Tabla
             </button>
