@@ -58,6 +58,18 @@ export function formatUSDCorto(valor: number): string {
   return `$${(valor / 1_000).toFixed(1)}K`;
 }
 
+/** Igual que formatUSDCorto pero sin símbolo de moneda, para métricas que
+ * no son montos monetarios (ej. Kilolitros en RankingBarChart). */
+export function formatNumeroCorto(valor: number): string {
+  if (valor >= 1_000_000) return `${(valor / 1_000_000).toFixed(1)}M`;
+  return `${(valor / 1_000).toFixed(1)}K`;
+}
+
+/** Igual que formatUSDAbrev/formatQAbrev pero sin símbolo de moneda. */
+export function formatNumeroAbrev(v: number): string {
+  return abreviarNumero(v);
+}
+
 export const MESES = [
   "Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic",
 ];

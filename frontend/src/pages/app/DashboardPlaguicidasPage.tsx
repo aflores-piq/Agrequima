@@ -13,7 +13,8 @@ import { CategoricalDonut } from "../../components/charts/CategoricalDonut";
 import { ComparativeBarChart } from "../../components/charts/ComparativeBarChart";
 import { MultiAnnualLineChart } from "../../components/charts/MultiAnnualLineChart";
 import { RankingBarChart } from "../../components/charts/RankingBarChart";
-import { formatNumber, formatQAbrev, formatUSDAbrev, MESES, MESES_LARGOS } from "../../utils/format";
+import { RankingBarChartKilolitros } from "../../components/charts/RankingBarChartKilolitros";
+import { formatNumber, formatNumeroAbrev, formatQAbrev, formatUSDAbrev, MESES, MESES_LARGOS } from "../../utils/format";
 import { claseBadgeCategoria, dashboardAccent } from "../../theme/colors";
 import type {
   DashboardPlaguicidasResponse,
@@ -49,6 +50,10 @@ export function DashboardPlaguicidasPage() {
   const [aplicacion, setAplicacion] = useState<string[]>([]);
   const [ingredienteAct, setIngredienteAct] = useState<string[]>([]);
   const [producto, setProducto] = useState<string[]>([]);
+  // Métrica mostrada en la tarjeta "Top 20 moléculas plaguicidas": una
+  // sola tarjeta, el selector solo cambia qué datos/componente se
+  // dibujan adentro (ver más abajo) -- no hay dos tarjetas separadas.
+  const [metricaMoleculas, setMetricaMoleculas] = useState<"cif_usd" | "kilolitros">("cif_usd");
 
   const [data, setData] = useState<DashboardPlaguicidasResponse | null>(null);
   const [cargando, setCargando] = useState(true);
@@ -382,27 +387,84 @@ export function DashboardPlaguicidasPage() {
             <ChartCard
               theme="plaguicidas"
               title="Top 20 moléculas plaguicidas"
-              subtitle="Por CIF USD"
+              subtitle={metricaMoleculas === "cif_usd" ? "Por CIF USD" : "Kilolitros"}
               exportar={
-                <BotonExportarExcel
-                  theme="plaguicidas"
-                  endpoint="/dashboard/plaguicidas/export/top-moleculas"
-                  filtros={filtrosExport}
-                  nombreArchivoPorDefecto={`plaguicidas_top_moleculas_${sufijoArchivo}.xlsx`}
-                />
+                metricaMoleculas === "cif_usd" ? (
+                  <BotonExportarExcel
+                    theme="plaguicidas"
+                    endpoint="/dashboard/plaguicidas/export/top-moleculas"
+                    filtros={filtrosExport}
+                    nombreArchivoPorDefecto={`plaguicidas_top_moleculas_${sufijoArchivo}.xlsx`}
+                  />
+                ) : undefined
               }
-              chart={<RankingBarChart theme="plaguicidas" data={data.top_ingredientes} />}
+              controlesExtra={
+                // Mismo patrón visual que el selector Gráfico/Tabla de
+                // ChartCard (mismas clases) -- UNA sola tarjeta, esto solo
+                // elige qué datos/componente se dibujan adentro. La
+                // gráfica de Kilolitros replica la medida DAX "Kilolitros"
+                // del reporte de Power BI anterior: SUM(cantidad) sin
+                // filtrar/convertir por unidad_medida (ver
+                // df_top_moleculas_kilolitros en el backend), ya validada
+                // por el cliente contra sus propios registros.
+                <div
+                  role="group"
+                  aria-label="Cambiar métrica de Top 20 moléculas plaguicidas"
+                  className="flex rounded-tremor-small bg-surface-hover p-0.5 text-xs"
+                >
+                  <button
+                    type="button"
+                    aria-pressed={metricaMoleculas === "cif_usd"}
+                    onClick={() => setMetricaMoleculas("cif_usd")}
+                    className={`rounded-tremor-small px-2.5 py-1 transition-colors ${
+                      metricaMoleculas === "cif_usd" ? "bg-teal-600 text-white" : "text-ink-muted hover:text-ink"
+                    }`}
+                  >
+                    CIF USD
+                  </button>
+                  <button
+                    type="button"
+                    aria-pressed={metricaMoleculas === "kilolitros"}
+                    onClick={() => setMetricaMoleculas("kilolitros")}
+                    className={`rounded-tremor-small px-2.5 py-1 transition-colors ${
+                      metricaMoleculas === "kilolitros" ? "bg-teal-600 text-white" : "text-ink-muted hover:text-ink"
+                    }`}
+                  >
+                    Kilolitros
+                  </button>
+                </div>
+              }
+              chart={
+                metricaMoleculas === "cif_usd" ? (
+                  <RankingBarChart theme="plaguicidas" data={data.top_ingredientes} />
+                ) : (
+                  <RankingBarChartKilolitros theme="plaguicidas" data={data.top_ingredientes_kilolitros} />
+                )
+              }
               table={
-                <SimpleDataTable
-                  sinLimiteAltura
-                  compacto="px-1 py-1 text-xs"
-                  columnas={[
-                    { header: "Ingrediente activo", accessor: (r) => r.etiqueta },
-                    { header: "CIF USD", accessor: (r) => formatUSDAbrev(r.cif_usd), align: "right" },
-                  ]}
-                  filas={data.top_ingredientes}
-                  getKey={(r) => r.etiqueta}
-                />
+                metricaMoleculas === "cif_usd" ? (
+                  <SimpleDataTable
+                    sinLimiteAltura
+                    compacto="px-1 py-1 text-xs"
+                    columnas={[
+                      { header: "Ingrediente activo", accessor: (r) => r.etiqueta },
+                      { header: "CIF USD", accessor: (r) => formatUSDAbrev(r.cif_usd), align: "right" },
+                    ]}
+                    filas={data.top_ingredientes}
+                    getKey={(r) => r.etiqueta}
+                  />
+                ) : (
+                  <SimpleDataTable
+                    sinLimiteAltura
+                    compacto="px-1 py-1 text-xs"
+                    columnas={[
+                      { header: "Ingrediente activo", accessor: (r) => r.etiqueta },
+                      { header: "Kilolitros", accessor: (r) => formatNumeroAbrev(r.kilolitros), align: "right" },
+                    ]}
+                    filas={data.top_ingredientes_kilolitros}
+                    getKey={(r) => r.etiqueta}
+                  />
+                )
               }
             />
 

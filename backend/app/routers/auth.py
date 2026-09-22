@@ -8,6 +8,7 @@ from app.core.security import create_access_token, hash_password, verify_passwor
 from app.models.usuario import Rol, Usuario
 from app.schemas.auth import (
     ActualizarPreferenciasRequest,
+    AvisoLegalResponse,
     CambiarMiPasswordRequest,
     LoginRequest,
     PreferenciasResponse,
@@ -58,6 +59,7 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse
         acceso_importaciones=usuario.AccesoImportaciones,
         acceso_financiero=usuario.AccesoFinanciero,
         acceso_indicadores=usuario.AccesoIndicadores,
+        aviso_legal_aceptado=usuario.AvisoLegalAceptado,
     )
 
 
@@ -104,3 +106,27 @@ def cambiar_mi_password(
         )
     usuario.PasswordHash = hash_password(payload.password_nueva)
     db.commit()
+
+
+@router.post("/aviso-legal", response_model=AvisoLegalResponse)
+def aceptar_aviso_legal(
+    db: Session = Depends(get_db),
+    usuario_token: UsuarioToken = Depends(get_current_user),
+) -> AvisoLegalResponse:
+    """Marca el aviso legal como aceptado para el usuario autenticado,
+    una sola vez (idempotente: si ya estaba aceptado, no pisa la fecha
+    original). FechaAceptacion usa la hora del SERVIDOR (func.getdate()),
+    nunca una fecha que mande el navegador, para que quede como respaldo
+    confiable ante un reclamo."""
+    usuario = db.query(Usuario).filter(Usuario.UsuarioId == usuario_token.usuario_id).first()
+    if usuario is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado")
+    if not usuario.AvisoLegalAceptado:
+        usuario.AvisoLegalAceptado = True
+        usuario.AvisoLegalFechaAceptacion = func.getdate()
+        db.commit()
+        db.refresh(usuario)
+    return AvisoLegalResponse(
+        aceptado=usuario.AvisoLegalAceptado,
+        fecha_aceptacion=usuario.AvisoLegalFechaAceptacion,
+    )

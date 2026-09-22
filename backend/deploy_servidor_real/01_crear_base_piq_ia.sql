@@ -71,6 +71,8 @@ CREATE TABLE dbo.[Usuarios] (
 	[AccesoImportaciones] BIT NOT NULL DEFAULT ((1)), 
 	[AccesoFinanciero] BIT NOT NULL DEFAULT ((0)), 
 	[AccesoIndicadores] BIT NOT NULL DEFAULT ((0)), 
+	[AvisoLegalAceptado] BIT NOT NULL DEFAULT ((0)), 
+	[AvisoLegalFechaAceptacion] DATETIME NULL, 
 	CONSTRAINT [PK__Usuarios__2B3DE7B817C4236F] PRIMARY KEY CLUSTERED ([UsuarioId]), 
 	CONSTRAINT [FK_Usuarios_Roles] FOREIGN KEY([RolId]) REFERENCES dbo.[Roles] ([RolId])
 );
@@ -442,68 +444,68 @@ GO
 IF OBJECT_ID('dbo.usp_ActualizarNomenclatura', 'P') IS NOT NULL
     DROP PROCEDURE dbo.usp_ActualizarNomenclatura;
 GO
-
-/* =====================================================================
-   6. PROCEDIMIENTOS - PLAGUICIDAS
-   ===================================================================== */
-CREATE   PROCEDURE dbo.usp_ActualizarNomenclatura
-AS
-BEGIN
-    SET NOCOUNT ON;
-
-    MERGE dbo.CatalogoNomenclaturaPlaguicidas AS destino
-    USING (
-        SELECT DISTINCT IngredienteActivo_Key, Agrupador, Codigo
-        FROM dbo.stg_Nomenclatura
-        WHERE IngredienteActivo_Key IS NOT NULL
-    ) AS origen
-    -- COLLATE DATABASE_DEFAULT: mismo fix de collation que
-    -- usp_CargarNutrientes (stg_Nomenclatura tambien la recrea pandas
-    -- sin especificar collation).
-    ON destino.IngredienteActivo_Key COLLATE DATABASE_DEFAULT = origen.IngredienteActivo_Key COLLATE DATABASE_DEFAULT
-    WHEN MATCHED AND (
-            ISNULL(destino.Agrupador,'') <> ISNULL(origen.Agrupador,'')
-         OR ISNULL(destino.Codigo,'')    <> ISNULL(origen.Codigo,'')
-    ) THEN
-        UPDATE SET Agrupador = origen.Agrupador, Codigo = origen.Codigo, FechaMod = GETDATE()
-    WHEN NOT MATCHED BY TARGET THEN
-        INSERT (IngredienteActivo_Key, Agrupador, Codigo, FechaMod)
-        VALUES (origen.IngredienteActivo_Key, origen.Agrupador, origen.Codigo, GETDATE());
-END
+
+/* =====================================================================
+   6. PROCEDIMIENTOS - PLAGUICIDAS
+   ===================================================================== */
+CREATE   PROCEDURE dbo.usp_ActualizarNomenclatura
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    MERGE dbo.CatalogoNomenclaturaPlaguicidas AS destino
+    USING (
+        SELECT DISTINCT IngredienteActivo_Key, Agrupador, Codigo
+        FROM dbo.stg_Nomenclatura
+        WHERE IngredienteActivo_Key IS NOT NULL
+    ) AS origen
+    -- COLLATE DATABASE_DEFAULT: mismo fix de collation que
+    -- usp_CargarNutrientes (stg_Nomenclatura tambien la recrea pandas
+    -- sin especificar collation).
+    ON destino.IngredienteActivo_Key COLLATE DATABASE_DEFAULT = origen.IngredienteActivo_Key COLLATE DATABASE_DEFAULT
+    WHEN MATCHED AND (
+            ISNULL(destino.Agrupador,'') <> ISNULL(origen.Agrupador,'')
+         OR ISNULL(destino.Codigo,'')    <> ISNULL(origen.Codigo,'')
+    ) THEN
+        UPDATE SET Agrupador = origen.Agrupador, Codigo = origen.Codigo, FechaMod = GETDATE()
+    WHEN NOT MATCHED BY TARGET THEN
+        INSERT (IngredienteActivo_Key, Agrupador, Codigo, FechaMod)
+        VALUES (origen.IngredienteActivo_Key, origen.Agrupador, origen.Codigo, GETDATE());
+END
 
 GO
 
 IF OBJECT_ID('dbo.usp_ActualizarAgrupadorNutrientes', 'P') IS NOT NULL
     DROP PROCEDURE dbo.usp_ActualizarAgrupadorNutrientes;
 GO
-
-/* =====================================================================
-   7. PROCEDIMIENTOS - NUTRIENTES (nuevos, mismo patrÃ³n que plaguicidas)
-   ===================================================================== */
-CREATE   PROCEDURE dbo.usp_ActualizarAgrupadorNutrientes
-AS
-BEGIN
-    SET NOCOUNT ON;
-
-    MERGE dbo.CatalogoAgrupadorNutrientes AS destino
-    USING (
-        SELECT DISTINCT NombreComercial_Key, ProductoAgrupado, Codigo
-        FROM dbo.stg_AgrupadorNutrientes
-        WHERE NombreComercial_Key IS NOT NULL
-    ) AS origen
-    -- COLLATE DATABASE_DEFAULT: mismo fix de collation que
-    -- usp_CargarNutrientes (stg_AgrupadorNutrientes tambien la recrea
-    -- pandas sin especificar collation).
-    ON destino.NombreComercial_Key COLLATE DATABASE_DEFAULT = origen.NombreComercial_Key COLLATE DATABASE_DEFAULT
-    WHEN MATCHED AND (
-            ISNULL(destino.ProductoAgrupado,'') <> ISNULL(origen.ProductoAgrupado,'')
-         OR ISNULL(destino.Codigo,'')            <> ISNULL(origen.Codigo,'')
-    ) THEN
-        UPDATE SET ProductoAgrupado = origen.ProductoAgrupado, Codigo = origen.Codigo, FechaMod = GETDATE()
-    WHEN NOT MATCHED BY TARGET THEN
-        INSERT (NombreComercial_Key, ProductoAgrupado, Codigo, FechaMod)
-        VALUES (origen.NombreComercial_Key, origen.ProductoAgrupado, origen.Codigo, GETDATE());
-END
+
+/* =====================================================================
+   7. PROCEDIMIENTOS - NUTRIENTES (nuevos, mismo patrÃ³n que plaguicidas)
+   ===================================================================== */
+CREATE   PROCEDURE dbo.usp_ActualizarAgrupadorNutrientes
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    MERGE dbo.CatalogoAgrupadorNutrientes AS destino
+    USING (
+        SELECT DISTINCT NombreComercial_Key, ProductoAgrupado, Codigo
+        FROM dbo.stg_AgrupadorNutrientes
+        WHERE NombreComercial_Key IS NOT NULL
+    ) AS origen
+    -- COLLATE DATABASE_DEFAULT: mismo fix de collation que
+    -- usp_CargarNutrientes (stg_AgrupadorNutrientes tambien la recrea
+    -- pandas sin especificar collation).
+    ON destino.NombreComercial_Key COLLATE DATABASE_DEFAULT = origen.NombreComercial_Key COLLATE DATABASE_DEFAULT
+    WHEN MATCHED AND (
+            ISNULL(destino.ProductoAgrupado,'') <> ISNULL(origen.ProductoAgrupado,'')
+         OR ISNULL(destino.Codigo,'')            <> ISNULL(origen.Codigo,'')
+    ) THEN
+        UPDATE SET ProductoAgrupado = origen.ProductoAgrupado, Codigo = origen.Codigo, FechaMod = GETDATE()
+    WHEN NOT MATCHED BY TARGET THEN
+        INSERT (NombreComercial_Key, ProductoAgrupado, Codigo, FechaMod)
+        VALUES (origen.NombreComercial_Key, origen.ProductoAgrupado, origen.Codigo, GETDATE());
+END
 
 GO
 

@@ -6,6 +6,11 @@ class RankingItem(BaseModel):
     cif_usd: float
 
 
+class RankingItemKilolitros(BaseModel):
+    etiqueta: str
+    kilolitros: float
+
+
 class ResumenItem(BaseModel):
     etiqueta: str
     transacciones: int
@@ -116,6 +121,7 @@ class DashboardPlaguicidasResponse(BaseModel):
     comparativo_acumulado_multianual: list[SerieAcumuladoAnual]
     diversificacion_aplicacion: list[RankingItem]
     top_ingredientes: list[RankingItem]
+    top_ingredientes_kilolitros: list[RankingItemKilolitros]
     top_importadores: list[RankingItem]
     top_origenes: list[ResumenItem]
     tabla_nombres_comerciales: list[NombreComercialItem]

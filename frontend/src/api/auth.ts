@@ -1,5 +1,5 @@
 import { apiClient } from "./client";
-import type { PreferenciasResponse, Tema, TokenResponse } from "../types/auth";
+import type { AvisoLegalResponse, PreferenciasResponse, Tema, TokenResponse } from "../types/auth";
 
 export async function login(nombreUsuario: string, password: string): Promise<TokenResponse> {
   const { data } = await apiClient.post<TokenResponse>("/auth/login", {
@@ -19,4 +19,9 @@ export async function cambiarMiPassword(passwordActual: string, passwordNueva: s
     password_actual: passwordActual,
     password_nueva: passwordNueva,
   });
+}
+
+export async function aceptarAvisoLegal(): Promise<AvisoLegalResponse> {
+  const { data } = await apiClient.post<AvisoLegalResponse>("/auth/aviso-legal");
+  return data;
 }

@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel
@@ -19,6 +20,9 @@ class TokenResponse(BaseModel):
     acceso_importaciones: bool
     acceso_financiero: bool
     acceso_indicadores: bool
+    # Si es False, el frontend muestra el aviso legal bloqueando el
+    # dashboard hasta que el usuario acepte (ver POST /auth/aviso-legal).
+    aviso_legal_aceptado: bool
 
 
 class ActualizarPreferenciasRequest(BaseModel):
@@ -32,3 +36,8 @@ class PreferenciasResponse(BaseModel):
 class CambiarMiPasswordRequest(BaseModel):
     password_actual: str
     password_nueva: str
+
+
+class AvisoLegalResponse(BaseModel):
+    aceptado: bool
+    fecha_aceptacion: datetime | None

@@ -28,3 +28,11 @@ class Usuario(Base):
     AccesoImportaciones = Column(Boolean, nullable=False, default=True)
     AccesoFinanciero = Column(Boolean, nullable=False, default=False)
     AccesoIndicadores = Column(Boolean, nullable=False, default=False)
+    # Aviso legal y condiciones de uso -- se pide una sola vez por
+    # usuario, al primer login (ver LoginPage.tsx / endpoint
+    # /auth/aceptar-aviso-legal). FechaAceptacion se llena con la hora
+    # del SERVIDOR (func.getdate() del lado del backend), nunca con una
+    # fecha que mande el navegador, para que sirva de respaldo confiable
+    # ante un reclamo.
+    AvisoLegalAceptado = Column(Boolean, nullable=False, default=False)
+    AvisoLegalFechaAceptacion = Column(DateTime)

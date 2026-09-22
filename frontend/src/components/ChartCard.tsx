@@ -24,6 +24,7 @@ export function ChartCard({
   table,
   exportar,
   estiloTarjeta,
+  controlesExtra,
 }: {
   theme: DashboardTheme;
   title: string;
@@ -36,6 +37,11 @@ export function ChartCard({
    * fondo general muy oscuro de la app) -- no afecta a Plaguicidas ni
    * Nutrientes, que no lo pasan y siguen usando bg-surface. */
   estiloTarjeta?: CSSProperties;
+  // Slot opcional para un selector adicional en el encabezado (ej. la
+  // métrica CIF USD/Kilolitros de "Top 20 moléculas plaguicidas"), junto
+  // al selector Gráfico/Tabla -- no afecta ningún ChartCard existente
+  // que no lo use.
+  controlesExtra?: ReactNode;
 }) {
   const [vista, setVista] = useState<"grafico" | "tabla">("grafico");
   const colorSeleccion = COLOR_SELECCION[theme];
@@ -49,6 +55,7 @@ export function ChartCard({
         </div>
         <div className="flex items-center gap-2">
           {exportar}
+          {controlesExtra}
           <div
             role="group"
             aria-label={`Cambiar vista de ${title}`}
