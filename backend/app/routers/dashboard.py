@@ -16,8 +16,10 @@ from app.schemas.dashboard import (
     OpcionesFiltroPlaguicidas,
 )
 from app.schemas.dashboard_financiero import DashboardFinancieroResponse
+from app.schemas.dashboard_otros_informes import CuotasAsociadosResponse
 from app.services import export as export_service
 from app.services.dashboard_financiero import obtener_dashboard_financiero
+from app.services.dashboard_otros_informes import obtener_cuotas_asociados
 from app.services.dashboard_nutrientes import (
     construir_contexto_nutrientes,
     obtener_dashboard_nutrientes,
@@ -97,6 +99,16 @@ def dashboard_financiero_estados_financieros(
     _acceso: UsuarioToken = Depends(require_acceso_financiero),
 ) -> DashboardFinancieroResponse:
     return obtener_dashboard_financiero(db, anio, mes)
+
+
+@router.get("/financiero/cuotas-asociados", response_model=CuotasAsociadosResponse)
+def dashboard_financiero_cuotas_asociados(
+    anio: int | None = None,
+    db: Session = Depends(get_db),
+    _usuario: UsuarioToken = Depends(get_current_user),
+    _acceso: UsuarioToken = Depends(require_acceso_financiero),
+) -> CuotasAsociadosResponse:
+    return obtener_cuotas_asociados(db, anio)
 
 
 def _respuesta_xlsx(contenido: bytes, nombre_archivo: str) -> Response:
