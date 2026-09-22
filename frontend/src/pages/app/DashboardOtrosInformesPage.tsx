@@ -9,7 +9,7 @@ import {
 } from "../../api/dashboardOtrosInformes";
 import { mensajeError } from "../../api/client";
 import { ChartCard } from "../../components/ChartCard";
-import { FINANCIERO_SURFACE } from "../../components/TablaGrupoExpandible";
+import { FINANCIERO_SURFACE, KpiCardIcono, VERDE_ENCABEZADO } from "../../components/TablaGrupoExpandible";
 import { formatPercent, formatQ, MESES_LARGOS } from "../../utils/format";
 import type {
   CuotasAsociadosResponse,
@@ -29,14 +29,15 @@ const COLOR_MARINO = "#375b7d";
 
 const COLOR_POR_TIPO: Record<string, string> = { A: COLOR_TEAL, B: COLOR_AZUL, C: COLOR_MARINO };
 
-// Colores REALES del tema del reporte .pbix (Layout.json / theme) para
-// las gráficas de Presupuesto vs Ejecutado en Centro de Costo -- las 3
-// gráficas (Administración/Operación/Consolidado) heredan el mismo tema
-// de reporte SIN color propio, por eso es un color por MÉTRICA (no por
-// grupo): Presupuesto siempre azul claro, Ejecutado siempre azul oscuro,
-// idéntico en las 3.
-const COLOR_PRESUPUESTO = "#118DFF";
-const COLOR_EJECUTADO = "#12239E";
+// Colores REALES de OBJETO del visual (Layout.json a nivel de visual, no
+// del tema general del reporte) para las gráficas de Presupuesto vs
+// Ejecutado en Centro de Costo -- las 3 gráficas (Administración/
+// Operación/Consolidado) usan un color por MÉTRICA (no por grupo),
+// idéntico en las 3. El primer color pasado (#118DFF/#12239E) resultó
+// ser el color del TEMA general del reporte, no el del visual -- se
+// reemplaza por el valor correcto leído a nivel de objeto.
+const COLOR_PRESUPUESTO = "#5C7285";
+const COLOR_EJECUTADO = "#A7B49E";
 
 /** Etiqueta de valor en miles, sin decimales (ej. "160K") -- calcado de
  * la unidad de miles del .pbix para las etiquetas sobre cada barra. */
@@ -50,27 +51,15 @@ function formatMiles(v: number): string {
 // para que tablas de hasta ~18 filas quepan en la franja de alto que le
 // corresponde sin necesitar scroll interno.
 
-/** Segmento del banner T/C/P -- franja BAJA y ANCHA de una sola línea
- * (letra + etiqueta + valor todo en fila), calcado de la proporción real
- * del .pbix (banner completo w=1620 h=100, 3 segmentos ~540x100 c/u,
- * ~5.4:1 ancho:alto por segmento). El diseño anterior apilaba
- * etiqueta/valor en 2 líneas dentro de un cuadrito -- eso es lo que lo
- * hacía verse como "caja alta/cuadrada" en vez de franja de banner. */
-function KpiChico({ letra, color, label, valor }: { letra: string; color: string; label: string; valor: string }) {
-  return (
-    <div className="flex h-16 flex-1 items-stretch overflow-hidden rounded-tremor-default ring-1 ring-line" style={{ backgroundColor: FINANCIERO_SURFACE }}>
-      <div className="flex aspect-square h-full shrink-0 items-center justify-center text-lg font-bold text-white" style={{ backgroundColor: color }} aria-hidden="true">
-        {letra}
-      </div>
-      <div className="flex min-w-0 flex-1 items-center justify-between gap-2 px-3">
-        <span className="truncate text-xs font-semibold text-white">{label}</span>
-        <span className="shrink-0 text-lg font-bold text-ink">{valor}</span>
-      </div>
-    </div>
-  );
-}
-
 // --- Cuotas Asociados ------------------------------------------------------
+//
+// Las 3 tarjetas T/C/P reusan KpiCardIcono (TablaGrupoExpandible.tsx),
+// el mismo componente ya validado para Estados Financieros -- un alto
+// FIJO en px con flex-1 (ancho variable) se desproporciona en pantallas
+// anchas (el ancho crece sin límite mientras el alto queda fijo, dejando
+// un hueco vacío enorme entre el ícono y el valor); aspect-[4/1] escala
+// el alto CON el ancho y mantiene siempre la misma proporción, sin
+// importar el viewport.
 
 // Alto FIJO (no derivado del contenido) para que las 3 tablas queden
 // EXACTAMENTE parejas entre sí sin importar cuántas filas tenga cada
@@ -168,6 +157,12 @@ function GraficoCuotaVsCancelado({ data }: { data: CuotasAsociadosResponse }) {
   );
 }
 
+// Leyenda de las donas con color de texto FIJO (rgb(var(--color-ink)),
+// el mismo tono de alto contraste que el resto de textos del reporte) en
+// vez del color por defecto de Recharts (el mismo color de cada porción
+// -- en modo oscuro, donde el fondo de la tarjeta también es oscuro, un
+// texto teal/marino oscuro sobre ese fondo queda casi ilegible). Tamaño
+// de fuente subido de 10 a 12px por el mismo motivo (legibilidad).
 function DonutCuotasPorTipo({ data }: { data: CuotasAsociadosResponse }) {
   const filas = data.tipos.map((t) => ({ nombre: `Tipo ${t.tipo}`, valor: t.total_cuota, color: COLOR_POR_TIPO[t.tipo] }));
   return (
@@ -178,7 +173,11 @@ function DonutCuotasPorTipo({ data }: { data: CuotasAsociadosResponse }) {
             <Cell key={f.nombre} fill={f.color} />
           ))}
         </Pie>
-        <Legend wrapperStyle={{ fontSize: 10 }} />
+        <Legend
+          wrapperStyle={{ fontSize: 12, color: "rgb(var(--color-ink))" }}
+          payload={filas.map((f) => ({ value: f.nombre, type: "square" as const, color: f.color }))}
+          formatter={(value: string) => <span style={{ color: "rgb(var(--color-ink))" }}>{value}</span>}
+        />
         <Tooltip formatter={(v: number) => formatQ(v)} contentStyle={{ background: "rgb(var(--color-bg-surface))", border: "1px solid rgb(var(--color-line))", borderRadius: 8 }} />
       </PieChart>
     </ResponsiveContainer>
@@ -198,7 +197,11 @@ function DonutRecuperacion({ data }: { data: CuotasAsociadosResponse }) {
             <Cell key={f.nombre} fill={f.color} />
           ))}
         </Pie>
-        <Legend wrapperStyle={{ fontSize: 10 }} />
+        <Legend
+          wrapperStyle={{ fontSize: 12, color: "rgb(var(--color-ink))" }}
+          payload={filas.map((f) => ({ value: f.nombre, type: "square" as const, color: f.color }))}
+          formatter={(value: string) => <span style={{ color: "rgb(var(--color-ink))" }}>{value}</span>}
+        />
         <Tooltip formatter={(v: number) => formatQ(v)} contentStyle={{ background: "rgb(var(--color-bg-surface))", border: "1px solid rgb(var(--color-line))", borderRadius: 8 }} />
       </PieChart>
     </ResponsiveContainer>
@@ -294,10 +297,23 @@ function PaginaCuotasAsociados() {
         // apiladas), ~27% de ancho cada una, ~34% del alto de la página;
         // las gráficas van debajo, en la misma pantalla, sin scroll.
         <div className="mx-auto space-y-3" style={{ width: "94%" }}>
+          {/* max-width en el wrapper de cada tarjeta -- KpiCardIcono es
+              flex-1 (ancho variable) por diseño para la fila angosta de
+              55% donde vive en Estados Financieros; acá el contenedor de
+              la página es más ancho (94%, por las 3 tablas de abajo), y
+              sin este tope cada tarjeta se estira mucho más de lo que su
+              aspect-[4/1] compensa, dejando un hueco vacío grande entre
+              el ícono y el valor. */}
           <div className="flex flex-wrap justify-center gap-2">
-            <KpiChico letra="T" color={COLOR_TEAL} label="Total" valor={formatQ(data.kpis.total)} />
-            <KpiChico letra="C" color={COLOR_AZUL} label="Cancelado" valor={formatQ(data.kpis.cancelado)} />
-            <KpiChico letra="P" color={COLOR_CORAL} label="Por cobrar" valor={formatQ(data.kpis.por_cobrar)} />
+            <div className="flex-1" style={{ maxWidth: 320 }}>
+              <KpiCardIcono letra="T" color={COLOR_TEAL} label="Total" valor={formatQ(data.kpis.total)} />
+            </div>
+            <div className="flex-1" style={{ maxWidth: 320 }}>
+              <KpiCardIcono letra="C" color={COLOR_AZUL} label="Cancelado" valor={formatQ(data.kpis.cancelado)} />
+            </div>
+            <div className="flex-1" style={{ maxWidth: 320 }}>
+              <KpiCardIcono letra="P" color={COLOR_CORAL} label="Por cobrar" valor={formatQ(data.kpis.por_cobrar)} />
+            </div>
           </div>
 
           <div className="grid grid-cols-3 gap-3">
@@ -405,7 +421,12 @@ function TablaEjecucionGastos({ data }: { data: EjecucionGastosResponse }) {
     <div className="overflow-hidden rounded-tremor-default ring-1 ring-line">
       <table className="w-full text-[11px]">
         <thead>
-          <tr style={{ backgroundColor: COLOR_TEAL }}>
+          {/* VERDE_ENCABEZADO (#4CAF50, TablaGrupoExpandible.tsx): el
+              mismo verde real que ya usan las demás tablas del sistema
+              (leído pixel a pixel de las capturas de referencia) -- antes
+              usaba COLOR_TEAL (#3f6f6b), un verde/teal distinto que no
+              coincidía con el resto del reporte. */}
+          <tr style={{ backgroundColor: VERDE_ENCABEZADO }}>
             <th className="px-2 py-1 text-left font-semibold text-white">Categoría</th>
             <th className="px-2 py-1 text-right font-semibold text-white">Administración</th>
             <th className="px-2 py-1 text-right font-semibold text-white">Peso %</th>
@@ -425,24 +446,18 @@ function TablaEjecucionGastos({ data }: { data: EjecucionGastosResponse }) {
   );
 }
 
-// Tarjeta KPI de una sola cifra (12 de estas, en 2 filas de 6) -- calcado
-// del .pbix real: debajo de la tabla dinámica van 12 tarjetas KPI en 2
-// filas. Tira COMPACTA de una sola línea (~150x40, etiqueta y valor en
-// la misma franja angosta) -- el diseño anterior apilaba franja de color
-// arriba + etiqueta + valor en 2 líneas, lo que las hacía ver como
-// bloques altos genéricos en vez de tiras horizontales compactas.
-function KpiMini({ label, valor, color }: { label: string; valor: string; color: string }) {
+// Texto de resumen en línea (12 de estos) -- calcado del reporte
+// original: NO son tarjetas KPI (sin caja, sin ícono, sin relleno), son
+// etiqueta y valor pegados uno al otro en la misma línea, como una
+// oración normal de texto, del mismo tamaño que el resto de textos del
+// reporte. El diseño anterior (KpiMini) los mostraba como tiras con
+// caja/ring/franja de color -- eso es justamente lo que se está
+// sacando acá.
+function TextoResumen({ label, valor }: { label: string; valor: string }) {
   return (
-    <div
-      className="flex h-10 items-center gap-1.5 overflow-hidden rounded-tremor-default px-2 ring-1 ring-line"
-      style={{ backgroundColor: FINANCIERO_SURFACE }}
-    >
-      <div className="h-4 w-1 shrink-0 rounded-sm" style={{ backgroundColor: color }} aria-hidden="true" />
-      <span className="min-w-0 flex-1 truncate text-[9px] font-semibold text-ink-muted" title={label}>
-        {label}
-      </span>
-      <span className="shrink-0 text-xs font-bold text-ink">{valor}</span>
-    </div>
+    <span className="text-xs text-ink">
+      <span className="font-semibold">{label}:</span> {valor}
+    </span>
   );
 }
 
@@ -585,32 +600,32 @@ function PaginaEjecucionGastos({ acumulado }: { acumulado: boolean }) {
 
       {data && (
         <>
-          {/* Tabla dinámica principal + las 12 tarjetas KPI, centradas al
-              58% de ancho (bloque compacto arriba, NO estirado a todo el
-              ancho -- calcado del .pbix: w≈1115 de un lienzo de 1920). */}
-          <div className="mx-auto space-y-2" style={{ width: "58%" }}>
+          {/* Tabla dinámica principal + los 12 textos de resumen,
+              centrados al mismo 55% de ancho que ya usan las tablas de
+              Estados Financieros (ANCHO_TABLA_FINANCIERO en
+              DashboardFinancieroPage.tsx) -- antes 58%, un valor propio
+              de esta página que no coincidía con el resto del sistema. */}
+          <div className="mx-auto space-y-2" style={{ width: "55%" }}>
             <TablaEjecucionGastos data={data} />
 
-            {/* 12 tarjetas KPI en 2 filas de 6 (grid-cols-6 se envuelve
-                solo) -- fila 1: Presupuesto y Ejecutado de los 3 grupos;
-                fila 2: % de Ejecución y Diferencia de los 3 grupos. Mismos
-                3 grupos que ya calcula el backend (Administración/
-                Operación/Consolidado, en ese orden fijo), solo se
-                muestran como 12 tarjetas de una cifra en vez de 3
-                tarjetas con gráfica embebida. */}
-            <div className="grid grid-cols-6 gap-2 pt-1">
-              <KpiMini label="Presupuesto Admin." valor={formatQ(data.fila_presupuesto.administracion)} color={COLOR_TEAL} />
-              <KpiMini label="Presupuesto Oper." valor={formatQ(data.fila_presupuesto.operacion)} color={COLOR_AZUL} />
-              <KpiMini label="Presupuesto Consol." valor={formatQ(data.fila_presupuesto.consolidado)} color={COLOR_MARINO} />
-              <KpiMini label="Ejecutado Admin." valor={formatQ(data.fila_total_ejecutado.administracion)} color={COLOR_TEAL} />
-              <KpiMini label="Ejecutado Oper." valor={formatQ(data.fila_total_ejecutado.operacion)} color={COLOR_AZUL} />
-              <KpiMini label="Ejecutado Consol." valor={formatQ(data.fila_total_ejecutado.consolidado)} color={COLOR_MARINO} />
-              <KpiMini label="% Ejec. Admin." valor={formatPercent(data.tarjetas[0].porcentaje_ejecucion)} color={COLOR_TEAL} />
-              <KpiMini label="% Ejec. Oper." valor={formatPercent(data.tarjetas[1].porcentaje_ejecucion)} color={COLOR_AZUL} />
-              <KpiMini label="% Ejec. Consol." valor={formatPercent(data.tarjetas[2].porcentaje_ejecucion)} color={COLOR_MARINO} />
-              <KpiMini label="Diferencia Admin." valor={formatQ(data.tarjetas[0].diferencia)} color={COLOR_TEAL} />
-              <KpiMini label="Diferencia Oper." valor={formatQ(data.tarjetas[1].diferencia)} color={COLOR_AZUL} />
-              <KpiMini label="Diferencia Consol." valor={formatQ(data.tarjetas[2].diferencia)} color={COLOR_MARINO} />
+            {/* 12 textos de resumen en línea, no tarjetas -- fila 1:
+                Presupuesto y Ejecutado de los 3 grupos; fila 2: % de
+                Ejecución y Diferencia de los 3 grupos. Mismos 3 grupos
+                que ya calcula el backend (Administración/Operación/
+                Consolidado, en ese orden fijo). */}
+            <div className="flex flex-wrap gap-x-4 gap-y-1 pt-1">
+              <TextoResumen label="Presupuesto Admin." valor={formatQ(data.fila_presupuesto.administracion)} />
+              <TextoResumen label="Presupuesto Oper." valor={formatQ(data.fila_presupuesto.operacion)} />
+              <TextoResumen label="Presupuesto Consol." valor={formatQ(data.fila_presupuesto.consolidado)} />
+              <TextoResumen label="Ejecutado Admin." valor={formatQ(data.fila_total_ejecutado.administracion)} />
+              <TextoResumen label="Ejecutado Oper." valor={formatQ(data.fila_total_ejecutado.operacion)} />
+              <TextoResumen label="Ejecutado Consol." valor={formatQ(data.fila_total_ejecutado.consolidado)} />
+              <TextoResumen label="% Ejec. Admin." valor={formatPercent(data.tarjetas[0].porcentaje_ejecucion)} />
+              <TextoResumen label="% Ejec. Oper." valor={formatPercent(data.tarjetas[1].porcentaje_ejecucion)} />
+              <TextoResumen label="% Ejec. Consol." valor={formatPercent(data.tarjetas[2].porcentaje_ejecucion)} />
+              <TextoResumen label="Diferencia Admin." valor={formatQ(data.tarjetas[0].diferencia)} />
+              <TextoResumen label="Diferencia Oper." valor={formatQ(data.tarjetas[1].diferencia)} />
+              <TextoResumen label="Diferencia Consol." valor={formatQ(data.tarjetas[2].diferencia)} />
             </div>
           </div>
 
