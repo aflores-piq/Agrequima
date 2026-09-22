@@ -19,37 +19,39 @@ import type {
   TipoCuotaAsociados,
 } from "../../types/dashboardOtrosInformes";
 
-// Mismos colores de identidad que Estados Financieros (teal/coral/azul,
-// ver DashboardFinancieroPage) para que "Otros informes financieros" se
-// vea consistente con el resto de Financiero -- acá se le suma un color
-// más (marino) para el tercer tipo (C) de Cuotas Asociados.
-// COLOR_TEAL es el color de identidad de la tarjeta KPI "T" (Total) --
-// confirmado correcto, NO TOCAR, aunque no coincida exacto con el verde
-// de Tipo A de abajo (son 2 elementos visuales distintos en el .pbix
-// real, cada uno con su propio hex).
-const COLOR_TEAL = "#3f6f6b";
+// COLOR_TEAL es el color del ícono KPI "T" (Total) Y de la barra
+// angosta "Cancelado" (fija, sin variar por tipo) de la gráfica de
+// barras -- #2C786C exacto, leído del Layout.json real (reemplaza el
+// valor anterior #3f6f6b, que era una aproximación por muestreo de
+// pantalla de una ronda previa).
+const COLOR_TEAL = "#2C786C";
 
 // Colores REALES por Tipo (A/B/C), leídos directo del archivo fuente
 // del reporte (Layout.json del .pbix, no una muestra de pantalla) --
-// usados en la dona "Cuotas por Tipo" y en la gráfica de barras
-// (overlay de "Cancelado" por grupo). Antes se habían aproximado por
-// muestreo de pantalla (#3f6f6b/#507eaa/#9e9e9e); estos son los hex
-// exactos del archivo fuente.
+// usados en la dona "Cuotas por Tipo" y en la barra ANCHA ("base") de
+// la gráfica "Cuota del año vs Cancelado" (con 60% de transparencia,
+// ver FILL_OPACITY_BARRA_BASE más abajo).
 const COLOR_TIPO_A = "#0C5A4A";
 const COLOR_TIPO_B = "#3182BD";
 const COLOR_TIPO_C = "#B7B7B7";
 
 const COLOR_POR_TIPO: Record<string, string> = { A: COLOR_TIPO_A, B: COLOR_TIPO_B, C: COLOR_TIPO_C };
 
-// Colores REALES de "Cancelado" y "Por cobrar" (dona "Recuperación
-// Cuota Asociados" y tarjetas KPI C/P) y de la barra BASE de "Cuota del
-// año vs Cancelado" -- también leídos del Layout.json real. La barra
-// base es un verde claro ÚNICO para los 3 grupos (NO por tipo); lo que
-// varía por tipo es el overlay angosto de "Cancelado" (COLOR_POR_TIPO,
-// arriba), no la barra ancha.
+// fillTransparency=60 en el Layout.json real de la barra ancha
+// ("Cuota del año", la de atrás) -- en Power BI "transparencia" se mide
+// al revés de opacidad (0% transparencia = opaco, 100% = invisible),
+// así que 60% de transparencia = 40% de opacidad. Sin este valor la
+// barra ancha se ve más oscura/opaca de lo que corresponde, aunque el
+// hex de base (COLOR_POR_TIPO) ya sea el correcto.
+const FILL_OPACITY_BARRA_BASE = 0.4;
+
+// Colores REALES de "Cancelado" y "Por cobrar" en la dona "Recuperación
+// Cuota Asociados" y en las tarjetas KPI C/P -- deben ser IDÉNTICOS
+// pixel a pixel entre el ícono de la tarjeta y el segmento de la dona
+// (antes había una diferencia mínima de tono con el sombreado por
+// muestreo de pantalla).
 const COLOR_TURQUESA = "#4DB6AC";
 const COLOR_GRIS_AZULADO = "#90A4AE";
-const COLOR_BARRA_BASE = "#C3E0C2";
 
 // Colores REALES de OBJETO del visual (Layout.json a nivel de visual, no
 // del tema general del reporte) para las gráficas de Presupuesto vs
@@ -92,15 +94,15 @@ const COLOR_EJECUTADO = "#A7B49E";
 // EXACTAMENTE parejas entre sí sin importar cuántas filas tenga cada
 // Tipo (A=8, B=13, C=18 en 2026) -- calcado de cómo Power BI dibuja un
 // visual de tabla: tamaño de lienzo fijo, no "en escalera" según los
-// datos. Medido con DevTools (getBoundingClientRect): con 430px las 3
-// cajas SÍ salían exactamente iguales (430px las 3), pero el contenido
-// de Tipo C (18 filas + total = 436px reales) no entraba completo y
-// quedaba con scroll interno, tapando la fila "Total C" -- por eso se
-// veía "distinta" pese a tener la misma caja. Subido de 445 a 478 para
-// dejarle espacio a la fila de título "Tipo X" (nueva, ver abajo) sin
-// que la tabla en sí (18 filas de Tipo C) vuelva a quedar apretada;
-// overflow-y-auto queda como respaldo si algún año tuviera más filas.
-const ALTO_TABLA_CUOTAS = 478;
+// datos. Subido de 478 a 560: al quitar el `truncate` de la columna
+// "Nombre" (los nombres largos ahora pasan a una 2da línea en vez de
+// cortarse con "…"), varias filas de Tipo C (nombres largos como
+// "AGROINDUSTRIAS SUCCESSO," o "CORPOGREEN, SOCIEDAD ANÓN...") ganan una
+// línea extra de alto, y el contenido total de Tipo C pasó a medir
+// ~519px reales (medido con DevTools) -- 560 le da margen para entrar
+// completo sin scroll interno. overflow-y-auto queda como respaldo si
+// algún año tuviera todavía más filas o nombres más largos.
+const ALTO_TABLA_CUOTAS = 560;
 // Alto de la fila de título "Tipo X", FUERA del área con scroll --
 // calcado del .pbix real: ahí el título va en una fila propia, sin
 // fondo de color, separada del encabezado de columnas (que sí lleva
@@ -146,24 +148,33 @@ function TablaCuotasTipo({ tipo }: { tipo: TipoCuotaAsociados }) {
             el mismo layout interno y ninguna arrastra un scroll que las
             otras no tengan. */}
         <table className="w-full table-fixed text-[11px]">
+          {/* Nombre ensanchada de 30% a 42% -- con el wrap de nombres
+              largos (ver `break-words` en el <td>, más abajo) una
+              columna angosta hacía que MUCHAS filas de Tipo C
+              necesitaran 2 líneas, disparando el alto de contenido muy
+              por encima del contenedor. Cuota/Cancelado/Saldo son
+              montos cortos ("Q12,000") que no necesitan tanto espacio,
+              así que se les resta lo que gana Nombre. */}
           <colgroup>
-            <col className="w-[30%]" />
-            <col className="w-[22%]" />
-            <col className="w-[26%]" />
-            <col className="w-[22%]" />
+            <col className="w-[42%]" />
+            <col className="w-[19%]" />
+            <col className="w-[21%]" />
+            <col className="w-[18%]" />
           </colgroup>
           <thead>
             {/* Encabezado de columnas con fondo verde sólido -- calcado
                 del .pbix real: es el MISMO verde en las 3 tablas (no un
                 color distinto por tipo, medido pixel a pixel), palabras
                 completas ("Cancelado", no "Canc."), columna "Nombre"
-                explícita con flechita de orden -- antes esta fila
-                combinaba "Tipo X" + columnas con el color por tipo
-                (COLOR_POR_TIPO), sin columna "Nombre" ni flecha. */}
+                explícita -- antes esta fila combinaba "Tipo X" +
+                columnas con el color por tipo (COLOR_POR_TIPO), sin
+                columna "Nombre". Sin flechita de orden: no hay
+                funcionalidad real de ordenar por columna todavía (se
+                agregará en otra ronda, para todas las tablas del
+                sistema a la vez) -- tenerla ahí sin función era solo un
+                ícono sin sentido. */}
             <tr style={{ backgroundColor: VERDE_ENCABEZADO }}>
-              <th className="truncate px-2 py-1 text-left font-semibold text-white">
-                Nombre <span aria-hidden="true">▲</span>
-              </th>
+              <th className="truncate px-2 py-1 text-left font-semibold text-white">Nombre</th>
               <th className="px-2 py-1 text-right font-semibold text-white">Cuota</th>
               <th className="px-2 py-1 text-right font-semibold text-white">Cancelado</th>
               <th className="px-2 py-1 text-right font-semibold text-white">Saldo</th>
@@ -172,7 +183,10 @@ function TablaCuotasTipo({ tipo }: { tipo: TipoCuotaAsociados }) {
           <tbody style={{ backgroundColor: FINANCIERO_SURFACE }}>
             {tipo.filas.map((f) => (
               <tr key={f.nombre} className="border-b border-line/50">
-                <td className="truncate px-2 py-0.5 text-ink" title={f.nombre}>
+                {/* Sin `truncate`: los nombres largos pasan a una
+                    segunda línea (word wrap normal) en vez de cortarse
+                    con "…" -- se puede leer el nombre completo. */}
+                <td className="break-words px-2 py-0.5 text-ink" title={f.nombre}>
                   {f.nombre}
                 </td>
                 <td className="whitespace-nowrap px-2 py-0.5 text-right text-ink">{formatQ(f.cuota)}</td>
@@ -208,19 +222,24 @@ const ALTO_VISUAL_CUOTAS = 340;
 // -- no hace falta tocar el backend, ya trae el desglose.
 //
 // TIPO DE VISUAL -- el .pbix real NO es un par de barras lado a lado
-// por Tipo: es UNA sola barra ancha BASE (Cuota, color único
-// #C3E0C2 para los 3 grupos -- confirmado contra Layout.json, NO por
-// tipo) con un marcador angosto (Cancelado) SUPERPUESTO encima, coloreado
-// por tipo con los mismos 3 tonos de la dona "Cuotas por Tipo"
-// (COLOR_POR_TIPO) -- como un target/reference marker de Power BI, no
-// dos series agrupadas. Recharts no tiene un modo nativo "2 series
-// superpuestas en la misma categoría" (2 <Bar> con dataKey distinto en
-// un mismo <BarChart> siempre se agrupan lado a lado) -- se logra
-// apilando 2 BarChart idénticos (mismo dominio Y, mismo margin) uno
-// encima del otro con position:absolute: el de abajo dibuja la barra
-// ancha BASE de Cuota, el de arriba (fondo transparente, ejes ocultos)
-// dibuja SOLO la barra angosta de Cancelado en la misma posición X --
-// al compartir dominio y márgenes exactos, coinciden pixel a pixel.
+// por Tipo: es UNA sola barra ancha BASE (Cuota, coloreada POR TIPO con
+// los mismos 3 tonos de la dona "Cuotas por Tipo" + 60% de
+// transparencia -- fillTransparency=60 del Layout.json, ver
+// FILL_OPACITY_BARRA_BASE) con un marcador angosto (Cancelado)
+// SUPERPUESTO encima, de color FIJO (COLOR_TEAL, #2C786C, igual en los
+// 3 grupos) -- como un target/reference marker de Power BI, no dos
+// series agrupadas. CORRECCIÓN sobre una ronda anterior: se había
+// puesto exactamente al revés (base uniforme + overlay por tipo) --
+// confirmado contra Layout.json que es la barra ANCHA la que varía por
+// tipo (con transparencia) y la angosta la de color fijo. Recharts no
+// tiene un modo nativo "2 series superpuestas en la misma categoría" (2
+// <Bar> con dataKey distinto en un mismo <BarChart> siempre se agrupan
+// lado a lado) -- se logra apilando 2 BarChart idénticos (mismo
+// dominio Y, mismo margin) uno encima del otro con position:absolute:
+// el de abajo dibuja la barra ancha BASE de Cuota, el de arriba (fondo
+// transparente, ejes ocultos) dibuja SOLO la barra angosta de Cancelado
+// en la misma posición X -- al compartir dominio y márgenes exactos,
+// coinciden pixel a pixel.
 function GraficoCuotaVsCancelado({ data }: { data: CuotasAsociadosResponse }) {
   const filas = data.tipos.map((t) => ({
     tipo: t.tipo,
@@ -264,11 +283,14 @@ function GraficoCuotaVsCancelado({ data }: { data: CuotasAsociadosResponse }) {
             tick={{ fill: "#FFFFFF" }}
           />
           <Tooltip formatter={(v: number) => formatQ(v)} contentStyle={{ background: "rgb(var(--color-bg-surface))", border: "1px solid rgb(var(--color-line))", borderRadius: 8 }} />
-          {/* Barra BASE color único (#C3E0C2, COLOR_BARRA_BASE) para
-              los 3 grupos -- NO por tipo, confirmado contra Layout.json
-              (lo que varía por tipo es el overlay angosto de abajo, no
-              esta barra). */}
-          <Bar dataKey="cuota" name="Cuota del año" fill={COLOR_BARRA_BASE} radius={[3, 3, 0, 0]} isAnimationActive={false}>
+          {/* Barra BASE coloreada POR TIPO con 40% de opacidad (60% de
+              transparencia, FILL_OPACITY_BARRA_BASE) -- confirmado
+              contra Layout.json que ESTA barra (la ancha) es la que
+              varía por tipo, no la angosta de abajo. */}
+          <Bar dataKey="cuota" name="Cuota del año" radius={[3, 3, 0, 0]} isAnimationActive={false}>
+            {filas.map((f) => (
+              <Cell key={f.tipo} fill={f.color} fillOpacity={FILL_OPACITY_BARRA_BASE} />
+            ))}
             <LabelList dataKey="cuota" position="top" formatter={(v: number) => formatQ(v)} fontSize={10} fontWeight={700} fill="rgb(var(--color-ink))" />
           </Bar>
         </BarChart>
@@ -282,14 +304,11 @@ function GraficoCuotaVsCancelado({ data }: { data: CuotasAsociadosResponse }) {
                 reservado difiere entre los 2 charts superpuestos,
                 dejan de compartir la misma escala/posición X. */}
             <YAxis type="number" domain={[0, maxValor]} width={65} tick={false} axisLine={false} tickLine={false} />
-            {/* Overlay coloreado POR TIPO (COLOR_POR_TIPO, los mismos 3
-                tonos de la dona "Cuotas por Tipo") -- antes era
-                turquesa uniforme; confirmado contra Layout.json que lo
-                que varía por tipo es este overlay, no la barra base. */}
-            <Bar dataKey="cancelado" name="Cancelado" barSize={8} isAnimationActive={false}>
-              {filas.map((f) => (
-                <Cell key={f.tipo} fill={f.color} />
-              ))}
+            {/* Overlay de color FIJO (COLOR_TEAL, #2C786C) igual en los
+                3 grupos -- confirmado contra Layout.json que lo que
+                varía por tipo es la barra ANCHA de abajo, no este
+                overlay angosto. */}
+            <Bar dataKey="cancelado" name="Cancelado" fill={COLOR_TEAL} barSize={8} isAnimationActive={false}>
               <LabelList dataKey="cancelado" position="top" formatter={(v: number) => formatQ(v)} fontSize={9} fontWeight={700} fill="rgb(var(--color-ink))" />
             </Bar>
           </BarChart>
@@ -358,6 +377,10 @@ function DonutCuotasPorTipo({ data }: { data: CuotasAsociadosResponse }) {
   return (
     <ResponsiveContainer width="100%" height={ALTO_VISUAL_CUOTAS}>
       <PieChart>
+        {/* stroke="none" en el <Pie> -- Recharts pone stroke="#fff" por
+            default (ver defaultProps de Pie.js), y eso es exactamente
+            el borde blanco grueso alrededor de cada porción que no
+            existe en el .pbix real. */}
         <Pie
           data={filas}
           dataKey="valor"
@@ -365,6 +388,7 @@ function DonutCuotasPorTipo({ data }: { data: CuotasAsociadosResponse }) {
           innerRadius="42%"
           outerRadius="65%"
           paddingAngle={2}
+          stroke="none"
           label={renderPorcentajeDona}
           labelLine={false}
           isAnimationActive={false}
@@ -399,6 +423,7 @@ function DonutRecuperacion({ data }: { data: CuotasAsociadosResponse }) {
           innerRadius="42%"
           outerRadius="65%"
           paddingAngle={2}
+          stroke="none"
           label={renderPorcentajeDona}
           labelLine={false}
           isAnimationActive={false}
