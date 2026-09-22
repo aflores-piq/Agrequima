@@ -23,23 +23,33 @@ import type {
 // ver DashboardFinancieroPage) para que "Otros informes financieros" se
 // vea consistente con el resto de Financiero -- acá se le suma un color
 // más (marino) para el tercer tipo (C) de Cuotas Asociados.
+// COLOR_TEAL es el color de identidad de la tarjeta KPI "T" (Total) --
+// confirmado correcto, NO TOCAR, aunque no coincida exacto con el verde
+// de Tipo A de abajo (son 2 elementos visuales distintos en el .pbix
+// real, cada uno con su propio hex).
 const COLOR_TEAL = "#3f6f6b";
-const COLOR_AZUL = "#507eaa";
-// Gris de Tipo C -- reemplaza al antiguo COLOR_MARINO (azul marino): la
-// captura real del .pbix (muestreada pixel a pixel) muestra Tipo C en
-// GRIS tanto en la dona "Cuotas por Tipo" como en la gráfica de barras,
-// no en azul marino.
-const COLOR_GRIS = "#9e9e9e";
 
-const COLOR_POR_TIPO: Record<string, string> = { A: COLOR_TEAL, B: COLOR_AZUL, C: COLOR_GRIS };
+// Colores REALES por Tipo (A/B/C), leídos directo del archivo fuente
+// del reporte (Layout.json del .pbix, no una muestra de pantalla) --
+// usados en la dona "Cuotas por Tipo" y en la gráfica de barras
+// (overlay de "Cancelado" por grupo). Antes se habían aproximado por
+// muestreo de pantalla (#3f6f6b/#507eaa/#9e9e9e); estos son los hex
+// exactos del archivo fuente.
+const COLOR_TIPO_A = "#0C5A4A";
+const COLOR_TIPO_B = "#3182BD";
+const COLOR_TIPO_C = "#B7B7B7";
 
-// Colores REALES de "Cancelado" y "Por cobrar" -- muestreados pixel a
-// pixel de la captura real del .pbix (tarjetas T/C/P y dona
-// "Recuperación Cuota Asociados"): Cancelado = turquesa (#4DB6AC, NO el
-// azul #507eaa que tenía la tarjeta C antes), Por cobrar = gris azulado
-// claro (#90A4AE, NO el rojo/salmón que tenía la tarjeta P antes)."
+const COLOR_POR_TIPO: Record<string, string> = { A: COLOR_TIPO_A, B: COLOR_TIPO_B, C: COLOR_TIPO_C };
+
+// Colores REALES de "Cancelado" y "Por cobrar" (dona "Recuperación
+// Cuota Asociados" y tarjetas KPI C/P) y de la barra BASE de "Cuota del
+// año vs Cancelado" -- también leídos del Layout.json real. La barra
+// base es un verde claro ÚNICO para los 3 grupos (NO por tipo); lo que
+// varía por tipo es el overlay angosto de "Cancelado" (COLOR_POR_TIPO,
+// arriba), no la barra ancha.
 const COLOR_TURQUESA = "#4DB6AC";
 const COLOR_GRIS_AZULADO = "#90A4AE";
+const COLOR_BARRA_BASE = "#C3E0C2";
 
 // Colores REALES de OBJETO del visual (Layout.json a nivel de visual, no
 // del tema general del reporte) para las gráficas de Presupuesto vs
@@ -51,11 +61,16 @@ const COLOR_GRIS_AZULADO = "#90A4AE";
 const COLOR_PRESUPUESTO = "#5C7285";
 const COLOR_EJECUTADO = "#A7B49E";
 
-/** Etiqueta de valor en miles, sin decimales (ej. "160K") -- calcado de
- * la unidad de miles del .pbix para las etiquetas sobre cada barra. */
-function formatMiles(v: number): string {
-  return `${Math.round(v / 1000).toLocaleString("es-GT")}K`;
-}
+// SIN abreviación K/M en ningún eje/etiqueta/tooltip de Financiero --
+// regla PERMANENTE para todo el módulo, confirmada contra el archivo
+// fuente real del reporte (Layout.json): la config real del eje tiene
+// labelDisplayUnits=None y labelPrecision=0, o sea números COMPLETOS
+// con formato de miles y prefijo Q, igual que las tarjetas KPI y las
+// tablas -- se usa `formatQ` (utils/format.ts) en todos lados, nunca un
+// formateador propio en K/M. Existía un `formatMiles` local (ej.
+// "280K") usado en 2 lugares de este archivo (eje Y de esta gráfica y
+// las etiquetas de GraficoColumnasGrupo en Centro de Costo, más abajo)
+// -- se eliminó por completo y se reemplazaron esos 2 usos por formatQ.
 
 // Layout COMPACTO calcado de las proporciones reales del .pbix (lienzo
 // 1920x1500, todo el contenido cabe sin scroll) -- ver instrucción del
@@ -192,18 +207,20 @@ const ALTO_VISUAL_CUOTAS = 340;
 // campo que ya usan las 3 tablas de arriba, total_cuota/total_cancelado)
 // -- no hace falta tocar el backend, ya trae el desglose.
 //
-// TIPO DE VISUAL corregido -- el .pbix real NO es un par de barras lado
-// a lado por Tipo: es UNA sola barra ancha (Cuota, coloreada por Tipo)
-// con un marcador angosto (Cancelado, turquesa) SUPERPUESTO encima,
-// como un target/reference marker de Power BI, no dos series agrupadas.
-// Recharts no tiene un modo nativo "2 series superpuestas en la misma
-// categoría" (2 <Bar> con dataKey distinto en un mismo <BarChart>
-// siempre se agrupan lado a lado) -- se logra apilando 2 BarChart
-// idénticos (mismo dominio Y, mismo margin) uno encima del otro con
-// position:absolute: el de abajo dibuja la barra ancha de Cuota, el de
-// arriba (fondo transparente, ejes ocultos) dibuja SOLO la barra angosta
-// de Cancelado en la misma posición X -- al compartir dominio y
-// márgenes exactos, coinciden pixel a pixel.
+// TIPO DE VISUAL -- el .pbix real NO es un par de barras lado a lado
+// por Tipo: es UNA sola barra ancha BASE (Cuota, color único
+// #C3E0C2 para los 3 grupos -- confirmado contra Layout.json, NO por
+// tipo) con un marcador angosto (Cancelado) SUPERPUESTO encima, coloreado
+// por tipo con los mismos 3 tonos de la dona "Cuotas por Tipo"
+// (COLOR_POR_TIPO) -- como un target/reference marker de Power BI, no
+// dos series agrupadas. Recharts no tiene un modo nativo "2 series
+// superpuestas en la misma categoría" (2 <Bar> con dataKey distinto en
+// un mismo <BarChart> siempre se agrupan lado a lado) -- se logra
+// apilando 2 BarChart idénticos (mismo dominio Y, mismo margin) uno
+// encima del otro con position:absolute: el de abajo dibuja la barra
+// ancha BASE de Cuota, el de arriba (fondo transparente, ejes ocultos)
+// dibuja SOLO la barra angosta de Cancelado en la misma posición X --
+// al compartir dominio y márgenes exactos, coinciden pixel a pixel.
 function GraficoCuotaVsCancelado({ data }: { data: CuotasAsociadosResponse }) {
   const filas = data.tipos.map((t) => ({
     tipo: t.tipo,
@@ -240,17 +257,18 @@ function GraficoCuotaVsCancelado({ data }: { data: CuotasAsociadosResponse }) {
           <YAxis
             type="number"
             domain={[0, maxValor]}
-            tickFormatter={(v: number) => formatMiles(v)}
+            tickFormatter={(v: number) => formatQ(v)}
             fontSize={10}
-            width={40}
+            width={65}
             stroke="#FFFFFF"
             tick={{ fill: "#FFFFFF" }}
           />
           <Tooltip formatter={(v: number) => formatQ(v)} contentStyle={{ background: "rgb(var(--color-bg-surface))", border: "1px solid rgb(var(--color-line))", borderRadius: 8 }} />
-          <Bar dataKey="cuota" name="Cuota del año" radius={[3, 3, 0, 0]} isAnimationActive={false}>
-            {filas.map((f) => (
-              <Cell key={f.tipo} fill={f.color} />
-            ))}
+          {/* Barra BASE color único (#C3E0C2, COLOR_BARRA_BASE) para
+              los 3 grupos -- NO por tipo, confirmado contra Layout.json
+              (lo que varía por tipo es el overlay angosto de abajo, no
+              esta barra). */}
+          <Bar dataKey="cuota" name="Cuota del año" fill={COLOR_BARRA_BASE} radius={[3, 3, 0, 0]} isAnimationActive={false}>
             <LabelList dataKey="cuota" position="top" formatter={(v: number) => formatQ(v)} fontSize={10} fontWeight={700} fill="rgb(var(--color-ink))" />
           </Bar>
         </BarChart>
@@ -259,8 +277,19 @@ function GraficoCuotaVsCancelado({ data }: { data: CuotasAsociadosResponse }) {
         <ResponsiveContainer width="100%" height={ALTO_VISUAL_CUOTAS}>
           <BarChart data={filas} margin={margin}>
             <XAxis dataKey="tipo" height={ALTO_EJE_X} tick={false} axisLine={false} tickLine={false} />
-            <YAxis type="number" domain={[0, maxValor]} width={40} tick={false} axisLine={false} tickLine={false} />
-            <Bar dataKey="cancelado" name="Cancelado" fill={COLOR_TURQUESA} barSize={8} isAnimationActive={false}>
+            {/* width=65 IGUAL al YAxis visible de arriba -- ver el
+                comentario del bug de baseline más arriba: si el ancho
+                reservado difiere entre los 2 charts superpuestos,
+                dejan de compartir la misma escala/posición X. */}
+            <YAxis type="number" domain={[0, maxValor]} width={65} tick={false} axisLine={false} tickLine={false} />
+            {/* Overlay coloreado POR TIPO (COLOR_POR_TIPO, los mismos 3
+                tonos de la dona "Cuotas por Tipo") -- antes era
+                turquesa uniforme; confirmado contra Layout.json que lo
+                que varía por tipo es este overlay, no la barra base. */}
+            <Bar dataKey="cancelado" name="Cancelado" barSize={8} isAnimationActive={false}>
+              {filas.map((f) => (
+                <Cell key={f.tipo} fill={f.color} />
+              ))}
               <LabelList dataKey="cancelado" position="top" formatter={(v: number) => formatQ(v)} fontSize={9} fontWeight={700} fill="rgb(var(--color-ink))" />
             </Bar>
           </BarChart>
@@ -506,21 +535,21 @@ function PaginaCuotasAsociados() {
         // 55% de una tabla sola porque son 3 tablas de 4 columnas cada
         // una lado a lado, pero con el mismo espíritu de margen visible.
         <div className="mx-auto" style={{ width: "72%" }}>
-          {/* max-width en el wrapper de cada tarjeta -- KpiCardIcono es
-              flex-1 (ancho variable) por diseño para la fila angosta de
-              55% donde vive en Estados Financieros; acá, aunque el
-              contenedor de la página ya se angostó a 72%, sigue siendo
-              más ancho que esa fila original, y sin este tope cada
-              tarjeta se estira más de lo que su aspect-[4/1] compensa,
-              dejando un hueco vacío entre el ícono y el valor. */}
-          <div className="flex flex-wrap justify-center gap-2">
-            <div className="flex-1" style={{ maxWidth: 320 }}>
+          {/* Fila de KPI a 80.6% de ESTE contenedor (que a su vez ya es
+              72% del área de contenido de la página) = 72% × 80.6% ≈
+              58% del área de contenido total -- medido con
+              getBoundingClientRect contra el ~58% real del .pbix
+              (antes cada tarjeta tenía maxWidth:320 sin tope de fila,
+              y las 3 juntas terminaban ocupando ~70% del área de
+              contenido, notablemente más ancho que el original). */}
+          <div className="mx-auto flex justify-center gap-2" style={{ width: "80.6%" }}>
+            <div className="flex-1">
               <KpiCardIcono letra="T" color={COLOR_TEAL} label="Total" valor={formatQ(data.kpis.total)} />
             </div>
-            <div className="flex-1" style={{ maxWidth: 320 }}>
+            <div className="flex-1">
               <KpiCardIcono letra="C" color={COLOR_TURQUESA} label="Cancelado" valor={formatQ(data.kpis.cancelado)} />
             </div>
-            <div className="flex-1" style={{ maxWidth: 320 }}>
+            <div className="flex-1">
               <KpiCardIcono letra="P" color={COLOR_GRIS_AZULADO} label="Por cobrar" valor={formatQ(data.kpis.por_cobrar)} />
             </div>
           </div>
@@ -590,7 +619,7 @@ function PaginaCuotasAsociados() {
               colorSeleccionHex={COLOR_TEAL}
               tituloChico
               estiloTarjeta={{ backgroundColor: FINANCIERO_SURFACE }}
-              title="Recuperación Cuota Asociados"
+              title={`Recuperación Cuota Asociados Año ${data.anio}`}
               chart={<DonutRecuperacion data={data} />}
               table={
                 <table className="w-full text-xs">
@@ -728,7 +757,7 @@ function GraficoColumnasGrupo({ presupuesto, ejecutado }: { presupuesto: number;
           {filas.map((f) => (
             <Cell key={f.etiqueta} fill={f.color} />
           ))}
-          <LabelList dataKey="valor" position="top" formatter={(v: number) => formatMiles(v)} fontSize={14} fill="rgb(var(--color-ink))" />
+          <LabelList dataKey="valor" position="top" formatter={(v: number) => formatQ(v)} fontSize={12} fill="rgb(var(--color-ink))" />
         </Bar>
       </BarChart>
     </ResponsiveContainer>
