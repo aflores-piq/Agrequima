@@ -26,6 +26,7 @@ export function ChartCard({
   estiloTarjeta,
   controlesExtra,
   colorSeleccionHex,
+  tituloChico,
 }: {
   theme: DashboardTheme;
   title: string;
@@ -51,6 +52,13 @@ export function ChartCard({
    * Tipo) y se ve como un acento azul de más. No pasar este prop no
    * cambia nada: sigue usando COLOR_SELECCION[theme] como siempre. */
   colorSeleccionHex?: string;
+  /** El <Title> de Tremor por defecto es grande (pensado para tarjetas
+   * completas) -- en tarjetas compactas (ej. los 3 gráficos de Cuotas
+   * Asociados, de solo 190px de alto) se ve exageradamente grande en
+   * proporción al resto del contenido, calcado del .pbix real que usa
+   * un título chico y discreto. No pasar este prop no cambia nada:
+   * sigue usando el <Title> de Tremor como siempre. */
+  tituloChico?: boolean;
 }) {
   const [vista, setVista] = useState<"grafico" | "tabla">("grafico");
   const colorSeleccion = COLOR_SELECCION[theme];
@@ -59,7 +67,11 @@ export function ChartCard({
     <Card className="flex h-full flex-col bg-surface ring-1 ring-line" style={estiloTarjeta}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <Title className="text-ink">{title}</Title>
+          {tituloChico ? (
+            <p className="text-sm font-semibold text-ink">{title}</p>
+          ) : (
+            <Title className="text-ink">{title}</Title>
+          )}
           {subtitle && <Text className="text-ink-muted">{subtitle}</Text>}
         </div>
         <div className="flex items-center gap-2">
