@@ -15,7 +15,6 @@ import type {
   CuotasAsociadosResponse,
   EjecucionGastosResponse,
   FilaGastoCategoria,
-  TarjetaResumenGasto,
   TipoCuotaAsociados,
 } from "../../types/dashboardOtrosInformes";
 
@@ -55,40 +54,57 @@ function KpiChico({ letra, color, label, valor }: { letra: string; color: string
 
 // --- Cuotas Asociados ------------------------------------------------------
 
+// Alto FIJO (no derivado del contenido) para que las 3 tablas queden
+// EXACTAMENTE parejas entre sí sin importar cuántas filas tenga cada
+// Tipo (A=8, B=13, C=18 en 2026) -- calcado de cómo Power BI dibuja un
+// visual de tabla: tamaño de lienzo fijo, no "en escalera" según los
+// datos. Con text-[11px]/py-0.5, 340px alcanza para las 18 filas de
+// Tipo C sin scroll; overflow-y-auto queda como respaldo si algún año
+// tuviera más filas todavía, no como mecanismo principal de layout.
+const ALTO_TABLA_CUOTAS = 430;
+
 function TablaCuotasTipo({ tipo }: { tipo: TipoCuotaAsociados }) {
   return (
-    <div className="flex h-full flex-col overflow-hidden rounded-tremor-default ring-1 ring-line">
-      <table className="w-full text-[11px]">
-        <thead>
-          <tr style={{ backgroundColor: COLOR_POR_TIPO[tipo.tipo] }}>
-            <th className="truncate px-2 py-1 text-left font-semibold text-white">{`Tipo ${tipo.tipo}`}</th>
-            <th className="px-2 py-1 text-right font-semibold text-white">Cuota</th>
-            <th className="px-2 py-1 text-right font-semibold text-white">Canc.</th>
-            <th className="px-2 py-1 text-right font-semibold text-white">Saldo</th>
-          </tr>
-        </thead>
-        <tbody style={{ backgroundColor: FINANCIERO_SURFACE }}>
-          {tipo.filas.map((f) => (
-            <tr key={f.nombre} className="border-b border-line/50">
-              <td className="truncate px-2 py-0.5 text-ink" title={f.nombre}>
-                {f.nombre}
-              </td>
-              <td className="whitespace-nowrap px-2 py-0.5 text-right text-ink">{formatQ(f.cuota)}</td>
-              <td className="whitespace-nowrap px-2 py-0.5 text-right text-ink">{formatQ(f.cancelado)}</td>
-              <td className="whitespace-nowrap px-2 py-0.5 text-right text-ink">{formatQ(f.saldo)}</td>
+    <div className="flex flex-col overflow-hidden rounded-tremor-default ring-1 ring-line" style={{ height: ALTO_TABLA_CUOTAS }}>
+      <div className="flex-1 overflow-y-auto">
+        <table className="w-full text-[11px]">
+          <thead>
+            <tr style={{ backgroundColor: COLOR_POR_TIPO[tipo.tipo] }}>
+              <th className="truncate px-2 py-1 text-left font-semibold text-white">{`Tipo ${tipo.tipo}`}</th>
+              <th className="px-2 py-1 text-right font-semibold text-white">Cuota</th>
+              <th className="px-2 py-1 text-right font-semibold text-white">Canc.</th>
+              <th className="px-2 py-1 text-right font-semibold text-white">Saldo</th>
             </tr>
-          ))}
-          <tr className="font-semibold text-ink">
-            <td className="px-2 py-1">Total {tipo.tipo}</td>
-            <td className="whitespace-nowrap px-2 py-1 text-right">{formatQ(tipo.total_cuota)}</td>
-            <td className="whitespace-nowrap px-2 py-1 text-right">{formatQ(tipo.total_cancelado)}</td>
-            <td className="whitespace-nowrap px-2 py-1 text-right">{formatQ(tipo.total_saldo)}</td>
-          </tr>
-        </tbody>
-      </table>
+          </thead>
+          <tbody style={{ backgroundColor: FINANCIERO_SURFACE }}>
+            {tipo.filas.map((f) => (
+              <tr key={f.nombre} className="border-b border-line/50">
+                <td className="truncate px-2 py-0.5 text-ink" title={f.nombre}>
+                  {f.nombre}
+                </td>
+                <td className="whitespace-nowrap px-2 py-0.5 text-right text-ink">{formatQ(f.cuota)}</td>
+                <td className="whitespace-nowrap px-2 py-0.5 text-right text-ink">{formatQ(f.cancelado)}</td>
+                <td className="whitespace-nowrap px-2 py-0.5 text-right text-ink">{formatQ(f.saldo)}</td>
+              </tr>
+            ))}
+            <tr className="font-semibold text-ink">
+              <td className="px-2 py-1">Total {tipo.tipo}</td>
+              <td className="whitespace-nowrap px-2 py-1 text-right">{formatQ(tipo.total_cuota)}</td>
+              <td className="whitespace-nowrap px-2 py-1 text-right">{formatQ(tipo.total_cancelado)}</td>
+              <td className="whitespace-nowrap px-2 py-1 text-right">{formatQ(tipo.total_saldo)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
+
+// Alto compartido por los 3 visuales de abajo (columnas + 2 donas) --
+// mismo valor en los 3 para que queden exactamente del mismo tamaño
+// entre sí (ver instrucción del cliente), calcado del .pbix (w≈510
+// h≈415 los 3 iguales entre sí).
+const ALTO_VISUAL_CUOTAS = 190;
 
 function GraficoCuotaVsCancelado({ data }: { data: CuotasAsociadosResponse }) {
   const filas = [
@@ -96,12 +112,16 @@ function GraficoCuotaVsCancelado({ data }: { data: CuotasAsociadosResponse }) {
     { etiqueta: "Cancelado", valor: data.kpis.cancelado },
   ];
   return (
-    <ResponsiveContainer width="100%" height={160}>
-      <BarChart data={filas} layout="vertical" margin={{ top: 4, right: 24, bottom: 4, left: 8 }}>
-        <XAxis type="number" tickFormatter={(v: number) => formatQ(v)} fontSize={10} stroke="rgb(var(--color-ink-faint))" />
-        <YAxis type="category" dataKey="etiqueta" width={90} fontSize={10} tickLine={false} />
+    // SIN layout="vertical": layout="vertical" en Recharts pone el eje de
+    // categoría en Y y las barras ACOSTADAS (horizontal) -- eso era el
+    // bug. El default (sin el prop) es columnas PARADAS (verticales),
+    // que es lo que pide el .pbix real.
+    <ResponsiveContainer width="100%" height={ALTO_VISUAL_CUOTAS}>
+      <BarChart data={filas} margin={{ top: 8, right: 8, bottom: 4, left: 8 }}>
+        <XAxis dataKey="etiqueta" fontSize={10} tickLine={false} />
+        <YAxis type="number" tickFormatter={(v: number) => formatQ(v)} fontSize={10} width={55} stroke="rgb(var(--color-ink-faint))" />
         <Tooltip formatter={(v: number) => formatQ(v)} contentStyle={{ background: "rgb(var(--color-bg-surface))", border: "1px solid rgb(var(--color-line))", borderRadius: 8 }} />
-        <Bar dataKey="valor" radius={[0, 4, 4, 0]}>
+        <Bar dataKey="valor" radius={[4, 4, 0, 0]}>
           <Cell fill={COLOR_TEAL} />
           <Cell fill={COLOR_AZUL} />
         </Bar>
@@ -113,7 +133,7 @@ function GraficoCuotaVsCancelado({ data }: { data: CuotasAsociadosResponse }) {
 function DonutCuotasPorTipo({ data }: { data: CuotasAsociadosResponse }) {
   const filas = data.tipos.map((t) => ({ nombre: `Tipo ${t.tipo}`, valor: t.total_cuota, color: COLOR_POR_TIPO[t.tipo] }));
   return (
-    <ResponsiveContainer width="100%" height={160}>
+    <ResponsiveContainer width="100%" height={ALTO_VISUAL_CUOTAS}>
       <PieChart>
         <Pie data={filas} dataKey="valor" nameKey="nombre" innerRadius="50%" outerRadius="80%" paddingAngle={2}>
           {filas.map((f) => (
@@ -133,7 +153,7 @@ function DonutRecuperacion({ data }: { data: CuotasAsociadosResponse }) {
     { nombre: "Por cobrar", valor: data.kpis.por_cobrar, color: COLOR_CORAL },
   ];
   return (
-    <ResponsiveContainer width="100%" height={160}>
+    <ResponsiveContainer width="100%" height={ALTO_VISUAL_CUOTAS}>
       <PieChart>
         <Pie data={filas} dataKey="valor" nameKey="nombre" innerRadius="50%" outerRadius="80%" paddingAngle={2}>
           {filas.map((f) => (
@@ -367,49 +387,46 @@ function TablaEjecucionGastos({ data }: { data: EjecucionGastosResponse }) {
   );
 }
 
-function BandaResumen({ fila, color }: { fila: FilaGastoCategoria; color: string }) {
+// Tarjeta KPI de una sola cifra (12 de estas, en 2 filas de 6) -- calcado
+// del .pbix real: debajo de la tabla dinámica van 12 tarjetas KPI en 2
+// filas, no las 3 tarjetas-con-gráfica-embebida que había antes. Franja
+// de color arriba en vez de cuadrito con letra (KpiChico/KpiCardIcono):
+// acá el nombre completo del grupo (Administración/Operación/
+// Consolidado) ya va en el label, no hace falta una letra aparte.
+function KpiMini({ label, valor, color }: { label: string; valor: string; color: string }) {
   return (
-    <table className="w-full table-fixed overflow-hidden rounded-tremor-default text-[11px] text-white" style={{ backgroundColor: color }}>
-      <tbody>
-        <tr>
-          <td className="px-2 py-1 font-semibold">{fila.categoria}</td>
-          <td className="whitespace-nowrap px-2 py-1 text-right font-semibold">{formatQ(fila.administracion)}</td>
-          <td className="whitespace-nowrap px-2 py-1 text-right font-semibold">{formatPercent(fila.peso_administracion)}</td>
-          <td className="whitespace-nowrap px-2 py-1 text-right font-semibold">{formatQ(fila.operacion)}</td>
-          <td className="whitespace-nowrap px-2 py-1 text-right font-semibold">{formatPercent(fila.peso_operacion)}</td>
-          <td className="whitespace-nowrap px-2 py-1 text-right font-semibold">{formatQ(fila.consolidado)}</td>
-        </tr>
-      </tbody>
-    </table>
+    <div className="overflow-hidden rounded-tremor-default ring-1 ring-line" style={{ backgroundColor: FINANCIERO_SURFACE }}>
+      <div className="h-1" style={{ backgroundColor: color }} aria-hidden="true" />
+      <div className="px-2 py-1.5 text-center">
+        <div className="truncate text-[9px] font-semibold text-ink-muted" title={label}>
+          {label}
+        </div>
+        <div className="text-sm font-bold text-ink">{valor}</div>
+      </div>
+    </div>
   );
 }
 
-function TarjetaGasto({ tarjeta }: { tarjeta: TarjetaResumenGasto }) {
+// Gráfica de columnas verticales Presupuesto vs Ejecutado de un grupo --
+// las 3 (Administración/Operación/Consolidado) comparten el mismo alto
+// fijo para quedar exactamente del mismo tamaño entre sí (calcado del
+// .pbix: 3 gráficas w=480 iguales entre sí).
+const ALTO_GRAFICA_GRUPO = 210;
+
+function GraficoColumnasGrupo({ presupuesto, ejecutado, color }: { presupuesto: number; ejecutado: number; color: string }) {
   const filas = [
-    { etiqueta: "Presupuesto", valor: tarjeta.presupuesto },
-    { etiqueta: "Ejecutado", valor: tarjeta.ejecutado },
+    { etiqueta: "Presupuesto", valor: presupuesto },
+    { etiqueta: "Ejecutado", valor: ejecutado },
   ];
   return (
-    <div className="overflow-hidden rounded-tremor-default ring-1 ring-line" style={{ backgroundColor: FINANCIERO_SURFACE }}>
-      <div className="flex items-center justify-between px-3 py-1.5">
-        <span className="text-xs font-semibold text-ink">{tarjeta.grupo}</span>
-        <span className="text-sm font-bold text-ink">{formatPercent(tarjeta.porcentaje_ejecucion)}</span>
-      </div>
-      <div className="px-3 text-[11px]" style={{ color: tarjeta.diferencia < 0 ? COLOR_CORAL : COLOR_TEAL }}>
-        Diferencia: {formatQ(tarjeta.diferencia)}
-      </div>
-      <ResponsiveContainer width="100%" height={110}>
-        <BarChart data={filas} margin={{ top: 4, right: 12, bottom: 0, left: 0 }}>
-          <XAxis dataKey="etiqueta" fontSize={9} tickLine={false} />
-          <YAxis type="number" tickFormatter={(v: number) => formatQ(v)} fontSize={9} width={55} stroke="rgb(var(--color-ink-faint))" />
-          <Tooltip formatter={(v: number) => formatQ(v)} contentStyle={{ background: "rgb(var(--color-bg-surface))", border: "1px solid rgb(var(--color-line))", borderRadius: 8 }} />
-          <Bar dataKey="valor" radius={[4, 4, 0, 0]}>
-            <Cell fill={COLOR_TEAL} />
-            <Cell fill={COLOR_AZUL} />
-          </Bar>
-        </BarChart>
-      </ResponsiveContainer>
-    </div>
+    <ResponsiveContainer width="100%" height={ALTO_GRAFICA_GRUPO}>
+      <BarChart data={filas} margin={{ top: 8, right: 12, bottom: 4, left: 8 }}>
+        <XAxis dataKey="etiqueta" fontSize={10} tickLine={false} />
+        <YAxis type="number" tickFormatter={(v: number) => formatQ(v)} fontSize={10} width={60} stroke="rgb(var(--color-ink-faint))" />
+        <Tooltip formatter={(v: number) => formatQ(v)} contentStyle={{ background: "rgb(var(--color-bg-surface))", border: "1px solid rgb(var(--color-line))", borderRadius: 8 }} />
+        <Bar dataKey="valor" radius={[4, 4, 0, 0]} fill={color} />
+      </BarChart>
+    </ResponsiveContainer>
   );
 }
 
@@ -503,19 +520,52 @@ function PaginaEjecucionGastos({ acumulado }: { acumulado: boolean }) {
       {cargando && !data && <p className="text-sm text-ink-muted">Cargando…</p>}
 
       {data && (
-        // Tabla principal centrada al 58% de ancho -- bloque compacto,
-        // NO estirada a todo el ancho de la página (calcado del .pbix).
-        <div className="mx-auto space-y-2" style={{ width: "58%" }}>
-          <TablaEjecucionGastos data={data} />
-          <BandaResumen fila={data.fila_presupuesto} color={COLOR_AZUL} />
-          <BandaResumen fila={data.fila_ejecucion} color={COLOR_MARINO} />
+        <>
+          {/* Tabla dinámica principal + las 12 tarjetas KPI, centradas al
+              58% de ancho (bloque compacto arriba, NO estirado a todo el
+              ancho -- calcado del .pbix: w≈1115 de un lienzo de 1920). */}
+          <div className="mx-auto space-y-2" style={{ width: "58%" }}>
+            <TablaEjecucionGastos data={data} />
 
-          <div className="grid grid-cols-3 gap-2 pt-1">
+            {/* 12 tarjetas KPI en 2 filas de 6 (grid-cols-6 se envuelve
+                solo) -- fila 1: Presupuesto y Ejecutado de los 3 grupos;
+                fila 2: % de Ejecución y Diferencia de los 3 grupos. Mismos
+                3 grupos que ya calcula el backend (Administración/
+                Operación/Consolidado, en ese orden fijo), solo se
+                muestran como 12 tarjetas de una cifra en vez de 3
+                tarjetas con gráfica embebida. */}
+            <div className="grid grid-cols-6 gap-2 pt-1">
+              <KpiMini label="Presupuesto Admin." valor={formatQ(data.fila_presupuesto.administracion)} color={COLOR_TEAL} />
+              <KpiMini label="Presupuesto Oper." valor={formatQ(data.fila_presupuesto.operacion)} color={COLOR_AZUL} />
+              <KpiMini label="Presupuesto Consol." valor={formatQ(data.fila_presupuesto.consolidado)} color={COLOR_MARINO} />
+              <KpiMini label="Ejecutado Admin." valor={formatQ(data.fila_total_ejecutado.administracion)} color={COLOR_TEAL} />
+              <KpiMini label="Ejecutado Oper." valor={formatQ(data.fila_total_ejecutado.operacion)} color={COLOR_AZUL} />
+              <KpiMini label="Ejecutado Consol." valor={formatQ(data.fila_total_ejecutado.consolidado)} color={COLOR_MARINO} />
+              <KpiMini label="% Ejec. Admin." valor={formatPercent(data.tarjetas[0].porcentaje_ejecucion)} color={COLOR_TEAL} />
+              <KpiMini label="% Ejec. Oper." valor={formatPercent(data.tarjetas[1].porcentaje_ejecucion)} color={COLOR_AZUL} />
+              <KpiMini label="% Ejec. Consol." valor={formatPercent(data.tarjetas[2].porcentaje_ejecucion)} color={COLOR_MARINO} />
+              <KpiMini label="Diferencia Admin." valor={formatQ(data.tarjetas[0].diferencia)} color={COLOR_TEAL} />
+              <KpiMini label="Diferencia Oper." valor={formatQ(data.tarjetas[1].diferencia)} color={COLOR_AZUL} />
+              <KpiMini label="Diferencia Consol." valor={formatQ(data.tarjetas[2].diferencia)} color={COLOR_MARINO} />
+            </div>
+          </div>
+
+          {/* Las 3 gráficas de columnas (Administración/Operación/
+              Consolidado) van más anchas que la tabla, a propósito --
+              calcado del .pbix (w=480 cada una, las 3 iguales entre sí). */}
+          <div className="mx-auto grid grid-cols-3 gap-3 pt-2" style={{ width: "90%" }}>
             {data.tarjetas.map((t) => (
-              <TarjetaGasto key={t.grupo} tarjeta={t} />
+              <div key={t.grupo} className="overflow-hidden rounded-tremor-default ring-1 ring-line" style={{ backgroundColor: FINANCIERO_SURFACE }}>
+                <div className="px-2 py-1 text-center text-xs font-semibold text-ink">{t.grupo}</div>
+                <GraficoColumnasGrupo
+                  presupuesto={t.presupuesto}
+                  ejecutado={t.ejecutado}
+                  color={t.grupo === "Administración" ? COLOR_TEAL : t.grupo === "Operación" ? COLOR_AZUL : COLOR_MARINO}
+                />
+              </div>
             ))}
           </div>
-        </div>
+        </>
       )}
     </div>
   );
