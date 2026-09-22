@@ -28,3 +28,39 @@ export interface CuotasAsociadosResponse {
   kpis: KpisCuotasAsociados;
   tipos: TipoCuotaAsociados[];
 }
+
+export interface PeriodoDisponibleGastos {
+  anio: number;
+  mes: number;
+}
+
+export interface FilaCentroCosto {
+  centro: string;
+  nombre: string;
+  peso_porcentaje: number;
+  presupuesto: number;
+  ejecutado: number;
+  diferencia: number;
+}
+
+export interface GrupoCentrosCosto {
+  grupo: string;
+  filas: FilaCentroCosto[];
+  total_presupuesto: number;
+  total_ejecutado: number;
+  total_diferencia: number;
+}
+
+export interface KpisEjecucionGastos {
+  presupuesto: number;
+  ejecutado: number;
+  diferencia: number;
+}
+
+export interface EjecucionGastosResponse {
+  anio: number;
+  mes: number;
+  periodos_disponibles: PeriodoDisponibleGastos[];
+  kpis: KpisEjecucionGastos;
+  grupos: GrupoCentrosCosto[];
+}

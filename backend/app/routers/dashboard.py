@@ -16,10 +16,14 @@ from app.schemas.dashboard import (
     OpcionesFiltroPlaguicidas,
 )
 from app.schemas.dashboard_financiero import DashboardFinancieroResponse
-from app.schemas.dashboard_otros_informes import CuotasAsociadosResponse
+from app.schemas.dashboard_otros_informes import CuotasAsociadosResponse, EjecucionGastosResponse
 from app.services import export as export_service
 from app.services.dashboard_financiero import obtener_dashboard_financiero
-from app.services.dashboard_otros_informes import obtener_cuotas_asociados
+from app.services.dashboard_otros_informes import (
+    obtener_cuotas_asociados,
+    obtener_ejecucion_gastos_acumulado,
+    obtener_ejecucion_gastos_mensual,
+)
 from app.services.dashboard_nutrientes import (
     construir_contexto_nutrientes,
     obtener_dashboard_nutrientes,
@@ -109,6 +113,28 @@ def dashboard_financiero_cuotas_asociados(
     _acceso: UsuarioToken = Depends(require_acceso_financiero),
 ) -> CuotasAsociadosResponse:
     return obtener_cuotas_asociados(db, anio)
+
+
+@router.get("/financiero/ejecucion-gastos-mes", response_model=EjecucionGastosResponse)
+def dashboard_financiero_ejecucion_gastos_mes(
+    anio: int | None = None,
+    mes: int | None = Query(None, ge=1, le=12),
+    db: Session = Depends(get_db),
+    _usuario: UsuarioToken = Depends(get_current_user),
+    _acceso: UsuarioToken = Depends(require_acceso_financiero),
+) -> EjecucionGastosResponse:
+    return obtener_ejecucion_gastos_mensual(db, anio, mes)
+
+
+@router.get("/financiero/ejecucion-gastos-acumulado", response_model=EjecucionGastosResponse)
+def dashboard_financiero_ejecucion_gastos_acumulado(
+    anio: int | None = None,
+    mes: int | None = Query(None, ge=1, le=12),
+    db: Session = Depends(get_db),
+    _usuario: UsuarioToken = Depends(get_current_user),
+    _acceso: UsuarioToken = Depends(require_acceso_financiero),
+) -> EjecucionGastosResponse:
+    return obtener_ejecucion_gastos_acumulado(db, anio, mes)
 
 
 def _respuesta_xlsx(contenido: bytes, nombre_archivo: str) -> Response:

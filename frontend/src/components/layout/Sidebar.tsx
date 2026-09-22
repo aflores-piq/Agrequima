@@ -41,8 +41,8 @@ const MENU_FINANCIERO: NodoMenu = {
         { id: "oif-cuotas", titulo: "Cuotas asociados", href: "/app/financiero/otros-informes?vista=cuotas-asociados" },
         { id: "oif-conciliacion", titulo: "Conciliación bancaria" },
         { id: "oif-flujo", titulo: "Flujo de caja" },
-        { id: "oif-gastos-mes", titulo: "Ejecución gastos por mes" },
-        { id: "oif-gastos-acum", titulo: "Ejecución gastos acumulado" },
+        { id: "oif-gastos-mes", titulo: "Ejecución gastos por mes", href: "/app/financiero/otros-informes?vista=gastos-mes" },
+        { id: "oif-gastos-acum", titulo: "Ejecución gastos acumulado", href: "/app/financiero/otros-informes?vista=gastos-acumulado" },
       ],
     },
     {

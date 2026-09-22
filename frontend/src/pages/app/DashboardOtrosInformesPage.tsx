@@ -2,12 +2,21 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Title } from "@tremor/react";
 import { Bar, BarChart, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { obtenerCuotasAsociados } from "../../api/dashboardOtrosInformes";
+import {
+  obtenerCuotasAsociados,
+  obtenerEjecucionGastosAcumulado,
+  obtenerEjecucionGastosMes,
+} from "../../api/dashboardOtrosInformes";
 import { mensajeError } from "../../api/client";
 import { ChartCard } from "../../components/ChartCard";
 import { KpiCardIcono, FINANCIERO_SURFACE } from "../../components/TablaGrupoExpandible";
-import { formatQ } from "../../utils/format";
-import type { CuotasAsociadosResponse, TipoCuotaAsociados } from "../../types/dashboardOtrosInformes";
+import { formatPercent, formatQ, MESES_LARGOS } from "../../utils/format";
+import type {
+  CuotasAsociadosResponse,
+  EjecucionGastosResponse,
+  GrupoCentrosCosto,
+  TipoCuotaAsociados,
+} from "../../types/dashboardOtrosInformes";
 
 // Mismos colores de identidad que Estados Financieros (teal/coral/azul,
 // ver DashboardFinancieroPage) para que "Otros informes financieros" se
@@ -120,9 +129,11 @@ function DonutRecuperacion({ data }: { data: CuotasAsociadosResponse }) {
 
 // "Otros informes financieros" -- 5 páginas hermanas de "Estados
 // financieros" en el Sidebar (mismo patrón: 1 sola ruta + ?vista=, ver
-// DashboardFinancieroPage). Por ahora solo "cuotas-asociados" está
-// implementada; las otras 4 quedan con placeholder hasta construirse
-// (Sidebar.tsx todavía no les da href a esas 4 a propósito).
+// DashboardFinancieroPage). Cuotas Asociados y Ejecución de gastos (mes/
+// acumulado) ya están implementadas; Conciliación Bancaria y Flujo de
+// Caja quedan con placeholder (la primera bloqueada por falta de datos
+// de Saldo Bancario, la segunda a la espera del layout exacto -- ver
+// Sidebar.tsx, que todavía no les da href a esas 2 a propósito).
 const VISTAS = ["cuotas-asociados", "conciliacion-bancaria", "flujo-caja", "gastos-mes", "gastos-acumulado"] as const;
 
 export function DashboardOtrosInformesPage() {
@@ -132,6 +143,12 @@ export function DashboardOtrosInformesPage() {
     ? (vistaParam as (typeof VISTAS)[number])
     : "cuotas-asociados";
 
+  if (vista === "gastos-mes") {
+    return <PaginaEjecucionGastos acumulado={false} />;
+  }
+  if (vista === "gastos-acumulado") {
+    return <PaginaEjecucionGastos acumulado={true} />;
+  }
   if (vista !== "cuotas-asociados") {
     return <p className="text-sm text-ink-muted">Todavía no implementado.</p>;
   }
@@ -266,6 +283,200 @@ function PaginaCuotasAsociados() {
                       <td className="px-2 py-1.5 text-ink">Por cobrar</td>
                       <td className="px-2 py-1.5 text-right text-ink">{formatQ(data.kpis.por_cobrar)}</td>
                     </tr>
+                  </tbody>
+                </table>
+              }
+            />
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// --- Ejecución de gastos (por mes / acumulado) ---------------------------
+// Misma forma de respuesta para las 2 vistas (mes vs acumulado difiere
+// solo en el endpoint que se llama, ver arriba) -- un solo componente
+// compartido, con el mismo selector Año/Mes de 2 niveles que ya usa
+// DashboardFinancieroPage (drill Año expandible + Mes).
+
+function TablaCentrosCosto({ grupo }: { grupo: GrupoCentrosCosto }) {
+  return (
+    <div className="overflow-hidden rounded-tremor-default ring-1 ring-line">
+      <table className="w-full text-sm">
+        <thead>
+          <tr style={{ backgroundColor: grupo.grupo === "Administración" ? COLOR_TEAL : COLOR_AZUL }}>
+            <th className="px-3 py-2 text-left font-semibold text-white">{grupo.grupo}</th>
+            <th className="px-3 py-2 text-right font-semibold text-white">Peso %</th>
+            <th className="px-3 py-2 text-right font-semibold text-white">Presupuesto</th>
+            <th className="px-3 py-2 text-right font-semibold text-white">Ejecutado</th>
+            <th className="px-3 py-2 text-right font-semibold text-white">Diferencia</th>
+          </tr>
+        </thead>
+        <tbody style={{ backgroundColor: FINANCIERO_SURFACE }}>
+          {grupo.filas.map((f) => (
+            <tr key={f.centro} className="border-b border-line/50">
+              <td className="break-words px-3 py-1.5 text-ink" title={`${f.centro} — ${f.nombre}`}>
+                {f.nombre}
+              </td>
+              <td className="px-3 py-1.5 text-right text-ink">{formatPercent(f.peso_porcentaje)}</td>
+              <td className="px-3 py-1.5 text-right text-ink">{formatQ(f.presupuesto)}</td>
+              <td className="px-3 py-1.5 text-right text-ink">{formatQ(f.ejecutado)}</td>
+              <td className="px-3 py-1.5 text-right text-ink">{formatQ(f.diferencia)}</td>
+            </tr>
+          ))}
+          <tr className="font-semibold text-ink">
+            <td className="px-3 py-2">{`Total ${grupo.grupo}`}</td>
+            <td className="px-3 py-2 text-right">{formatPercent(grupo.filas.reduce((s, f) => s + f.peso_porcentaje, 0))}</td>
+            <td className="px-3 py-2 text-right">{formatQ(grupo.total_presupuesto)}</td>
+            <td className="px-3 py-2 text-right">{formatQ(grupo.total_ejecutado)}</td>
+            <td className="px-3 py-2 text-right">{formatQ(grupo.total_diferencia)}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function GraficoPresupuestoVsEjecutado({ data }: { data: EjecucionGastosResponse }) {
+  const filas = data.grupos.map((g) => ({ etiqueta: g.grupo, presupuesto: g.total_presupuesto, ejecutado: g.total_ejecutado }));
+  return (
+    <ResponsiveContainer width="100%" height={260}>
+      <BarChart data={filas} margin={{ top: 4, right: 16, bottom: 4, left: 8 }}>
+        <XAxis dataKey="etiqueta" fontSize={12} tickLine={false} />
+        <YAxis type="number" tickFormatter={(v: number) => formatQ(v)} fontSize={12} stroke="rgb(var(--color-ink-faint))" />
+        <Tooltip formatter={(v: number) => formatQ(v)} contentStyle={{ background: "rgb(var(--color-bg-surface))", border: "1px solid rgb(var(--color-line))", borderRadius: 8 }} />
+        <Legend />
+        <Bar dataKey="presupuesto" name="Presupuesto" fill={COLOR_TEAL} radius={[4, 4, 0, 0]} />
+        <Bar dataKey="ejecutado" name="Ejecutado" fill={COLOR_AZUL} radius={[4, 4, 0, 0]} />
+      </BarChart>
+    </ResponsiveContainer>
+  );
+}
+
+function PaginaEjecucionGastos({ acumulado }: { acumulado: boolean }) {
+  const [anio, setAnio] = useState("");
+  const [mes, setMes] = useState("");
+  const [data, setData] = useState<EjecucionGastosResponse | null>(null);
+  const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const obtener = acumulado ? obtenerEjecucionGastosAcumulado : obtenerEjecucionGastosMes;
+
+  useEffect(() => {
+    let cancelado = false;
+    setCargando(true);
+    obtener(anio ? Number(anio) : undefined, mes ? Number(mes) : undefined)
+      .then((res) => {
+        if (cancelado) return;
+        setData(res);
+        setError(null);
+        if (!anio) setAnio(String(res.anio));
+        if (!mes) setMes(String(res.mes));
+      })
+      .catch((err) => {
+        if (!cancelado) setError(mensajeError(err));
+      })
+      .finally(() => {
+        if (!cancelado) setCargando(false);
+      });
+    return () => {
+      cancelado = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [anio, mes, acumulado]);
+
+  if (error) {
+    return <p className="rounded-tremor-small bg-danger-surface px-4 py-3 text-sm text-danger">{error}</p>;
+  }
+
+  const periodos = data?.periodos_disponibles ?? [];
+  const aniosDisponibles = Array.from(new Set(periodos.map((p) => p.anio))).sort((a, b) => a - b);
+  const mesesDelAnio = periodos
+    .filter((p) => String(p.anio) === anio)
+    .map((p) => p.mes)
+    .sort((a, b) => a - b);
+
+  function cambiarAnio(nuevoAnio: string) {
+    const mesesDelNuevoAnio = periodos.filter((p) => String(p.anio) === nuevoAnio).map((p) => p.mes);
+    setAnio(nuevoAnio);
+    if (!mesesDelNuevoAnio.includes(Number(mes))) {
+      setMes(String(Math.max(...mesesDelNuevoAnio)));
+    }
+  }
+
+  const tituloPagina = data
+    ? `Ejecución de Gastos ${acumulado ? "Acumulado" : "por Mes"} — ${MESES_LARGOS[data.mes - 1]} ${data.anio}`
+    : `Ejecución de Gastos ${acumulado ? "Acumulado" : "por Mes"}`;
+
+  return (
+    <div className="space-y-5">
+      <div className="relative flex min-h-[64px] items-center justify-center">
+        <Title className="px-4 text-center text-3xl text-ink">{tituloPagina}</Title>
+        <div className="absolute right-0 top-full mt-5 flex gap-2">
+          <label className="block">
+            <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-ink-muted">Año</span>
+            <select
+              value={anio}
+              onChange={(e) => cambiarAnio(e.target.value)}
+              className="rounded-tremor-default border border-line bg-surface px-3 py-1.5 text-sm text-ink"
+            >
+              {aniosDisponibles.map((a) => (
+                <option key={a} value={a}>
+                  {a}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-ink-muted">Mes</span>
+            <select
+              value={mes}
+              onChange={(e) => setMes(e.target.value)}
+              className="rounded-tremor-default border border-line bg-surface px-3 py-1.5 text-sm text-ink"
+            >
+              {mesesDelAnio.map((m) => (
+                <option key={m} value={m}>
+                  {MESES_LARGOS[m - 1]}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      </div>
+
+      {cargando && !data && <p className="text-sm text-ink-muted">Cargando…</p>}
+
+      {data && (
+        <>
+          <div className="mx-auto space-y-5" style={{ width: ANCHO_TABLA }}>
+            <div className="flex flex-wrap justify-center gap-3">
+              <KpiCardIcono letra="P" color={COLOR_TEAL} label="Presupuesto" valor={formatQ(data.kpis.presupuesto)} />
+              <KpiCardIcono letra="E" color={COLOR_AZUL} label="Ejecutado" valor={formatQ(data.kpis.ejecutado)} />
+              <KpiCardIcono letra="D" color={COLOR_CORAL} label="Diferencia" valor={formatQ(data.kpis.diferencia)} />
+            </div>
+
+            {data.grupos.map((g) => (
+              <TablaCentrosCosto key={g.grupo} grupo={g} />
+            ))}
+          </div>
+
+          <div className="mx-auto" style={{ width: ANCHO_TABLA }}>
+            <ChartCard
+              theme="financiero"
+              estiloTarjeta={{ backgroundColor: FINANCIERO_SURFACE }}
+              title="Presupuesto vs Ejecutado por grupo"
+              chart={<GraficoPresupuestoVsEjecutado data={data} />}
+              table={
+                <table className="w-full text-sm">
+                  <tbody>
+                    {data.grupos.map((g) => (
+                      <tr key={g.grupo} className="border-b border-line/50">
+                        <td className="px-2 py-1.5 text-ink">{g.grupo}</td>
+                        <td className="px-2 py-1.5 text-right text-ink">{formatQ(g.total_presupuesto)}</td>
+                        <td className="px-2 py-1.5 text-right text-ink">{formatQ(g.total_ejecutado)}</td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               }
