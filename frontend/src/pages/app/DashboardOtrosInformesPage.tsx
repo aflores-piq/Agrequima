@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Title } from "@tremor/react";
-import { Bar, BarChart, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, Cell, Legend, LabelList, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import {
   obtenerCuotasAsociados,
   obtenerEjecucionGastosAcumulado,
@@ -29,24 +29,42 @@ const COLOR_MARINO = "#375b7d";
 
 const COLOR_POR_TIPO: Record<string, string> = { A: COLOR_TEAL, B: COLOR_AZUL, C: COLOR_MARINO };
 
+// Colores REALES del tema del reporte .pbix (Layout.json / theme) para
+// las gráficas de Presupuesto vs Ejecutado en Centro de Costo -- las 3
+// gráficas (Administración/Operación/Consolidado) heredan el mismo tema
+// de reporte SIN color propio, por eso es un color por MÉTRICA (no por
+// grupo): Presupuesto siempre azul claro, Ejecutado siempre azul oscuro,
+// idéntico en las 3.
+const COLOR_PRESUPUESTO = "#118DFF";
+const COLOR_EJECUTADO = "#12239E";
+
+/** Etiqueta de valor en miles, sin decimales (ej. "160K") -- calcado de
+ * la unidad de miles del .pbix para las etiquetas sobre cada barra. */
+function formatMiles(v: number): string {
+  return `${Math.round(v / 1000).toLocaleString("es-GT")}K`;
+}
+
 // Layout COMPACTO calcado de las proporciones reales del .pbix (lienzo
 // 1920x1500, todo el contenido cabe sin scroll) -- ver instrucción del
 // usuario. Tipografía/padding reducidos a propósito (text-[11px], py-0.5)
 // para que tablas de hasta ~18 filas quepan en la franja de alto que le
 // corresponde sin necesitar scroll interno.
 
-/** Tarjeta KPI chica, mismo espíritu que KpiCardIcono pero más angosta y
- * más baja -- KpiCardIcono (aspect-[4/1]) es demasiado grande para el
- * layout compacto de estas 3 páginas. */
+/** Segmento del banner T/C/P -- franja BAJA y ANCHA de una sola línea
+ * (letra + etiqueta + valor todo en fila), calcado de la proporción real
+ * del .pbix (banner completo w=1620 h=100, 3 segmentos ~540x100 c/u,
+ * ~5.4:1 ancho:alto por segmento). El diseño anterior apilaba
+ * etiqueta/valor en 2 líneas dentro de un cuadrito -- eso es lo que lo
+ * hacía verse como "caja alta/cuadrada" en vez de franja de banner. */
 function KpiChico({ letra, color, label, valor }: { letra: string; color: string; label: string; valor: string }) {
   return (
-    <div className="flex h-11 flex-1 items-stretch overflow-hidden rounded-tremor-default ring-1 ring-line" style={{ backgroundColor: FINANCIERO_SURFACE }}>
-      <div className="flex aspect-square h-full shrink-0 items-center justify-center text-sm font-bold text-white" style={{ backgroundColor: color }} aria-hidden="true">
+    <div className="flex h-16 flex-1 items-stretch overflow-hidden rounded-tremor-default ring-1 ring-line" style={{ backgroundColor: FINANCIERO_SURFACE }}>
+      <div className="flex aspect-square h-full shrink-0 items-center justify-center text-lg font-bold text-white" style={{ backgroundColor: color }} aria-hidden="true">
         {letra}
       </div>
-      <div className="flex min-w-0 flex-1 flex-col items-end justify-center gap-0 px-2.5 py-1">
-        <span className="text-[10px] font-semibold text-white">{label}</span>
-        <span className="text-sm font-semibold text-ink">{valor}</span>
+      <div className="flex min-w-0 flex-1 items-center justify-between gap-2 px-3">
+        <span className="truncate text-xs font-semibold text-white">{label}</span>
+        <span className="shrink-0 text-lg font-bold text-ink">{valor}</span>
       </div>
     </div>
   );
@@ -58,16 +76,36 @@ function KpiChico({ letra, color, label, valor }: { letra: string; color: string
 // EXACTAMENTE parejas entre sí sin importar cuántas filas tenga cada
 // Tipo (A=8, B=13, C=18 en 2026) -- calcado de cómo Power BI dibuja un
 // visual de tabla: tamaño de lienzo fijo, no "en escalera" según los
-// datos. Con text-[11px]/py-0.5, 340px alcanza para las 18 filas de
-// Tipo C sin scroll; overflow-y-auto queda como respaldo si algún año
-// tuviera más filas todavía, no como mecanismo principal de layout.
-const ALTO_TABLA_CUOTAS = 430;
+// datos. Medido con DevTools (getBoundingClientRect): con 430px las 3
+// cajas SÍ salían exactamente iguales (430px las 3), pero el contenido
+// de Tipo C (18 filas + total = 436px reales) no entraba completo y
+// quedaba con scroll interno, tapando la fila "Total C" -- por eso se
+// veía "distinta" pese a tener la misma caja. 445px le da margen a las
+// 18 filas de Tipo C para entrar completas sin scroll; overflow-y-auto
+// queda como respaldo si algún año tuviera todavía más filas.
+const ALTO_TABLA_CUOTAS = 445;
 
 function TablaCuotasTipo({ tipo }: { tipo: TipoCuotaAsociados }) {
   return (
     <div className="flex flex-col overflow-hidden rounded-tremor-default ring-1 ring-line" style={{ height: ALTO_TABLA_CUOTAS }}>
-      <div className="flex-1 overflow-y-auto">
-        <table className="w-full text-[11px]">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden">
+        {/* table-fixed + colgroup: sin esto, un <table> en table-layout
+            auto (el default) puede crecer MÁS ANCHO que su contenedor si
+            el contenido de alguna fila lo exige -- eso generaba un
+            scroll horizontal en Tipo C (nombres/montos más largos) que
+            no aparecía en A/B, y ese scrollbar horizontal le robaba
+            alto utilizable al contenedor, disparando TAMBIÉN un scroll
+            vertical aunque las 18 filas ya entraban en los 445px. Con
+            columnas de ancho fijo, las 3 tablas quedan con exactamente
+            el mismo layout interno y ninguna arrastra un scroll que las
+            otras no tengan. */}
+        <table className="w-full table-fixed text-[11px]">
+          <colgroup>
+            <col className="w-[40%]" />
+            <col className="w-[20%]" />
+            <col className="w-[20%]" />
+            <col className="w-[20%]" />
+          </colgroup>
           <thead>
             <tr style={{ backgroundColor: COLOR_POR_TIPO[tipo.tipo] }}>
               <th className="truncate px-2 py-1 text-left font-semibold text-white">{`Tipo ${tipo.tipo}`}</th>
@@ -389,42 +427,68 @@ function TablaEjecucionGastos({ data }: { data: EjecucionGastosResponse }) {
 
 // Tarjeta KPI de una sola cifra (12 de estas, en 2 filas de 6) -- calcado
 // del .pbix real: debajo de la tabla dinámica van 12 tarjetas KPI en 2
-// filas, no las 3 tarjetas-con-gráfica-embebida que había antes. Franja
-// de color arriba en vez de cuadrito con letra (KpiChico/KpiCardIcono):
-// acá el nombre completo del grupo (Administración/Operación/
-// Consolidado) ya va en el label, no hace falta una letra aparte.
+// filas. Tira COMPACTA de una sola línea (~150x40, etiqueta y valor en
+// la misma franja angosta) -- el diseño anterior apilaba franja de color
+// arriba + etiqueta + valor en 2 líneas, lo que las hacía ver como
+// bloques altos genéricos en vez de tiras horizontales compactas.
 function KpiMini({ label, valor, color }: { label: string; valor: string; color: string }) {
   return (
-    <div className="overflow-hidden rounded-tremor-default ring-1 ring-line" style={{ backgroundColor: FINANCIERO_SURFACE }}>
-      <div className="h-1" style={{ backgroundColor: color }} aria-hidden="true" />
-      <div className="px-2 py-1.5 text-center">
-        <div className="truncate text-[9px] font-semibold text-ink-muted" title={label}>
-          {label}
-        </div>
-        <div className="text-sm font-bold text-ink">{valor}</div>
-      </div>
+    <div
+      className="flex h-10 items-center gap-1.5 overflow-hidden rounded-tremor-default px-2 ring-1 ring-line"
+      style={{ backgroundColor: FINANCIERO_SURFACE }}
+    >
+      <div className="h-4 w-1 shrink-0 rounded-sm" style={{ backgroundColor: color }} aria-hidden="true" />
+      <span className="min-w-0 flex-1 truncate text-[9px] font-semibold text-ink-muted" title={label}>
+        {label}
+      </span>
+      <span className="shrink-0 text-xs font-bold text-ink">{valor}</span>
     </div>
   );
 }
 
 // Gráfica de columnas verticales Presupuesto vs Ejecutado de un grupo --
 // las 3 (Administración/Operación/Consolidado) comparten el mismo alto
-// fijo para quedar exactamente del mismo tamaño entre sí (calcado del
-// .pbix: 3 gráficas w=480 iguales entre sí).
-const ALTO_GRAFICA_GRUPO = 210;
+// fijo para quedar exactamente del mismo tamaño entre sí, calcado del
+// contenedor real del .pbix (w=480 h=325, ratio ~1.48:1 -- 280px de alto
+// de gráfica + cabecera del grupo arriba se acerca a esa proporción).
+const ALTO_GRAFICA_GRUPO = 280;
 
-function GraficoColumnasGrupo({ presupuesto, ejecutado, color }: { presupuesto: number; ejecutado: number; color: string }) {
+// Colores por MÉTRICA (no por grupo) -- ver COLOR_PRESUPUESTO/
+// COLOR_EJECUTADO arriba: las 3 gráficas (Administración/Operación/
+// Consolidado) usan EXACTAMENTE los mismos 2 colores, calcado del tema
+// real del .pbix (las 3 heredan el mismo tema de reporte, sin color
+// propio por grupo).
+function GraficoColumnasGrupo({ presupuesto, ejecutado }: { presupuesto: number; ejecutado: number }) {
   const filas = [
-    { etiqueta: "Presupuesto", valor: presupuesto },
-    { etiqueta: "Ejecutado", valor: ejecutado },
+    { etiqueta: "Presupuesto", valor: presupuesto, color: COLOR_PRESUPUESTO },
+    { etiqueta: "Ejecutado", valor: ejecutado, color: COLOR_EJECUTADO },
   ];
   return (
     <ResponsiveContainer width="100%" height={ALTO_GRAFICA_GRUPO}>
-      <BarChart data={filas} margin={{ top: 8, right: 12, bottom: 4, left: 8 }}>
+      <BarChart data={filas} margin={{ top: 20, right: 16, bottom: 4, left: 4 }}>
         <XAxis dataKey="etiqueta" fontSize={10} tickLine={false} />
         <YAxis type="number" tickFormatter={(v: number) => formatQ(v)} fontSize={10} width={60} stroke="rgb(var(--color-ink-faint))" />
         <Tooltip formatter={(v: number) => formatQ(v)} contentStyle={{ background: "rgb(var(--color-bg-surface))", border: "1px solid rgb(var(--color-line))", borderRadius: 8 }} />
-        <Bar dataKey="valor" radius={[4, 4, 0, 0]} fill={color} />
+        <Legend
+          wrapperStyle={{ fontSize: 10 }}
+          payload={[
+            { value: "Presupuesto", type: "square", color: COLOR_PRESUPUESTO },
+            { value: "Ejecutado", type: "square", color: COLOR_EJECUTADO },
+          ]}
+        />
+        {/* isAnimationActive={false}: Recharts solo pinta el LabelList
+            DESPUÉS de que termina la animación de entrada de las barras
+            (Bar.renderLabelList espera isAnimationFinished) -- en la
+            práctica esa animación no siempre llega a completar/disparar
+            su callback, y la etiqueta de valor quedaba invisible pese a
+            estar en el árbol de props. Sin animación, la etiqueta se
+            pinta de inmediato y de forma confiable. */}
+        <Bar dataKey="valor" radius={[4, 4, 0, 0]} isAnimationActive={false}>
+          {filas.map((f) => (
+            <Cell key={f.etiqueta} fill={f.color} />
+          ))}
+          <LabelList dataKey="valor" position="top" formatter={(v: number) => formatMiles(v)} fontSize={14} fill="rgb(var(--color-ink))" />
+        </Bar>
       </BarChart>
     </ResponsiveContainer>
   );
@@ -557,11 +621,7 @@ function PaginaEjecucionGastos({ acumulado }: { acumulado: boolean }) {
             {data.tarjetas.map((t) => (
               <div key={t.grupo} className="overflow-hidden rounded-tremor-default ring-1 ring-line" style={{ backgroundColor: FINANCIERO_SURFACE }}>
                 <div className="px-2 py-1 text-center text-xs font-semibold text-ink">{t.grupo}</div>
-                <GraficoColumnasGrupo
-                  presupuesto={t.presupuesto}
-                  ejecutado={t.ejecutado}
-                  color={t.grupo === "Administración" ? COLOR_TEAL : t.grupo === "Operación" ? COLOR_AZUL : COLOR_MARINO}
-                />
+                <GraficoColumnasGrupo presupuesto={t.presupuesto} ejecutado={t.ejecutado} />
               </div>
             ))}
           </div>
