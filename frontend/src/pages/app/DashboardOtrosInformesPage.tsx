@@ -9,6 +9,7 @@ import {
 } from "../../api/dashboardOtrosInformes";
 import { mensajeError } from "../../api/client";
 import { ChartCard } from "../../components/ChartCard";
+import { FilterYearMonth } from "../../components/filters/PowerBiFilter";
 import { FINANCIERO_SURFACE, KpiCardIcono, VERDE_ENCABEZADO } from "../../components/TablaGrupoExpandible";
 import { formatPercent, formatQ, MESES_LARGOS } from "../../utils/format";
 import type {
@@ -180,8 +181,11 @@ function TablaCuotasTipo({ tipo }: { tipo: TipoCuotaAsociados }) {
 // Alto compartido por los 3 visuales de abajo (columnas + 2 donas) --
 // mismo valor en los 3 para que queden exactamente del mismo tamaño
 // entre sí (ver instrucción del cliente), calcado del .pbix (w≈510
-// h≈415 los 3 iguales entre sí).
-const ALTO_VISUAL_CUOTAS = 190;
+// h≈415 los 3 iguales entre sí). Subido de 190 a 340 -- a 190 los 3 se
+// veían chicos y apretados (letra de ejes/leyenda encimada, donas casi
+// sin anillo visible); con el ChartCard ya angosto de tituloChico, este
+// alto más alto es lo que le da tamaño real al gráfico en sí.
+const ALTO_VISUAL_CUOTAS = 340;
 
 // Desglosada por Tipo (A/B/C) -- NO es solo el total del año, son datos
 // DISTINTOS. El dato por tipo YA está disponible en data.tipos (mismo
@@ -228,8 +232,20 @@ function GraficoCuotaVsCancelado({ data }: { data: CuotasAsociadosResponse }) {
     <div style={{ position: "relative", width: "100%", height: ALTO_VISUAL_CUOTAS }}>
       <ResponsiveContainer width="100%" height={ALTO_VISUAL_CUOTAS}>
         <BarChart data={filas} margin={margin}>
-          <XAxis dataKey="tipo" height={ALTO_EJE_X} fontSize={10} tickLine={false} />
-          <YAxis type="number" domain={[0, maxValor]} tickFormatter={(v: number) => formatMiles(v)} fontSize={10} width={40} stroke="rgb(var(--color-ink-faint))" />
+          {/* Ejes en blanco puro (#FFFFFF) por instrucción directa --
+              línea, marcas y texto, vía `stroke` (línea/marcas) +
+              `tick={{fill}}` (texto de las etiquetas, que Recharts NO
+              hereda de `stroke`). */}
+          <XAxis dataKey="tipo" height={ALTO_EJE_X} fontSize={10} tickLine={false} stroke="#FFFFFF" tick={{ fill: "#FFFFFF" }} />
+          <YAxis
+            type="number"
+            domain={[0, maxValor]}
+            tickFormatter={(v: number) => formatMiles(v)}
+            fontSize={10}
+            width={40}
+            stroke="#FFFFFF"
+            tick={{ fill: "#FFFFFF" }}
+          />
           <Tooltip formatter={(v: number) => formatQ(v)} contentStyle={{ background: "rgb(var(--color-bg-surface))", border: "1px solid rgb(var(--color-line))", borderRadius: 8 }} />
           <Bar dataKey="cuota" name="Cuota del año" radius={[3, 3, 0, 0]} isAnimationActive={false}>
             {filas.map((f) => (
@@ -402,22 +418,24 @@ export function DashboardOtrosInformesPage() {
   return <PaginaCuotasAsociados />;
 }
 
-// Meses para el selector "Año y Mes" -- ver comentario en el <select>
-// de mes más abajo sobre por qué es solo visual (no filtra datos).
-const MESES_SELECT = MESES_LARGOS.map((nombre, i) => ({ valor: i + 1, nombre }));
+// Los 12 meses siempre están disponibles como corte de "hasta el mes"
+// (a diferencia de Ejecución de Gastos, donde `mesesOpciones` depende de
+// qué combinaciones año+mes existen de verdad en los datos, acá
+// cualquier mes 1-12 es un corte válido del acumulado de Cancelado
+// dentro del año elegido, sin importar si ese mes específico tuvo
+// movimientos).
+const MES_OPCIONES = MESES_LARGOS.map((nombre, i) => ({ value: String(i + 1), label: nombre }));
 
 function PaginaCuotasAsociados() {
   const [anio, setAnio] = useState("");
-  // Selector de Mes -- SOLO visual, calcado del combo "Año y Mes" que ya
-  // usan las demás páginas de Financiero. NO se manda al backend: el
-  // servicio (obtener_cuotas_asociados, ver docstring del módulo) ya
-  // había verificado que "Cancelado" filtrado por Sal_Mes da un número
-  // DISTINTO del total anual real (Q634,000 en vez de los Q660,000
-  // exactos confirmados contra la referencia) -- la cancelación de
-  // Cuotas Asociados es un concepto ANUAL, no mensual, así que filtrar
-  // por mes rompería la cifra ya verificada. El combo queda para
-  // paridad visual con el resto del sistema; "Todo el año" es el único
-  // estado que corresponde a datos reales.
+  // Selector de Mes -- FUNCIONAL: filtra "Cancelado" (y por lo tanto
+  // Saldo/Por cobrar) acumulado hasta el mes elegido dentro del año.
+  // "Cuota" no varía por mes (es un monto fijo anual). Ver el docstring
+  // de obtener_cuotas_asociados (backend) para el detalle de la
+  // corrección: una nota anterior decía que filtrar por mes "no
+  // aplicaba" a este concepto -- investigado de nuevo con una consulta
+  // directa, el acumulado por mes es correcto (crece mes a mes hasta
+  // llegar al total anual verificado en el último mes con datos).
   const [mes, setMes] = useState("");
   const [data, setData] = useState<CuotasAsociadosResponse | null>(null);
   const [cargando, setCargando] = useState(true);
@@ -426,12 +444,13 @@ function PaginaCuotasAsociados() {
   useEffect(() => {
     let cancelado = false;
     setCargando(true);
-    obtenerCuotasAsociados(anio ? Number(anio) : undefined)
+    obtenerCuotasAsociados(anio ? Number(anio) : undefined, mes ? Number(mes) : undefined)
       .then((res) => {
         if (cancelado) return;
         setData(res);
         setError(null);
         if (!anio) setAnio(String(res.anio));
+        if (!mes) setMes(String(res.mes));
       })
       .catch((err) => {
         if (!cancelado) setError(mensajeError(err));
@@ -443,7 +462,7 @@ function PaginaCuotasAsociados() {
       cancelado = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [anio]);
+  }, [anio, mes]);
 
   if (error) {
     return <p className="rounded-tremor-small bg-danger-surface px-4 py-3 text-sm text-danger">{error}</p>;
@@ -452,38 +471,25 @@ function PaginaCuotasAsociados() {
   const aniosDisponibles = data?.periodos_disponibles ?? [];
 
   return (
-    <div className="space-y-3">
-      <div className="relative flex min-h-[40px] items-center justify-center">
-        <Title className="px-4 text-center text-xl text-ink">{`Cuotas Asociados ${data?.anio ?? ""}`}</Title>
-        {/* Selector "Año y Mes" -- calcado del mismo patrón (2 <select>
-            uno al lado del otro) ya usado en Ejecución de Gastos (ver
-            PaginaEjecucionGastos más abajo). El de Mes es solo visual,
-            ver comentario en su estado más arriba. */}
-        <div className="absolute right-0 top-0 flex gap-2">
-          <select
-            value={anio}
-            onChange={(e) => setAnio(e.target.value)}
-            className="rounded-tremor-default border border-line bg-surface px-2 py-1 text-xs text-ink"
-          >
-            {aniosDisponibles.map((a) => (
-              <option key={a} value={a}>
-                {a}
-              </option>
-            ))}
-          </select>
-          <select
-            value={mes}
-            onChange={(e) => setMes(e.target.value)}
-            title="Cancelado es un total anual -- no varía por mes."
-            className="rounded-tremor-default border border-line bg-surface px-2 py-1 text-xs text-ink"
-          >
-            <option value="">Todo el año</option>
-            {MESES_SELECT.map((m) => (
-              <option key={m.valor} value={m.valor}>
-                {m.nombre}
-              </option>
-            ))}
-          </select>
+    // Mismo patrón EXACTO que DashboardFinancieroPage (Estados
+    // Financieros, 4 páginas ya aprobadas): min-h-[64px] + título
+    // text-3xl centrado + filtro FilterYearMonth posicionado con
+    // `absolute right-0 top-full mt-5` (debajo de la fila del título,
+    // no encima) -- antes esta página tenía su propio min-h-[40px] +
+    // text-xl + 2 <select> sueltos, un patrón distinto al ya aprobado.
+    <div className="space-y-5">
+      <div className="relative flex min-h-[64px] items-center justify-center">
+        <Title className="px-4 text-center text-3xl text-ink">{`Cuotas Asociados ${data?.anio ?? ""}`}</Title>
+        <div className="absolute right-0 top-full mt-5">
+          <FilterYearMonth
+            theme="gris"
+            anio={anio}
+            mes={mes}
+            onChangeAnio={setAnio}
+            onChangeMes={setMes}
+            aniosOpciones={aniosDisponibles.map(String)}
+            mesesOpciones={MES_OPCIONES}
+          />
         </div>
       </div>
 

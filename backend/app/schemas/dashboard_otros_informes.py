@@ -31,6 +31,7 @@ class KpisCuotasAsociados(BaseModel):
 
 class CuotasAsociadosResponse(BaseModel):
     anio: int
+    mes: int
     periodos_disponibles: list[int]
     kpis: KpisCuotasAsociados
     tipos: list[TipoCuotaAsociados]

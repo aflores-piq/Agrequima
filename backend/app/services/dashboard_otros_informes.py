@@ -22,13 +22,24 @@ Fuentes reales:
 Semántica CONFIRMADA contra los datos reales (Total/Cancelado/Por cobrar
 del año 2026 cuadran exacto contra la captura de referencia: Q756,000 /
 Q660,000 / Q96,000):
-    CuotaTotal = SUM(cuota) de AsociadosCuota para el año filtrado.
-    Cancelado = SUM(Creditos) de BalanceGeneral para el mismo año, de las
-        cuentas (cod_n5) que aparecen en AsociadosCuota para ese año --
-        SIN filtro de mes: es la cancelación acumulada de TODO el año,
-        no "hasta el mes" (confirmado: filtrar además por Sal_Mes daba
-        634,000 en vez de 660,000 exacto).
-    Saldo (Por cobrar) = CuotaTotal - Cancelado.
+    CuotaTotal = SUM(cuota) de AsociadosCuota para el año filtrado -- NO
+        varía por mes (la cuota es un monto fijo anual por asociado).
+    Cancelado = SUM(Creditos) de BalanceGeneral, ACUMULADO hasta el mes
+        filtrado (Sal_Mes <= mes), de las cuentas (cod_n5) que aparecen
+        en AsociadosCuota para ese año.
+        CORRECCIÓN a una nota anterior de este docstring: se había
+        anotado que "filtrar por Sal_Mes daba 634,000 en vez de 660,000
+        exacto" y se concluyó (mal) que el filtro de mes "no aplica" a
+        este concepto. Investigado de nuevo con una consulta directa: el
+        acumulado por mes es monótono creciente y CORRECTO (12,000 en
+        enero -> 634,000 en julio -> 660,000 desde agosto en adelante,
+        que es el último mes con pagos cargados a la fecha) -- 634,000
+        es simplemente el acumulado REAL hasta julio, no un error. El
+        filtro de mes SÍ aplica: por default (mes=None o mes=12) se
+        obtiene el total anual completo (660,000, igual que antes),
+        y con un mes específico se obtiene el acumulado real hasta ese
+        mes.
+    Saldo (Por cobrar) = CuotaTotal - Cancelado (del mismo corte de mes).
 """
 
 from datetime import date
@@ -60,7 +71,7 @@ def _anios_disponibles_cuotas(db: Session) -> list[int]:
     return [int(a) for (a,) in filas if a is not None]
 
 
-def obtener_cuotas_asociados(db: Session, anio: int | None) -> CuotasAsociadosResponse:
+def obtener_cuotas_asociados(db: Session, anio: int | None, mes: int | None = None) -> CuotasAsociadosResponse:
     periodos = _anios_disponibles_cuotas(db)
     if anio is not None:
         anio_resuelto = anio
@@ -68,6 +79,12 @@ def obtener_cuotas_asociados(db: Session, anio: int | None) -> CuotasAsociadosRe
         anio_resuelto = periodos[-1]
     else:
         anio_resuelto = date.today().year
+
+    # mes=None (default) equivale a mes=12: "Cancelado" acumulado hasta
+    # diciembre = el total anual completo, exactamente lo mismo que se
+    # verificó antes de que este filtro existiera -- así el estado por
+    # default de la página no cambia ningún número ya confirmado.
+    mes_resuelto = mes if mes is not None else 12
 
     filas = (
         db.execute(
@@ -82,14 +99,14 @@ def obtener_cuotas_asociados(db: Session, anio: int | None) -> CuotasAsociadosRe
                 LEFT JOIN (
                     SELECT cod_n5, SUM(Creditos) AS creditos
                     FROM dbo.BalanceGeneral
-                    WHERE Sal_Ano = :anio
+                    WHERE Sal_Ano = :anio AND Sal_Mes <= :mes
                     GROUP BY cod_n5
                 ) bg ON bg.cod_n5 = ac.cod_n5
                 WHERE ac.Sal_Ano = :anio AND ac.grupo IN ('A', 'B', 'C')
                 ORDER BY ac.grupo, ac.nombre_mostrar
                 """
             ),
-            {"anio": anio_resuelto},
+            {"anio": anio_resuelto, "mes": mes_resuelto},
         )
         .mappings()
         .all()
@@ -123,7 +140,7 @@ def obtener_cuotas_asociados(db: Session, anio: int | None) -> CuotasAsociadosRe
     kpis = KpisCuotasAsociados(total=total, cancelado=cancelado_total, por_cobrar=total - cancelado_total)
 
     return CuotasAsociadosResponse(
-        anio=anio_resuelto, periodos_disponibles=periodos, kpis=kpis, tipos=tipos
+        anio=anio_resuelto, mes=mes_resuelto, periodos_disponibles=periodos, kpis=kpis, tipos=tipos
     )
 
 

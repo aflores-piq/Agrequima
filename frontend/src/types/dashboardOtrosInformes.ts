@@ -24,6 +24,7 @@ export interface KpisCuotasAsociados {
 
 export interface CuotasAsociadosResponse {
   anio: number;
+  mes: number;
   periodos_disponibles: number[];
   kpis: KpisCuotasAsociados;
   tipos: TipoCuotaAsociados[];

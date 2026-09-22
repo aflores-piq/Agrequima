@@ -108,11 +108,12 @@ def dashboard_financiero_estados_financieros(
 @router.get("/financiero/cuotas-asociados", response_model=CuotasAsociadosResponse)
 def dashboard_financiero_cuotas_asociados(
     anio: int | None = None,
+    mes: int | None = Query(None, ge=1, le=12),
     db: Session = Depends(get_db),
     _usuario: UsuarioToken = Depends(get_current_user),
     _acceso: UsuarioToken = Depends(require_acceso_financiero),
 ) -> CuotasAsociadosResponse:
-    return obtener_cuotas_asociados(db, anio)
+    return obtener_cuotas_asociados(db, anio, mes)
 
 
 @router.get("/financiero/ejecucion-gastos-mes", response_model=EjecucionGastosResponse)
