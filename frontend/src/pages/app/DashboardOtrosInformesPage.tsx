@@ -21,48 +21,70 @@ import type {
 // Mismos colores de identidad que Estados Financieros (teal/coral/azul,
 // ver DashboardFinancieroPage) para que "Otros informes financieros" se
 // vea consistente con el resto de Financiero -- acá se le suma un color
-// más (marino) para el tercer tipo (C), ya que esta página tiene 3
-// categorías (A/B/C) en vez de las 2-3 de Estados Financieros.
+// más (marino) para el tercer tipo (C) de Cuotas Asociados.
 const COLOR_TEAL = "#3f6f6b";
 const COLOR_CORAL = "#e87471";
 const COLOR_AZUL = "#507eaa";
 const COLOR_MARINO = "#375b7d";
 
 const COLOR_POR_TIPO: Record<string, string> = { A: COLOR_TEAL, B: COLOR_AZUL, C: COLOR_MARINO };
+// Usado por la sección de Ejecución de gastos más abajo (todavía con el
+// layout viejo en este commit puntual -- se compacta en el próximo).
 const ANCHO_TABLA = "55%";
 
-// Todavía no existe un componente compartido para tabla simple (no
-// expandible) fuera de Estados Financieros -- ahí también es local a la
-// página (ver TablaCategorias en DashboardFinancieroPage.tsx), mismo
-// patrón acá: una por Tipo, columnas fijas Nombre/Cuota/Cancelado/Saldo.
+// Layout COMPACTO calcado de las proporciones reales del .pbix (lienzo
+// 1920x1500, todo el contenido cabe sin scroll) -- ver instrucción del
+// usuario. Tipografía/padding reducidos a propósito (text-[11px], py-0.5)
+// para que tablas de hasta ~18 filas quepan en la franja de alto que le
+// corresponde sin necesitar scroll interno.
+
+/** Tarjeta KPI chica, mismo espíritu que KpiCardIcono pero más angosta y
+ * más baja -- KpiCardIcono (aspect-[4/1]) es demasiado grande para el
+ * layout compacto de estas 3 páginas. */
+function KpiChico({ letra, color, label, valor }: { letra: string; color: string; label: string; valor: string }) {
+  return (
+    <div className="flex h-11 flex-1 items-stretch overflow-hidden rounded-tremor-default ring-1 ring-line" style={{ backgroundColor: FINANCIERO_SURFACE }}>
+      <div className="flex aspect-square h-full shrink-0 items-center justify-center text-sm font-bold text-white" style={{ backgroundColor: color }} aria-hidden="true">
+        {letra}
+      </div>
+      <div className="flex min-w-0 flex-1 flex-col items-end justify-center gap-0 px-2.5 py-1">
+        <span className="text-[10px] font-semibold text-white">{label}</span>
+        <span className="text-sm font-semibold text-ink">{valor}</span>
+      </div>
+    </div>
+  );
+}
+
+// --- Cuotas Asociados ------------------------------------------------------
+
 function TablaCuotasTipo({ tipo }: { tipo: TipoCuotaAsociados }) {
   return (
-    <div className="overflow-hidden rounded-tremor-default ring-1 ring-line">
-      <table className="w-full text-sm">
+    <div className="flex h-full flex-col overflow-hidden rounded-tremor-default ring-1 ring-line">
+      <table className="w-full text-[11px]">
         <thead>
           <tr style={{ backgroundColor: COLOR_POR_TIPO[tipo.tipo] }}>
-            <th className="px-3 py-2 text-left font-semibold text-white">{`Tipo ${tipo.tipo}`}</th>
-            <th className="px-3 py-2 text-right font-semibold text-white">Cuota</th>
-            <th className="px-3 py-2 text-right font-semibold text-white">Cancelado</th>
-            <th className="px-3 py-2 text-right font-semibold text-white">Saldo</th>
+            <th className="truncate px-2 py-1 text-left font-semibold text-white">{`Tipo ${tipo.tipo}`}</th>
+            <th className="px-2 py-1 text-right font-semibold text-white">Cuota</th>
+            <th className="px-2 py-1 text-right font-semibold text-white">Canc.</th>
+            <th className="px-2 py-1 text-right font-semibold text-white">Saldo</th>
           </tr>
         </thead>
         <tbody style={{ backgroundColor: FINANCIERO_SURFACE }}>
           {tipo.filas.map((f) => (
             <tr key={f.nombre} className="border-b border-line/50">
-              <td className="break-words px-3 py-1.5 text-ink" title={f.nombre}>
+              <td className="truncate px-2 py-0.5 text-ink" title={f.nombre}>
                 {f.nombre}
               </td>
-              <td className="px-3 py-1.5 text-right text-ink">{formatQ(f.cuota)}</td>
-              <td className="px-3 py-1.5 text-right text-ink">{formatQ(f.cancelado)}</td>
-              <td className="px-3 py-1.5 text-right text-ink">{formatQ(f.saldo)}</td>
+              <td className="whitespace-nowrap px-2 py-0.5 text-right text-ink">{formatQ(f.cuota)}</td>
+              <td className="whitespace-nowrap px-2 py-0.5 text-right text-ink">{formatQ(f.cancelado)}</td>
+              <td className="whitespace-nowrap px-2 py-0.5 text-right text-ink">{formatQ(f.saldo)}</td>
             </tr>
           ))}
           <tr className="font-semibold text-ink">
-            <td className="px-3 py-2">Total {tipo.tipo}</td>
-            <td className="px-3 py-2 text-right">{formatQ(tipo.total_cuota)}</td>
-            <td className="px-3 py-2 text-right">{formatQ(tipo.total_cancelado)}</td>
-            <td className="px-3 py-2 text-right">{formatQ(tipo.total_saldo)}</td>
+            <td className="px-2 py-1">Total {tipo.tipo}</td>
+            <td className="whitespace-nowrap px-2 py-1 text-right">{formatQ(tipo.total_cuota)}</td>
+            <td className="whitespace-nowrap px-2 py-1 text-right">{formatQ(tipo.total_cancelado)}</td>
+            <td className="whitespace-nowrap px-2 py-1 text-right">{formatQ(tipo.total_saldo)}</td>
           </tr>
         </tbody>
       </table>
@@ -76,10 +98,10 @@ function GraficoCuotaVsCancelado({ data }: { data: CuotasAsociadosResponse }) {
     { etiqueta: "Cancelado", valor: data.kpis.cancelado },
   ];
   return (
-    <ResponsiveContainer width="100%" height={260}>
+    <ResponsiveContainer width="100%" height={160}>
       <BarChart data={filas} layout="vertical" margin={{ top: 4, right: 24, bottom: 4, left: 8 }}>
-        <XAxis type="number" tickFormatter={(v: number) => formatQ(v)} fontSize={12} stroke="rgb(var(--color-ink-faint))" />
-        <YAxis type="category" dataKey="etiqueta" width={110} fontSize={12} tickLine={false} />
+        <XAxis type="number" tickFormatter={(v: number) => formatQ(v)} fontSize={10} stroke="rgb(var(--color-ink-faint))" />
+        <YAxis type="category" dataKey="etiqueta" width={90} fontSize={10} tickLine={false} />
         <Tooltip formatter={(v: number) => formatQ(v)} contentStyle={{ background: "rgb(var(--color-bg-surface))", border: "1px solid rgb(var(--color-line))", borderRadius: 8 }} />
         <Bar dataKey="valor" radius={[0, 4, 4, 0]}>
           <Cell fill={COLOR_TEAL} />
@@ -93,14 +115,14 @@ function GraficoCuotaVsCancelado({ data }: { data: CuotasAsociadosResponse }) {
 function DonutCuotasPorTipo({ data }: { data: CuotasAsociadosResponse }) {
   const filas = data.tipos.map((t) => ({ nombre: `Tipo ${t.tipo}`, valor: t.total_cuota, color: COLOR_POR_TIPO[t.tipo] }));
   return (
-    <ResponsiveContainer width="100%" height={260}>
+    <ResponsiveContainer width="100%" height={160}>
       <PieChart>
-        <Pie data={filas} dataKey="valor" nameKey="nombre" innerRadius="55%" outerRadius="85%" paddingAngle={2}>
+        <Pie data={filas} dataKey="valor" nameKey="nombre" innerRadius="50%" outerRadius="80%" paddingAngle={2}>
           {filas.map((f) => (
             <Cell key={f.nombre} fill={f.color} />
           ))}
         </Pie>
-        <Legend />
+        <Legend wrapperStyle={{ fontSize: 10 }} />
         <Tooltip formatter={(v: number) => formatQ(v)} contentStyle={{ background: "rgb(var(--color-bg-surface))", border: "1px solid rgb(var(--color-line))", borderRadius: 8 }} />
       </PieChart>
     </ResponsiveContainer>
@@ -113,14 +135,14 @@ function DonutRecuperacion({ data }: { data: CuotasAsociadosResponse }) {
     { nombre: "Por cobrar", valor: data.kpis.por_cobrar, color: COLOR_CORAL },
   ];
   return (
-    <ResponsiveContainer width="100%" height={260}>
+    <ResponsiveContainer width="100%" height={160}>
       <PieChart>
-        <Pie data={filas} dataKey="valor" nameKey="nombre" innerRadius="55%" outerRadius="85%" paddingAngle={2}>
+        <Pie data={filas} dataKey="valor" nameKey="nombre" innerRadius="50%" outerRadius="80%" paddingAngle={2}>
           {filas.map((f) => (
             <Cell key={f.nombre} fill={f.color} />
           ))}
         </Pie>
-        <Legend />
+        <Legend wrapperStyle={{ fontSize: 10 }} />
         <Tooltip formatter={(v: number) => formatQ(v)} contentStyle={{ background: "rgb(var(--color-bg-surface))", border: "1px solid rgb(var(--color-line))", borderRadius: 8 }} />
       </PieChart>
     </ResponsiveContainer>
@@ -191,59 +213,59 @@ function PaginaCuotasAsociados() {
   const aniosDisponibles = data?.periodos_disponibles ?? [];
 
   return (
-    <div className="space-y-5">
-      <div className="relative flex min-h-[64px] items-center justify-center">
-        <Title className="px-4 text-center text-3xl text-ink">{`Cuotas Asociados ${data?.anio ?? ""}`}</Title>
-        <div className="absolute right-0 top-full mt-5">
-          <label className="block">
-            <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-ink-muted">Año</span>
-            <select
-              value={anio}
-              onChange={(e) => setAnio(e.target.value)}
-              className="rounded-tremor-default border border-line bg-surface px-3 py-1.5 text-sm text-ink"
-            >
-              {aniosDisponibles.map((a) => (
-                <option key={a} value={a}>
-                  {a}
-                </option>
-              ))}
-            </select>
-          </label>
+    <div className="space-y-3">
+      <div className="relative flex min-h-[40px] items-center justify-center">
+        <Title className="px-4 text-center text-xl text-ink">{`Cuotas Asociados ${data?.anio ?? ""}`}</Title>
+        <div className="absolute right-0 top-0">
+          <select
+            value={anio}
+            onChange={(e) => setAnio(e.target.value)}
+            className="rounded-tremor-default border border-line bg-surface px-2 py-1 text-xs text-ink"
+          >
+            {aniosDisponibles.map((a) => (
+              <option key={a} value={a}>
+                {a}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 
       {cargando && !data && <p className="text-sm text-ink-muted">Cargando…</p>}
 
       {data && (
-        <>
-          <div className="mx-auto space-y-5" style={{ width: ANCHO_TABLA }}>
-            <div className="flex flex-wrap justify-center gap-3">
-              <KpiCardIcono letra="T" color={COLOR_TEAL} label="Total" valor={formatQ(data.kpis.total)} />
-              <KpiCardIcono letra="C" color={COLOR_AZUL} label="Cancelado" valor={formatQ(data.kpis.cancelado)} />
-              <KpiCardIcono letra="P" color={COLOR_CORAL} label="Por cobrar" valor={formatQ(data.kpis.por_cobrar)} />
-            </div>
+        // Layout calcado del .pbix: las 3 tablas van LADO A LADO (no
+        // apiladas), ~27% de ancho cada una, ~34% del alto de la página;
+        // las gráficas van debajo, en la misma pantalla, sin scroll.
+        <div className="mx-auto space-y-3" style={{ width: "94%" }}>
+          <div className="flex flex-wrap justify-center gap-2">
+            <KpiChico letra="T" color={COLOR_TEAL} label="Total" valor={formatQ(data.kpis.total)} />
+            <KpiChico letra="C" color={COLOR_AZUL} label="Cancelado" valor={formatQ(data.kpis.cancelado)} />
+            <KpiChico letra="P" color={COLOR_CORAL} label="Por cobrar" valor={formatQ(data.kpis.por_cobrar)} />
+          </div>
 
+          <div className="grid grid-cols-3 gap-3">
             {data.tipos.map((t) => (
               <TablaCuotasTipo key={t.tipo} tipo={t} />
             ))}
           </div>
 
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+          <div className="grid grid-cols-3 gap-3">
             <ChartCard
               theme="financiero"
               estiloTarjeta={{ backgroundColor: FINANCIERO_SURFACE }}
               title="Cuota del año vs Cancelado"
               chart={<GraficoCuotaVsCancelado data={data} />}
               table={
-                <table className="w-full text-sm">
+                <table className="w-full text-xs">
                   <tbody>
                     <tr className="border-b border-line/50">
-                      <td className="px-2 py-1.5 text-ink">Cuota del año</td>
-                      <td className="px-2 py-1.5 text-right text-ink">{formatQ(data.kpis.total)}</td>
+                      <td className="px-2 py-1 text-ink">Cuota del año</td>
+                      <td className="px-2 py-1 text-right text-ink">{formatQ(data.kpis.total)}</td>
                     </tr>
                     <tr>
-                      <td className="px-2 py-1.5 text-ink">Cancelado</td>
-                      <td className="px-2 py-1.5 text-right text-ink">{formatQ(data.kpis.cancelado)}</td>
+                      <td className="px-2 py-1 text-ink">Cancelado</td>
+                      <td className="px-2 py-1 text-right text-ink">{formatQ(data.kpis.cancelado)}</td>
                     </tr>
                   </tbody>
                 </table>
@@ -255,12 +277,12 @@ function PaginaCuotasAsociados() {
               title="Cuotas por Tipo"
               chart={<DonutCuotasPorTipo data={data} />}
               table={
-                <table className="w-full text-sm">
+                <table className="w-full text-xs">
                   <tbody>
                     {data.tipos.map((t) => (
                       <tr key={t.tipo} className="border-b border-line/50">
-                        <td className="px-2 py-1.5 text-ink">{`Tipo ${t.tipo}`}</td>
-                        <td className="px-2 py-1.5 text-right text-ink">{formatQ(t.total_cuota)}</td>
+                        <td className="px-2 py-1 text-ink">{`Tipo ${t.tipo}`}</td>
+                        <td className="px-2 py-1 text-right text-ink">{formatQ(t.total_cuota)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -273,22 +295,22 @@ function PaginaCuotasAsociados() {
               title="Recuperación Cuota Asociados"
               chart={<DonutRecuperacion data={data} />}
               table={
-                <table className="w-full text-sm">
+                <table className="w-full text-xs">
                   <tbody>
                     <tr className="border-b border-line/50">
-                      <td className="px-2 py-1.5 text-ink">Cancelado</td>
-                      <td className="px-2 py-1.5 text-right text-ink">{formatQ(data.kpis.cancelado)}</td>
+                      <td className="px-2 py-1 text-ink">Cancelado</td>
+                      <td className="px-2 py-1 text-right text-ink">{formatQ(data.kpis.cancelado)}</td>
                     </tr>
                     <tr>
-                      <td className="px-2 py-1.5 text-ink">Por cobrar</td>
-                      <td className="px-2 py-1.5 text-right text-ink">{formatQ(data.kpis.por_cobrar)}</td>
+                      <td className="px-2 py-1 text-ink">Por cobrar</td>
+                      <td className="px-2 py-1 text-right text-ink">{formatQ(data.kpis.por_cobrar)}</td>
                     </tr>
                   </tbody>
                 </table>
               }
             />
           </div>
-        </>
+        </div>
       )}
     </div>
   );
