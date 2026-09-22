@@ -39,14 +39,14 @@ from sqlalchemy.orm import Session
 from app.schemas.dashboard_otros_informes import (
     CuotasAsociadosResponse,
     EjecucionGastosResponse,
-    FilaCentroCosto,
     FilaCuotaAsociado,
-    GrupoCentrosCosto,
+    FilaGastoCategoria,
     KpisCuotasAsociados,
-    KpisEjecucionGastos,
     PeriodoDisponibleGastos,
+    TarjetaResumenGasto,
     TipoCuotaAsociados,
 )
+from app.services.agrupador_cuentas import cargar_mapas_agrupador, grupo_de_cuenta
 
 _TIPOS_CUOTA = ("A", "B", "C")
 
@@ -129,41 +129,59 @@ def obtener_cuotas_asociados(db: Session, anio: int | None) -> CuotasAsociadosRe
 
 # --- Ejecución de gastos (por mes / acumulado) ---------------------------
 #
+# CORREGIDO -- una versión anterior de esta sección agrupaba por centro
+# de costo individual (22 filas). Se descartó por completo: verificado
+# con la fórmula DAX real del .pbix original Y con las capturas de
+# referencia (ambas coinciden entre sí) que la tabla agrupa por
+# CATEGORÍA DE GASTO ("GroupEgresos" en el .pbix), no por centro.
+#
+# "GroupEgresos" no es una columna propia -- es exactamente
+# dbo.CatalogoAgrupadorCuentas con TipoAgrupador='Egresos' (la MISMA
+# tabla/mecanismo que ya usa la columna "Grupo" de Ingresos/Egresos en
+# Estados Financieros, ver agrupador_cuentas.py: cargar_mapas_agrupador +
+# grupo_de_cuenta). Confirmado sin huecos: cada Cta_Codigo que aparece en
+# BalanceSaldos para Administración/Operación matchea alguna categoría
+# (0 filas "Sin clasificar" en la verificación contra agosto 2026).
+#
 # Fuentes reales:
-#     dbo.Presupuestos(emp_nit, par_ano, par_mes, cta_codigo,
-#         pre_presupuesto, cod_centro) -- presupuesto cargado mes a mes,
-#         con datos completos 2023-2026 para los 22 centros de costo
-#         reales (confirmado, sin huecos).
-#     dbo.BalanceSaldos(Cta_Codigo, Sal_Ano, Sal_Mes, Debitos, Cod_Centro)
-#         -- Ejecutado = SUM(Debitos), mismo campo que usa Egresos en
-#         Estados Financieros (dashboard_financiero.py).
-#     dbo.CentrosDeCosto(Cod_centro, Des_centro, nivel, CC_Grupo1) --
-#         nombre de cada centro. Los códigos REALES usados en Presupuestos/
-#         BalanceSaldos son siempre nivel 3 o 4 (el nivel hoja de cada
-#         rama): AD-01/AD-02/AD-03 (Administración) y OP-01 + OP-0X-YY
-#         (Operación) -- NUNCA aparecen los nodos intermedios "AD"/"OP"/
-#         "OP-02"/"OP-03"/"OP-04" sueltos como código de transacción, solo
-#         como agrupadores jerárquicos. Se agrupa por el prefijo del
-#         código (AD- / OP-), no por CC_Grupo1 (que solo cubre un nivel).
+#     dbo.BalanceSaldos(Cta_Codigo, Sal_Ano, Sal_Mes, Debitos, Creditos,
+#         Cod_Centro) -- Ejecutado = SUM(Debitos) - SUM(Creditos) (NETO,
+#         no solo Debitos -- a diferencia de Estados Financieros).
+#     dbo.Presupuestos(par_ano, par_mes, cta_codigo, pre_presupuesto,
+#         cod_centro).
 #
-# Filtro de cuenta: solo cta_codigo/Cta_Codigo que empiezan con '5'
-# (cuentas de gastos) -- consistente con el nombre de la página
-# ("Ejecución de GASTOS"); Presupuestos también trae una fila suelta con
-# cta_codigo '410104001' (ingresos) que queda excluida a propósito.
+# Administración = Cod_Centro IN ('AD-01', 'AD-02') -- OJO: AD-03 NO
+#     entra acá (a diferencia de la versión anterior, que agrupaba TODO
+#     lo que empezaba con "AD-").
+# Operación = el resto, pero con un filtro explícito, NO "todo lo que no
+#     sea Administración": Cod_Centro que empieza con 'O', o que empieza
+#     con 'A' y no es AD-01/AD-02 (esto incluye AD-03). Cod_Centro = '0'
+#     ("NO APLICA") queda EXCLUIDO de los dos grupos a propósito -- tiene
+#     un neto grande (-Q917,109.82 en agosto 2026 nada más) que si se
+#     incluyera en Operación arruina el total; el .pbix simplemente no lo
+#     cuenta en ningún lado.
+# Presupuesto Operativo excluye además cta_codigo='410104001' (una fila
+#     de ingresos suelta dentro de la tabla de Presupuestos).
 #
-# "Mensual" (página 4) filtra por mes exacto; "Acumulado" (página 5) usa
-# Sal_Mes/par_mes <= mes, dentro del MISMO año (mismo patrón "acumulado"
-# que el resto del módulo Financiero, reinicia cada enero).
+# Verificado EXACTO contra la captura de referencia real de agosto 2026
+# (mensual Y acumulado a agosto, dos verificaciones independientes):
+#   Mensual:    Administración Q143,505 (88.1%, ppto Q162,825, dif -Q19,320)
+#               Operación      Q710,318 (96.7%, ppto Q734,909, dif -Q24,590)
+#               Consolidado    Q853,823 (95.1%, ppto Q897,734, dif -Q43,911)
+#   Acumulado:  Administración Q1,328,560 (88.8%, ppto Q1,496,204)
+#               Operación      Q5,247,423 (75.6%, ppto Q6,943,846)
+#               Consolidado    Q6,575,984 (77.9%, ppto Q8,440,050)
+#   Categoría "Sueldos Bonificaciones y Prestaciones de Ley" dentro de
+#   Administración, agosto 2026: Q88,180.97 = 61.4% del peso -- exacto.
 #
-# "Peso %" = participación de cada centro sobre el PRESUPUESTO TOTAL del
-# grupo Administración+Operación (no sobre el ejecutado) -- es la
-# interpretación estándar de "peso" en un reporte de ejecución
-# presupuestaria (cuánto pesa cada centro en el presupuesto asignado).
-# No hay una cifra de referencia del cliente para esta página todavía
-# (a diferencia de Cuotas Asociados) -- los números se muestran
-# transparentes para que el cliente los valide.
+# "Peso %" (columnas 2 y 4 de la tabla) = participación de esa categoría
+# sobre el TOTAL EJECUTADO de su propio grupo (Administración u
+# Operación por separado, no sobre el consolidado ni sobre el
+# presupuesto) -- fórmula DAX real: DIVIDE(valor_categoria,
+# CALCULATE(total, REMOVEFILTERS(GroupEgresos)), 0).
 
-_GRUPOS_CENTRO_COSTO = (("Administración", "AD-"), ("Operación", "OP-"))
+_FILTRO_ADMIN_SQL = "bs.Cod_Centro IN ('AD-01', 'AD-02')"
+_FILTRO_OP_SQL = "(LEFT(bs.Cod_Centro, 1) = 'O' OR (LEFT(bs.Cod_Centro, 1) = 'A' AND bs.Cod_Centro NOT IN ('AD-01', 'AD-02')))"
 
 
 def _periodos_disponibles_gastos(db: Session) -> list[PeriodoDisponibleGastos]:
@@ -185,98 +203,143 @@ def _anio_mes_default_gastos(
     return anio or ultimo.anio, mes or ultimo.mes
 
 
-def _detalle_centros_costo(
-    db: Session, anio: int, mes: int, acumulado: bool
-) -> tuple[list[GrupoCentrosCosto], KpisEjecucionGastos]:
-    condicion_mes_presupuesto = "p.par_mes <= :mes" if acumulado else "p.par_mes = :mes"
-    condicion_mes_ejecutado = "bs.Sal_Mes <= :mes" if acumulado else "bs.Sal_Mes = :mes"
+def _neto_por_categoria(db: Session, anio: int, mes: int, acumulado: bool, filtro_centro_sql: str) -> dict[str, float]:
+    condicion_mes = "bs.Sal_Mes <= :mes" if acumulado else "bs.Sal_Mes = :mes"
+    filas = db.execute(
+        text(
+            f"""
+            SELECT bs.Cta_Codigo AS codigo, SUM(bs.Debitos) - SUM(bs.Creditos) AS neto
+            FROM dbo.BalanceSaldos bs
+            WHERE bs.Sal_Ano = :anio AND {condicion_mes} AND {filtro_centro_sql}
+            GROUP BY bs.Cta_Codigo
+            """
+        ),
+        {"anio": anio, "mes": mes},
+    ).all()
 
-    presupuesto_por_centro = {
-        centro: _num(valor)
-        for centro, valor in db.execute(
-            text(
-                f"""
-                SELECT p.cod_centro AS centro, SUM(p.pre_presupuesto) AS presupuesto
-                FROM dbo.Presupuestos p
-                WHERE p.par_ano = :anio AND {condicion_mes_presupuesto} AND p.cta_codigo LIKE '5%'
-                GROUP BY p.cod_centro
-                """
-            ),
-            {"anio": anio, "mes": mes},
-        ).all()
-    }
+    mapas, _ = cargar_mapas_agrupador(db, "Egresos")
+    por_categoria: dict[str, float] = {}
+    for codigo, neto in filas:
+        categoria = grupo_de_cuenta(mapas, codigo) or "Sin clasificar"
+        por_categoria[categoria] = por_categoria.get(categoria, 0.0) + _num(neto)
+    return por_categoria
 
-    ejecutado_por_centro = {
-        centro: _num(valor)
-        for centro, valor in db.execute(
-            text(
-                f"""
-                SELECT bs.Cod_Centro AS centro, SUM(bs.Debitos) AS ejecutado
-                FROM dbo.BalanceSaldos bs
-                WHERE bs.Sal_Ano = :anio AND {condicion_mes_ejecutado} AND bs.Cta_Codigo LIKE '5%'
-                GROUP BY bs.Cod_Centro
-                """
-            ),
-            {"anio": anio, "mes": mes},
-        ).all()
-    }
 
-    nombres_centro = dict(db.execute(text("SELECT Cod_centro, Des_centro FROM dbo.CentrosDeCosto")).all())
+def _presupuesto_grupo(db: Session, anio: int, mes: int, acumulado: bool, es_admin: bool) -> float:
+    condicion_mes = "p.par_mes <= :mes" if acumulado else "p.par_mes = :mes"
+    if es_admin:
+        filtro = "p.cod_centro IN ('AD-01', 'AD-02')"
+    else:
+        filtro = "p.cod_centro NOT IN ('AD-01', 'AD-02') AND p.cta_codigo <> '410104001'"
+    valor = db.execute(
+        text(f"SELECT SUM(p.pre_presupuesto) FROM dbo.Presupuestos p WHERE p.par_ano = :anio AND {condicion_mes} AND {filtro}"),
+        {"anio": anio, "mes": mes},
+    ).scalar()
+    return _num(valor)
 
-    presupuesto_total = sum(v for c, v in presupuesto_por_centro.items() if c != "0")
 
-    grupos: list[GrupoCentrosCosto] = []
-    for etiqueta, prefijo in _GRUPOS_CENTRO_COSTO:
-        centros = sorted(
-            c
-            for c in set(list(presupuesto_por_centro) + list(ejecutado_por_centro))
-            if c.startswith(prefijo)
+def _ejecucion_gastos(db: Session, anio: int, mes: int, acumulado: bool) -> EjecucionGastosResponse:
+    periodos = _periodos_disponibles_gastos(db)
+
+    por_categoria_admin = _neto_por_categoria(db, anio, mes, acumulado, _FILTRO_ADMIN_SQL)
+    por_categoria_op = _neto_por_categoria(db, anio, mes, acumulado, _FILTRO_OP_SQL)
+
+    total_ejecutado_admin = sum(por_categoria_admin.values())
+    total_ejecutado_op = sum(por_categoria_op.values())
+
+    nombres_categoria = sorted(set(list(por_categoria_admin) + list(por_categoria_op)))
+    categorias = [
+        FilaGastoCategoria(
+            categoria=cat,
+            administracion=por_categoria_admin.get(cat, 0.0),
+            peso_administracion=(por_categoria_admin.get(cat, 0.0) / total_ejecutado_admin * 100) if total_ejecutado_admin else 0.0,
+            operacion=por_categoria_op.get(cat, 0.0),
+            peso_operacion=(por_categoria_op.get(cat, 0.0) / total_ejecutado_op * 100) if total_ejecutado_op else 0.0,
+            consolidado=por_categoria_admin.get(cat, 0.0) + por_categoria_op.get(cat, 0.0),
         )
-        filas = []
-        for c in centros:
-            presupuesto = presupuesto_por_centro.get(c, 0.0)
-            ejecutado = ejecutado_por_centro.get(c, 0.0)
-            filas.append(
-                FilaCentroCosto(
-                    centro=c,
-                    nombre=nombres_centro.get(c) or c,
-                    peso_porcentaje=(presupuesto / presupuesto_total * 100) if presupuesto_total else 0.0,
-                    presupuesto=presupuesto,
-                    ejecutado=ejecutado,
-                    diferencia=presupuesto - ejecutado,
-                )
-            )
-        grupos.append(
-            GrupoCentrosCosto(
-                grupo=etiqueta,
-                filas=filas,
-                total_presupuesto=sum(f.presupuesto for f in filas),
-                total_ejecutado=sum(f.ejecutado for f in filas),
-                total_diferencia=sum(f.diferencia for f in filas),
-            )
-        )
+        for cat in nombres_categoria
+    ]
+    categorias.sort(key=lambda f: -f.consolidado)
 
-    kpis = KpisEjecucionGastos(
-        presupuesto=sum(g.total_presupuesto for g in grupos),
-        ejecutado=sum(g.total_ejecutado for g in grupos),
-        diferencia=sum(g.total_diferencia for g in grupos),
+    fila_total_ejecutado = FilaGastoCategoria(
+        categoria="Total ejecutado",
+        administracion=total_ejecutado_admin,
+        peso_administracion=100.0,
+        operacion=total_ejecutado_op,
+        peso_operacion=100.0,
+        consolidado=total_ejecutado_admin + total_ejecutado_op,
     )
-    return grupos, kpis
+
+    presupuesto_admin = _presupuesto_grupo(db, anio, mes, acumulado, es_admin=True)
+    presupuesto_op = _presupuesto_grupo(db, anio, mes, acumulado, es_admin=False)
+
+    fila_presupuesto = FilaGastoCategoria(
+        categoria="Presupuesto",
+        administracion=presupuesto_admin,
+        peso_administracion=100.0,
+        operacion=presupuesto_op,
+        peso_operacion=100.0,
+        consolidado=presupuesto_admin + presupuesto_op,
+    )
+
+    pct_admin = (total_ejecutado_admin / presupuesto_admin * 100) if presupuesto_admin else 0.0
+    pct_op = (total_ejecutado_op / presupuesto_op * 100) if presupuesto_op else 0.0
+    fila_ejecucion = FilaGastoCategoria(
+        categoria="Ejecución",
+        administracion=total_ejecutado_admin,
+        peso_administracion=pct_admin,
+        operacion=total_ejecutado_op,
+        peso_operacion=pct_op,
+        consolidado=total_ejecutado_admin + total_ejecutado_op,
+    )
+
+    presupuesto_total = presupuesto_admin + presupuesto_op
+    ejecutado_total = total_ejecutado_admin + total_ejecutado_op
+    pct_consolidado = (ejecutado_total / presupuesto_total * 100) if presupuesto_total else 0.0
+
+    tarjetas = [
+        TarjetaResumenGasto(
+            grupo="Administración",
+            presupuesto=presupuesto_admin,
+            ejecutado=total_ejecutado_admin,
+            porcentaje_ejecucion=pct_admin,
+            diferencia=total_ejecutado_admin - presupuesto_admin,
+        ),
+        TarjetaResumenGasto(
+            grupo="Operación",
+            presupuesto=presupuesto_op,
+            ejecutado=total_ejecutado_op,
+            porcentaje_ejecucion=pct_op,
+            diferencia=total_ejecutado_op - presupuesto_op,
+        ),
+        TarjetaResumenGasto(
+            grupo="Consolidado",
+            presupuesto=presupuesto_total,
+            ejecutado=ejecutado_total,
+            porcentaje_ejecucion=pct_consolidado,
+            diferencia=ejecutado_total - presupuesto_total,
+        ),
+    ]
+
+    return EjecucionGastosResponse(
+        anio=anio,
+        mes=mes,
+        periodos_disponibles=periodos,
+        categorias=categorias,
+        fila_total_ejecutado=fila_total_ejecutado,
+        fila_presupuesto=fila_presupuesto,
+        fila_ejecucion=fila_ejecucion,
+        tarjetas=tarjetas,
+    )
 
 
 def obtener_ejecucion_gastos_mensual(db: Session, anio: int | None, mes: int | None) -> EjecucionGastosResponse:
     periodos = _periodos_disponibles_gastos(db)
     anio_resuelto, mes_resuelto = _anio_mes_default_gastos(anio, mes, periodos)
-    grupos, kpis = _detalle_centros_costo(db, anio_resuelto, mes_resuelto, acumulado=False)
-    return EjecucionGastosResponse(
-        anio=anio_resuelto, mes=mes_resuelto, periodos_disponibles=periodos, kpis=kpis, grupos=grupos
-    )
+    return _ejecucion_gastos(db, anio_resuelto, mes_resuelto, acumulado=False)
 
 
 def obtener_ejecucion_gastos_acumulado(db: Session, anio: int | None, mes: int | None) -> EjecucionGastosResponse:
     periodos = _periodos_disponibles_gastos(db)
     anio_resuelto, mes_resuelto = _anio_mes_default_gastos(anio, mes, periodos)
-    grupos, kpis = _detalle_centros_costo(db, anio_resuelto, mes_resuelto, acumulado=True)
-    return EjecucionGastosResponse(
-        anio=anio_resuelto, mes=mes_resuelto, periodos_disponibles=periodos, kpis=kpis, grupos=grupos
-    )
+    return _ejecucion_gastos(db, anio_resuelto, mes_resuelto, acumulado=True)

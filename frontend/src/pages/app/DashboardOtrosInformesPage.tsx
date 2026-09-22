@@ -9,12 +9,13 @@ import {
 } from "../../api/dashboardOtrosInformes";
 import { mensajeError } from "../../api/client";
 import { ChartCard } from "../../components/ChartCard";
-import { KpiCardIcono, FINANCIERO_SURFACE } from "../../components/TablaGrupoExpandible";
+import { FINANCIERO_SURFACE } from "../../components/TablaGrupoExpandible";
 import { formatPercent, formatQ, MESES_LARGOS } from "../../utils/format";
 import type {
   CuotasAsociadosResponse,
   EjecucionGastosResponse,
-  GrupoCentrosCosto,
+  FilaGastoCategoria,
+  TarjetaResumenGasto,
   TipoCuotaAsociados,
 } from "../../types/dashboardOtrosInformes";
 
@@ -28,9 +29,6 @@ const COLOR_AZUL = "#507eaa";
 const COLOR_MARINO = "#375b7d";
 
 const COLOR_POR_TIPO: Record<string, string> = { A: COLOR_TEAL, B: COLOR_AZUL, C: COLOR_MARINO };
-// Usado por la sección de Ejecución de gastos más abajo (todavía con el
-// layout viejo en este commit puntual -- se compacta en el próximo).
-const ANCHO_TABLA = "55%";
 
 // Layout COMPACTO calcado de las proporciones reales del .pbix (lienzo
 // 1920x1500, todo el contenido cabe sin scroll) -- ver instrucción del
@@ -316,63 +314,102 @@ function PaginaCuotasAsociados() {
   );
 }
 
-// --- Ejecución de gastos (por mes / acumulado) ---------------------------
-// Misma forma de respuesta para las 2 vistas (mes vs acumulado difiere
-// solo en el endpoint que se llama, ver arriba) -- un solo componente
-// compartido, con el mismo selector Año/Mes de 2 niveles que ya usa
-// DashboardFinancieroPage (drill Año expandible + Mes).
+// --- Ejecución de gastos (por mes / acumulado) ------------------------------
+//
+// Estructura CORREGIDA (ver dashboard_otros_informes.py): la tabla
+// agrupa por categoría de gasto (GroupEgresos), no por centro de costo.
+// Columnas: Administración | Peso % | Operación | Peso % | Consolidado.
+// Debajo, 2 filas de resumen (Presupuesto / Ejecución, misma forma que
+// las filas de la tabla) y 3 tarjetas (Administración/Operación/
+// Consolidado) con % de ejecución, diferencia y una gráfica chica.
+//
+// Layout calcado del .pbix: tabla principal ~58% de ancho, ~35% de alto,
+// bloque compacto arriba (NO estirada a todo el ancho) -- todo el
+// contenido de la página cabe en una sola pantalla, sin scroll.
 
-function TablaCentrosCosto({ grupo }: { grupo: GrupoCentrosCosto }) {
+function FilaTabla({ fila, negrita = false }: { fila: FilaGastoCategoria; negrita?: boolean }) {
+  return (
+    <tr className={`border-b border-line/50 ${negrita ? "font-semibold" : ""} text-ink`}>
+      <td className="truncate px-2 py-0.5" title={fila.categoria}>
+        {fila.categoria}
+      </td>
+      <td className="whitespace-nowrap px-2 py-0.5 text-right">{formatQ(fila.administracion)}</td>
+      <td className="whitespace-nowrap px-2 py-0.5 text-right">{formatPercent(fila.peso_administracion)}</td>
+      <td className="whitespace-nowrap px-2 py-0.5 text-right">{formatQ(fila.operacion)}</td>
+      <td className="whitespace-nowrap px-2 py-0.5 text-right">{formatPercent(fila.peso_operacion)}</td>
+      <td className="whitespace-nowrap px-2 py-0.5 text-right">{formatQ(fila.consolidado)}</td>
+    </tr>
+  );
+}
+
+function TablaEjecucionGastos({ data }: { data: EjecucionGastosResponse }) {
   return (
     <div className="overflow-hidden rounded-tremor-default ring-1 ring-line">
-      <table className="w-full text-sm">
+      <table className="w-full text-[11px]">
         <thead>
-          <tr style={{ backgroundColor: grupo.grupo === "Administración" ? COLOR_TEAL : COLOR_AZUL }}>
-            <th className="px-3 py-2 text-left font-semibold text-white">{grupo.grupo}</th>
-            <th className="px-3 py-2 text-right font-semibold text-white">Peso %</th>
-            <th className="px-3 py-2 text-right font-semibold text-white">Presupuesto</th>
-            <th className="px-3 py-2 text-right font-semibold text-white">Ejecutado</th>
-            <th className="px-3 py-2 text-right font-semibold text-white">Diferencia</th>
+          <tr style={{ backgroundColor: COLOR_TEAL }}>
+            <th className="px-2 py-1 text-left font-semibold text-white">Categoría</th>
+            <th className="px-2 py-1 text-right font-semibold text-white">Administración</th>
+            <th className="px-2 py-1 text-right font-semibold text-white">Peso %</th>
+            <th className="px-2 py-1 text-right font-semibold text-white">Operación</th>
+            <th className="px-2 py-1 text-right font-semibold text-white">Peso %</th>
+            <th className="px-2 py-1 text-right font-semibold text-white">Consolidado</th>
           </tr>
         </thead>
         <tbody style={{ backgroundColor: FINANCIERO_SURFACE }}>
-          {grupo.filas.map((f) => (
-            <tr key={f.centro} className="border-b border-line/50">
-              <td className="break-words px-3 py-1.5 text-ink" title={`${f.centro} — ${f.nombre}`}>
-                {f.nombre}
-              </td>
-              <td className="px-3 py-1.5 text-right text-ink">{formatPercent(f.peso_porcentaje)}</td>
-              <td className="px-3 py-1.5 text-right text-ink">{formatQ(f.presupuesto)}</td>
-              <td className="px-3 py-1.5 text-right text-ink">{formatQ(f.ejecutado)}</td>
-              <td className="px-3 py-1.5 text-right text-ink">{formatQ(f.diferencia)}</td>
-            </tr>
+          {data.categorias.map((f) => (
+            <FilaTabla key={f.categoria} fila={f} />
           ))}
-          <tr className="font-semibold text-ink">
-            <td className="px-3 py-2">{`Total ${grupo.grupo}`}</td>
-            <td className="px-3 py-2 text-right">{formatPercent(grupo.filas.reduce((s, f) => s + f.peso_porcentaje, 0))}</td>
-            <td className="px-3 py-2 text-right">{formatQ(grupo.total_presupuesto)}</td>
-            <td className="px-3 py-2 text-right">{formatQ(grupo.total_ejecutado)}</td>
-            <td className="px-3 py-2 text-right">{formatQ(grupo.total_diferencia)}</td>
-          </tr>
+          <FilaTabla fila={data.fila_total_ejecutado} negrita />
         </tbody>
       </table>
     </div>
   );
 }
 
-function GraficoPresupuestoVsEjecutado({ data }: { data: EjecucionGastosResponse }) {
-  const filas = data.grupos.map((g) => ({ etiqueta: g.grupo, presupuesto: g.total_presupuesto, ejecutado: g.total_ejecutado }));
+function BandaResumen({ fila, color }: { fila: FilaGastoCategoria; color: string }) {
   return (
-    <ResponsiveContainer width="100%" height={260}>
-      <BarChart data={filas} margin={{ top: 4, right: 16, bottom: 4, left: 8 }}>
-        <XAxis dataKey="etiqueta" fontSize={12} tickLine={false} />
-        <YAxis type="number" tickFormatter={(v: number) => formatQ(v)} fontSize={12} stroke="rgb(var(--color-ink-faint))" />
-        <Tooltip formatter={(v: number) => formatQ(v)} contentStyle={{ background: "rgb(var(--color-bg-surface))", border: "1px solid rgb(var(--color-line))", borderRadius: 8 }} />
-        <Legend />
-        <Bar dataKey="presupuesto" name="Presupuesto" fill={COLOR_TEAL} radius={[4, 4, 0, 0]} />
-        <Bar dataKey="ejecutado" name="Ejecutado" fill={COLOR_AZUL} radius={[4, 4, 0, 0]} />
-      </BarChart>
-    </ResponsiveContainer>
+    <table className="w-full table-fixed overflow-hidden rounded-tremor-default text-[11px] text-white" style={{ backgroundColor: color }}>
+      <tbody>
+        <tr>
+          <td className="px-2 py-1 font-semibold">{fila.categoria}</td>
+          <td className="whitespace-nowrap px-2 py-1 text-right font-semibold">{formatQ(fila.administracion)}</td>
+          <td className="whitespace-nowrap px-2 py-1 text-right font-semibold">{formatPercent(fila.peso_administracion)}</td>
+          <td className="whitespace-nowrap px-2 py-1 text-right font-semibold">{formatQ(fila.operacion)}</td>
+          <td className="whitespace-nowrap px-2 py-1 text-right font-semibold">{formatPercent(fila.peso_operacion)}</td>
+          <td className="whitespace-nowrap px-2 py-1 text-right font-semibold">{formatQ(fila.consolidado)}</td>
+        </tr>
+      </tbody>
+    </table>
+  );
+}
+
+function TarjetaGasto({ tarjeta }: { tarjeta: TarjetaResumenGasto }) {
+  const filas = [
+    { etiqueta: "Presupuesto", valor: tarjeta.presupuesto },
+    { etiqueta: "Ejecutado", valor: tarjeta.ejecutado },
+  ];
+  return (
+    <div className="overflow-hidden rounded-tremor-default ring-1 ring-line" style={{ backgroundColor: FINANCIERO_SURFACE }}>
+      <div className="flex items-center justify-between px-3 py-1.5">
+        <span className="text-xs font-semibold text-ink">{tarjeta.grupo}</span>
+        <span className="text-sm font-bold text-ink">{formatPercent(tarjeta.porcentaje_ejecucion)}</span>
+      </div>
+      <div className="px-3 text-[11px]" style={{ color: tarjeta.diferencia < 0 ? COLOR_CORAL : COLOR_TEAL }}>
+        Diferencia: {formatQ(tarjeta.diferencia)}
+      </div>
+      <ResponsiveContainer width="100%" height={110}>
+        <BarChart data={filas} margin={{ top: 4, right: 12, bottom: 0, left: 0 }}>
+          <XAxis dataKey="etiqueta" fontSize={9} tickLine={false} />
+          <YAxis type="number" tickFormatter={(v: number) => formatQ(v)} fontSize={9} width={55} stroke="rgb(var(--color-ink-faint))" />
+          <Tooltip formatter={(v: number) => formatQ(v)} contentStyle={{ background: "rgb(var(--color-bg-surface))", border: "1px solid rgb(var(--color-line))", borderRadius: 8 }} />
+          <Bar dataKey="valor" radius={[4, 4, 0, 0]}>
+            <Cell fill={COLOR_TEAL} />
+            <Cell fill={COLOR_AZUL} />
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
   );
 }
 
@@ -428,83 +465,57 @@ function PaginaEjecucionGastos({ acumulado }: { acumulado: boolean }) {
   }
 
   const tituloPagina = data
-    ? `Ejecución de Gastos ${acumulado ? "Acumulado" : "por Mes"} — ${MESES_LARGOS[data.mes - 1]} ${data.anio}`
+    ? acumulado
+      ? `Detalle de Ejecución Gastos vs. Presupuesto al ${MESES_LARGOS[data.mes - 1]} ${data.anio}`
+      : `Ejecución de Gastos por Mes — ${MESES_LARGOS[data.mes - 1]} ${data.anio}`
     : `Ejecución de Gastos ${acumulado ? "Acumulado" : "por Mes"}`;
 
   return (
-    <div className="space-y-5">
-      <div className="relative flex min-h-[64px] items-center justify-center">
-        <Title className="px-4 text-center text-3xl text-ink">{tituloPagina}</Title>
-        <div className="absolute right-0 top-full mt-5 flex gap-2">
-          <label className="block">
-            <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-ink-muted">Año</span>
-            <select
-              value={anio}
-              onChange={(e) => cambiarAnio(e.target.value)}
-              className="rounded-tremor-default border border-line bg-surface px-3 py-1.5 text-sm text-ink"
-            >
-              {aniosDisponibles.map((a) => (
-                <option key={a} value={a}>
-                  {a}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-ink-muted">Mes</span>
-            <select
-              value={mes}
-              onChange={(e) => setMes(e.target.value)}
-              className="rounded-tremor-default border border-line bg-surface px-3 py-1.5 text-sm text-ink"
-            >
-              {mesesDelAnio.map((m) => (
-                <option key={m} value={m}>
-                  {MESES_LARGOS[m - 1]}
-                </option>
-              ))}
-            </select>
-          </label>
+    <div className="space-y-3">
+      <div className="relative flex min-h-[40px] items-center justify-center">
+        <Title className="px-4 text-center text-xl text-ink">{tituloPagina}</Title>
+        <div className="absolute right-0 top-0 flex gap-2">
+          <select
+            value={anio}
+            onChange={(e) => cambiarAnio(e.target.value)}
+            className="rounded-tremor-default border border-line bg-surface px-2 py-1 text-xs text-ink"
+          >
+            {aniosDisponibles.map((a) => (
+              <option key={a} value={a}>
+                {a}
+              </option>
+            ))}
+          </select>
+          <select
+            value={mes}
+            onChange={(e) => setMes(e.target.value)}
+            className="rounded-tremor-default border border-line bg-surface px-2 py-1 text-xs text-ink"
+          >
+            {mesesDelAnio.map((m) => (
+              <option key={m} value={m}>
+                {MESES_LARGOS[m - 1]}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 
       {cargando && !data && <p className="text-sm text-ink-muted">Cargando…</p>}
 
       {data && (
-        <>
-          <div className="mx-auto space-y-5" style={{ width: ANCHO_TABLA }}>
-            <div className="flex flex-wrap justify-center gap-3">
-              <KpiCardIcono letra="P" color={COLOR_TEAL} label="Presupuesto" valor={formatQ(data.kpis.presupuesto)} />
-              <KpiCardIcono letra="E" color={COLOR_AZUL} label="Ejecutado" valor={formatQ(data.kpis.ejecutado)} />
-              <KpiCardIcono letra="D" color={COLOR_CORAL} label="Diferencia" valor={formatQ(data.kpis.diferencia)} />
-            </div>
+        // Tabla principal centrada al 58% de ancho -- bloque compacto,
+        // NO estirada a todo el ancho de la página (calcado del .pbix).
+        <div className="mx-auto space-y-2" style={{ width: "58%" }}>
+          <TablaEjecucionGastos data={data} />
+          <BandaResumen fila={data.fila_presupuesto} color={COLOR_AZUL} />
+          <BandaResumen fila={data.fila_ejecucion} color={COLOR_MARINO} />
 
-            {data.grupos.map((g) => (
-              <TablaCentrosCosto key={g.grupo} grupo={g} />
+          <div className="grid grid-cols-3 gap-2 pt-1">
+            {data.tarjetas.map((t) => (
+              <TarjetaGasto key={t.grupo} tarjeta={t} />
             ))}
           </div>
-
-          <div className="mx-auto" style={{ width: ANCHO_TABLA }}>
-            <ChartCard
-              theme="financiero"
-              estiloTarjeta={{ backgroundColor: FINANCIERO_SURFACE }}
-              title="Presupuesto vs Ejecutado por grupo"
-              chart={<GraficoPresupuestoVsEjecutado data={data} />}
-              table={
-                <table className="w-full text-sm">
-                  <tbody>
-                    {data.grupos.map((g) => (
-                      <tr key={g.grupo} className="border-b border-line/50">
-                        <td className="px-2 py-1.5 text-ink">{g.grupo}</td>
-                        <td className="px-2 py-1.5 text-right text-ink">{formatQ(g.total_presupuesto)}</td>
-                        <td className="px-2 py-1.5 text-right text-ink">{formatQ(g.total_ejecutado)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              }
-            />
-          </div>
-        </>
+        </div>
       )}
     </div>
   );

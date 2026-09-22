@@ -34,26 +34,23 @@ export interface PeriodoDisponibleGastos {
   mes: number;
 }
 
-export interface FilaCentroCosto {
-  centro: string;
-  nombre: string;
-  peso_porcentaje: number;
-  presupuesto: number;
-  ejecutado: number;
-  diferencia: number;
+// Misma forma para las filas de la tabla (una por categoría de
+// GroupEgresos) y para las 2 filas de resumen que van debajo
+// (Presupuesto / Ejecución) -- ver dashboard_otros_informes.py.
+export interface FilaGastoCategoria {
+  categoria: string;
+  administracion: number;
+  peso_administracion: number;
+  operacion: number;
+  peso_operacion: number;
+  consolidado: number;
 }
 
-export interface GrupoCentrosCosto {
+export interface TarjetaResumenGasto {
   grupo: string;
-  filas: FilaCentroCosto[];
-  total_presupuesto: number;
-  total_ejecutado: number;
-  total_diferencia: number;
-}
-
-export interface KpisEjecucionGastos {
   presupuesto: number;
   ejecutado: number;
+  porcentaje_ejecucion: number;
   diferencia: number;
 }
 
@@ -61,6 +58,9 @@ export interface EjecucionGastosResponse {
   anio: number;
   mes: number;
   periodos_disponibles: PeriodoDisponibleGastos[];
-  kpis: KpisEjecucionGastos;
-  grupos: GrupoCentrosCosto[];
+  categorias: FilaGastoCategoria[];
+  fila_total_ejecutado: FilaGastoCategoria;
+  fila_presupuesto: FilaGastoCategoria;
+  fila_ejecucion: FilaGastoCategoria;
+  tarjetas: TarjetaResumenGasto[];
 }

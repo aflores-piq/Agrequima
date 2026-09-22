@@ -37,6 +37,12 @@ class CuotasAsociadosResponse(BaseModel):
 
 
 # --- Ejecución de gastos (por mes / acumulado) --------------------------
+#
+# CORREGIDO -- versión anterior (tabla de 22 centros de costo individuales)
+# descartada por completo: la estructura real (confirmada por la fórmula
+# DAX del .pbix original Y por las capturas de referencia, ambas
+# coinciden) agrupa por CATEGORÍA DE GASTO (GroupEgresos), no por centro
+# de costo. Ver services/dashboard_otros_informes.py.
 
 
 class PeriodoDisponibleGastos(BaseModel):
@@ -44,26 +50,25 @@ class PeriodoDisponibleGastos(BaseModel):
     mes: int
 
 
-class FilaCentroCosto(BaseModel):
-    centro: str
-    nombre: str
-    peso_porcentaje: float
-    presupuesto: float
-    ejecutado: float
-    diferencia: float
+class FilaGastoCategoria(BaseModel):
+    """Una fila de la tabla principal (una categoría de GroupEgresos), o
+    una de las 2 filas de resumen que van debajo con la misma forma
+    ("Total ejecutado" ya viene incluido como una fila más de la tabla;
+    "Presupuesto" y "Ejecución" son filas aparte, fuera de la tabla)."""
+
+    categoria: str
+    administracion: float
+    peso_administracion: float
+    operacion: float
+    peso_operacion: float
+    consolidado: float
 
 
-class GrupoCentrosCosto(BaseModel):
+class TarjetaResumenGasto(BaseModel):
     grupo: str
-    filas: list[FilaCentroCosto]
-    total_presupuesto: float
-    total_ejecutado: float
-    total_diferencia: float
-
-
-class KpisEjecucionGastos(BaseModel):
     presupuesto: float
     ejecutado: float
+    porcentaje_ejecucion: float
     diferencia: float
 
 
@@ -71,5 +76,8 @@ class EjecucionGastosResponse(BaseModel):
     anio: int
     mes: int
     periodos_disponibles: list[PeriodoDisponibleGastos]
-    kpis: KpisEjecucionGastos
-    grupos: list[GrupoCentrosCosto]
+    categorias: list[FilaGastoCategoria]
+    fila_total_ejecutado: FilaGastoCategoria
+    fila_presupuesto: FilaGastoCategoria
+    fila_ejecucion: FilaGastoCategoria
+    tarjetas: list[TarjetaResumenGasto]
