@@ -282,7 +282,20 @@ function GraficoCuotaVsCancelado({ data }: { data: CuotasAsociadosResponse }) {
             stroke="#FFFFFF"
             tick={{ fill: "#FFFFFF" }}
           />
-          <Tooltip formatter={(v: number) => formatQ(v)} contentStyle={{ background: "rgb(var(--color-bg-surface))", border: "1px solid rgb(var(--color-line))", borderRadius: 8 }} />
+          {/* Tooltip calcado EXACTO del patrón aprobado de Estados
+              Financieros (ver TresBarrasResultado.tsx): fondo
+              FINANCIERO_SURFACE (el mismo gris de las tarjetas/celdas,
+              NO rgb(var(--color-bg-surface)) -- esa es la variable
+              general de la app, que resuelve a slate-900/#0F172A en
+              oscuro, un azul marino inventado que nunca se usó en las
+              páginas aprobadas) + labelStyle/itemStyle en color ink. */}
+          <Tooltip
+            cursor={{ fill: "rgb(var(--color-ink-faint) / 0.08)" }}
+            formatter={(v: number) => formatQ(v)}
+            contentStyle={{ background: FINANCIERO_SURFACE, border: "1px solid rgb(var(--color-line))", borderRadius: 8 }}
+            labelStyle={{ color: "rgb(var(--color-ink))" }}
+            itemStyle={{ color: "rgb(var(--color-ink))" }}
+          />
           {/* Barra BASE coloreada POR TIPO con 40% de opacidad (60% de
               transparencia, FILL_OPACITY_BARRA_BASE) -- confirmado
               contra Layout.json que ESTA barra (la ancha) es la que
