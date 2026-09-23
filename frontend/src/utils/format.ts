@@ -4,20 +4,19 @@ const usdFormatter = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 0,
 });
 
-const qFormatter = new Intl.NumberFormat("es-GT", {
-  style: "currency",
-  currency: "GTQ",
-  maximumFractionDigits: 0,
-});
-
 const numberFormatter = new Intl.NumberFormat("es-GT");
 
 export function formatUSD(v: number): string {
   return usdFormatter.format(v);
 }
 
+// Intl.NumberFormat con currency:"GTQ" inserta un espacio entre "Q" y el
+// monto ("Q 930") -- el reporte real de Power BI no lleva ese espacio
+// ("Q930", "-Q19,320", con el signo ANTES de la Q). Se arma el string a
+// mano en vez de confiar en el formateador de moneda del Intl.
 export function formatQ(v: number): string {
-  return qFormatter.format(v);
+  const signo = v < 0 ? "-" : "";
+  return `${signo}Q${Math.round(Math.abs(v)).toLocaleString("es-GT")}`;
 }
 
 export function formatNumber(v: number): string {

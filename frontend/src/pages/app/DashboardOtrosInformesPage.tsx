@@ -16,6 +16,7 @@ import type {
   CuotasAsociadosResponse,
   EjecucionGastosResponse,
   FilaGastoCategoria,
+  TarjetaResumenGasto,
   TipoCuotaAsociados,
 } from "../../types/dashboardOtrosInformes";
 
@@ -733,25 +734,91 @@ function PaginaCuotasAsociados() {
 // bloque compacto arriba (NO estirada a todo el ancho) -- todo el
 // contenido de la página cabe en una sola pantalla, sin scroll.
 
-function FilaTabla({ fila, negrita = false }: { fila: FilaGastoCategoria; negrita?: boolean }) {
+function FilaTabla({
+  fila,
+  negrita = false,
+  ocultarCeros = false,
+  fondoTotal = false,
+  // pivotTable real: values.wordWrap=true -- el nombre de categoría debe
+  // poder pasar a una 2da línea, NO truncarse con "..." (antes usaba
+  // `truncate`, que corta nombres largos como "Literatura y Material
+  // para Capacitación Programa Educación").
+  ajustarTexto = false,
+}: {
+  fila: FilaGastoCategoria;
+  negrita?: boolean;
+  // Página "Ejecución gastos por mes" (pivotTable real del .pbix, sin
+  // propiedad visual explícita de "vacío" -- las categorías vienen de un
+  // COALESCE(...,0), así que un 0 acá siempre significa "sin dato para
+  // ese grupo", nunca un monto real de Q0. Celda vacía en vez de "Q0"/
+  // "0.0%" para esos casos.
+  ocultarCeros?: boolean;
+  // rowTotal.backColor='#4CAF50' + applyToHeaders=true en el pivotTable
+  // real -- la fila "Total ejecutado" lleva fondo verde en TODAS sus
+  // celdas (incluida la del nombre), no solo texto en negrita.
+  fondoTotal?: boolean;
+  ajustarTexto?: boolean;
+}) {
+  const celda = (valor: number, formatear: (v: number) => string) => (ocultarCeros && valor === 0 ? "" : formatear(valor));
+  const claseCelda = `whitespace-nowrap px-2 py-1 text-right ${fondoTotal ? "text-white" : ""}`;
   return (
-    <tr className={`border-b border-line/50 ${negrita ? "font-semibold" : ""} text-ink`}>
-      <td className="truncate px-2 py-0.5" title={fila.categoria}>
+    <tr
+      className={`border-b border-line/50 ${negrita ? "font-semibold" : ""} text-ink`}
+      style={fondoTotal ? { backgroundColor: VERDE_ENCABEZADO } : undefined}
+    >
+      <td
+        className={`px-2 py-1 ${ajustarTexto ? "whitespace-normal break-words" : "truncate"} ${fondoTotal ? "text-white" : ""}`}
+        title={ajustarTexto ? undefined : fila.categoria}
+      >
         {fila.categoria}
       </td>
-      <td className="whitespace-nowrap px-2 py-0.5 text-right">{formatQ(fila.administracion)}</td>
-      <td className="whitespace-nowrap px-2 py-0.5 text-right">{formatPercent(fila.peso_administracion)}</td>
-      <td className="whitespace-nowrap px-2 py-0.5 text-right">{formatQ(fila.operacion)}</td>
-      <td className="whitespace-nowrap px-2 py-0.5 text-right">{formatPercent(fila.peso_operacion)}</td>
-      <td className="whitespace-nowrap px-2 py-0.5 text-right">{formatQ(fila.consolidado)}</td>
+      <td className={claseCelda}>{celda(fila.administracion, formatQ)}</td>
+      <td className={claseCelda}>{celda(fila.peso_administracion, formatPercent)}</td>
+      <td className={claseCelda}>{celda(fila.operacion, formatQ)}</td>
+      <td className={claseCelda}>{celda(fila.peso_operacion, formatPercent)}</td>
+      <td className={claseCelda}>{celda(fila.consolidado, formatQ)}</td>
     </tr>
   );
 }
 
-function TablaEjecucionGastos({ data }: { data: EjecucionGastosResponse }) {
+// Ancho de columnas calcado del pivotTable real de cada página
+// (columnWidth del Layout.json) -- son 2 medidas DAX/páginas distintas
+// ("Centros de Costo" vs "Centros de Costo acumulado") con anchos
+// propios, no el mismo layout reusado:
+// mensual: GroupEgresos≈542px de ~1115px (49%), EjecutadoOperativo≈9%.
+// acumulado: GroupEgresos≈483px de ~1113px (43%), EjecutadoAdministrativo≈
+// 14%, EjecutadoOperativo≈11%, TotalEjecutado≈12%, ambos Peso≈9%.
+const ANCHOS_COLUMNA_MENSUAL = ["49%", "12%", "9%", "12%", "9%", "9%"];
+const ANCHOS_COLUMNA_ACUMULADO = ["43%", "14%", "9%", "11%", "9%", "12%"];
+
+function ColgroupEjecucion({ variante }: { variante: "mensual" | "acumulado" }) {
+  const anchos = variante === "mensual" ? ANCHOS_COLUMNA_MENSUAL : ANCHOS_COLUMNA_ACUMULADO;
+  return (
+    <colgroup>
+      {anchos.map((ancho, i) => (
+        <col key={i} style={{ width: ancho }} />
+      ))}
+    </colgroup>
+  );
+}
+
+function TablaEjecucionGastos({ data, variante }: { data: EjecucionGastosResponse; variante: "mensual" | "acumulado" }) {
+  const esAcumulado = variante === "acumulado";
+  // pivotTable real: values/columnHeaders/rowHeaders.fontSize=14D en las
+  // 2 páginas -- antes esta tabla usaba 11px (un valor propio de una
+  // versión anterior, nunca actualizado al dato real ya extraído del
+  // Layout.json).
+  const claseTabla = "w-full text-sm";
+  // columnHeaders real: alignment='Center' en las 2 páginas. bold: la
+  // página mensual lo desactiva explícitamente (bold=false); la página
+  // acumulado NO trae esa propiedad, así que queda con el bold por
+  // default del widget pivotTable de Power BI -- son 2 configs
+  // distintas, confirmado comparando ambos pivotTable.config.
+  const claseHeader = `px-2 py-1.5 text-center text-white ${esAcumulado ? "font-semibold" : "font-normal"}`;
   return (
     <div className="overflow-hidden rounded-tremor-default ring-1 ring-line">
-      <table className="w-full text-[11px]">
+      <table className={claseTabla}>
+        <ColgroupEjecucion variante={variante} />
         <thead>
           {/* VERDE_ENCABEZADO (#4CAF50, TablaGrupoExpandible.tsx): el
               mismo verde real que ya usan las demás tablas del sistema
@@ -759,37 +826,80 @@ function TablaEjecucionGastos({ data }: { data: EjecucionGastosResponse }) {
               usaba COLOR_TEAL (#3f6f6b), un verde/teal distinto que no
               coincidía con el resto del reporte. */}
           <tr style={{ backgroundColor: VERDE_ENCABEZADO }}>
-            <th className="px-2 py-1 text-left font-semibold text-white">Categoría</th>
-            <th className="px-2 py-1 text-right font-semibold text-white">Administración</th>
-            <th className="px-2 py-1 text-right font-semibold text-white">Peso %</th>
-            <th className="px-2 py-1 text-right font-semibold text-white">Operación</th>
-            <th className="px-2 py-1 text-right font-semibold text-white">Peso %</th>
-            <th className="px-2 py-1 text-right font-semibold text-white">Consolidado</th>
+            <th className={claseHeader}>Gastos</th>
+            <th className={claseHeader}>Administración</th>
+            <th className={claseHeader}>Peso en %</th>
+            <th className={claseHeader}>Operación</th>
+            <th className={claseHeader}>Peso en %</th>
+            <th className={claseHeader}>Consolidado</th>
           </tr>
         </thead>
         <tbody style={{ backgroundColor: FINANCIERO_SURFACE }}>
           {data.categorias.map((f) => (
-            <FilaTabla key={f.categoria} fila={f} />
+            <FilaTabla key={f.categoria} fila={f} ocultarCeros ajustarTexto />
           ))}
-          <FilaTabla fila={data.fila_total_ejecutado} negrita />
+          <FilaTabla fila={data.fila_total_ejecutado} negrita ocultarCeros fondoTotal ajustarTexto />
         </tbody>
       </table>
     </div>
   );
 }
 
-// Texto de resumen en línea (12 de estos) -- calcado del reporte
-// original: NO son tarjetas KPI (sin caja, sin ícono, sin relleno), son
-// etiqueta y valor pegados uno al otro en la misma línea, como una
-// oración normal de texto, del mismo tamaño que el resto de textos del
-// reporte. El diseño anterior (KpiMini) los mostraba como tiras con
-// caja/ring/franja de color -- eso es justamente lo que se está
-// sacando acá.
-function TextoResumen({ label, valor }: { label: string; valor: string }) {
+// Ancho de columna en fracciones de grid (mismo valor que ANCHOS_COLUMNA_*
+// de arriba, para que ResumenPresupuestoEjecucion quede pixel-alineado
+// con las columnas de la tabla de encima).
+function anchosGrid(variante: "mensual" | "acumulado"): string {
+  return (variante === "mensual" ? ANCHOS_COLUMNA_MENSUAL : ANCHOS_COLUMNA_ACUMULADO).join(" ");
+}
+
+// Bloque "Presupuesto"/"Ejecución" -- en el .pbix real es un elemento
+// INDEPENDIENTE debajo de la tabla (2 textbox + 12 advanceCard sueltos,
+// no parte del pivotTable), con su propia franja de fondo y cada valor
+// en su propia caja. Antes estas 2 filas vivían DENTRO de la tabla
+// (como si fueran más filas del pivotTable) -- error de esta misma
+// tarea, corregido acá.
+function FilaResumenGrande({ fila, variante }: { fila: FilaGastoCategoria; variante: "mensual" | "acumulado" }) {
+  const valores = [
+    { texto: formatQ(fila.administracion), negrita: false },
+    { texto: formatPercent(fila.peso_administracion), negrita: true },
+    { texto: formatQ(fila.operacion), negrita: false },
+    { texto: formatPercent(fila.peso_operacion), negrita: true },
+    { texto: formatQ(fila.consolidado), negrita: false },
+  ];
   return (
-    <span className="text-xs text-ink">
-      <span className="font-semibold">{label}:</span> {valor}
-    </span>
+    <div
+      className="grid items-center gap-1.5 rounded px-2 py-2"
+      style={{ backgroundColor: FINANCIERO_SURFACE, gridTemplateColumns: anchosGrid(variante) }}
+    >
+      <div className="truncate text-base font-bold text-ink">{fila.categoria}</div>
+      {/* Mismo gris que la tabla y las tarjetas de las gráficas
+          (FINANCIERO_SURFACE) -- antes usaba bg-app (--color-bg-app,
+          casi negro en modo oscuro), un token distinto que no coincidía
+          con el resto de la página. Sin ring/borde: las celdas quedan
+          separadas solo por el gap del grid, sin contorno oscuro -- el
+          ring-1 anterior se veía como un borde/sombra marcada, no como
+          el reporte real. */}
+      {valores.map((v, i) => (
+        <div
+          key={i}
+          className={`rounded px-2 py-1 text-right text-sm text-ink ${v.negrita ? "font-bold" : ""}`}
+          style={{ backgroundColor: FINANCIERO_SURFACE }}
+        >
+          {v.texto}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ResumenPresupuestoEjecucion({ data, variante }: { data: EjecucionGastosResponse; variante: "mensual" | "acumulado" }) {
+  return (
+    // mt-8 (32px) separa este bloque de la tabla, como en el reporte
+    // real -- antes las 2 filas quedaban pegadas dentro de la tabla.
+    <div className="mt-8 flex flex-col gap-2">
+      <FilaResumenGrande fila={data.fila_presupuesto} variante={variante} />
+      <FilaResumenGrande fila={data.fila_ejecucion} variante={variante} />
+    </div>
   );
 }
 
@@ -805,20 +915,122 @@ const ALTO_GRAFICA_GRUPO = 280;
 // Consolidado) usan EXACTAMENTE los mismos 2 colores, calcado del tema
 // real del .pbix (las 3 heredan el mismo tema de reporte, sin color
 // propio por grupo).
-function GraficoColumnasGrupo({ presupuesto, ejecutado }: { presupuesto: number; ejecutado: number }) {
-  const filas = [
-    { etiqueta: "Presupuesto", valor: presupuesto, color: COLOR_PRESUPUESTO },
-    { etiqueta: "Ejecutado", valor: ejecutado, color: COLOR_EJECUTADO },
-  ];
+
+// EJE Y COMPARTIDO entre las 3 gráficas -- en el .pbix real el `end` del
+// eje Y es una medida DAX distinta por página (_Calculos.EscalaEjeY en
+// mensual, _Calculos.EscalaEjeY_CentroAcumulado en acumulado), ninguna
+// extraíble como literal desde Layout.json.
+// Mensual: se fija en 1,000,000 porque el usuario confirmó viendo el
+// reporte real que los 3 grupos caben en esa escala para Agosto 2026 (un
+// valor puntual validado, no una fórmula).
+// Acumulado: NO puede ser el mismo literal fijo -- los montos acumulados
+// crecen mes a mes (un acumulado a Diciembre es ~12x uno a Enero), así
+// que se calcula dinámicamente a partir de los datos reales cargados
+// (calcularEscalaEjeY), redondeando hacia arriba al siguiente
+// 1/2/5×10^n "número redondo" como hace Power BI.
+const ESCALA_EJE_Y_MENSUAL = { max: 1_000_000, ticks: [0, 500_000, 1_000_000] };
+
+// La medida DAX real (_Calculos.EscalaEjeY / EscalaEjeY_CentroAcumulado)
+// no es extraíble desde Layout.json -- esto es una aproximación por
+// "número redondo" (1/2/5×10^n), no la fórmula real. Si el usuario
+// puede pasar el DAX desde Power BI Desktop, se reemplaza por la lógica
+// exacta.
+function calcularEscalaEjeY(valores: number[]): { max: number; ticks: number[] } {
+  const maxValor = Math.max(0, ...valores);
+  if (maxValor <= 0) return { max: 1, ticks: [0, 0.5, 1] };
+  const magnitud = Math.pow(10, Math.floor(Math.log10(maxValor)));
+  const normalizado = maxValor / magnitud;
+  const base = normalizado <= 1 ? 1 : normalizado <= 2 ? 2 : normalizado <= 5 ? 5 : 10;
+  const max = base * magnitud;
+  return { max, ticks: [0, max / 2, max] };
+}
+
+// Último día real del mes (28/29 de febrero según año bisiesto, 30 o 31
+// el resto) -- para el título de "Ejecución gastos acumulado".
+function ultimoDiaDelMes(anio: number, mes: number): number {
+  return new Date(anio, mes, 0).getDate();
+}
+
+// Chips de cabecera de cada tarjeta (nombre + % ejecución a la
+// izquierda, diferencia a la derecha) -- calcado de los 2 advanceCard
+// "chip" por grupo del .pbix real, que van AFUERA y ARRIBA de la
+// tarjeta de la gráfica (visualHeader de la gráfica en sí queda oculto,
+// show=false en chart_config.json: el título real de cada grupo vive en
+// estos chips externos, no dentro de la tarjeta ni centrados).
+function ChipsResumenGrupo({ tarjeta }: { tarjeta: TarjetaResumenGasto }) {
+  return (
+    <div className="flex items-center justify-between gap-2 px-1 pb-1 text-xs text-ink">
+      <span className="flex items-center gap-2">
+        {/* Los 3 chips (nombre, % y diferencia) van en la MISMA caja
+            gris FINANCIERO_SURFACE, sin ring/borde -- antes el chip del
+            nombre era texto suelto sin caja, y los otros 2 llevaban
+            ring-1 (que en la práctica se veía como un contorno/sombra
+            oscura marcada, no como el reporte real). */}
+        <span className="rounded px-2 py-0.5 font-semibold" style={{ backgroundColor: FINANCIERO_SURFACE }}>
+          {tarjeta.grupo}
+        </span>
+        <span className="rounded px-2 py-0.5" style={{ backgroundColor: FINANCIERO_SURFACE }}>
+          {tarjeta.porcentaje_ejecucion.toFixed(2)}%
+        </span>
+      </span>
+      <span className="rounded px-2 py-0.5" style={{ backgroundColor: FINANCIERO_SURFACE }}>
+        {formatQ(tarjeta.diferencia)}
+      </span>
+    </div>
+  );
+}
+
+// Gráfica de columnas verticales Presupuesto vs Ejecutado -- calcada del
+// clusteredColumnChart real (chart_config.json de "Centros de Costo" /
+// "Centros de Costo acumulado", visualmente idénticos salvo la escala
+// del eje Y): UNA sola categoría con 2 series (Presupuesto/Ejecutado)
+// juntas y centradas -- antes cada una vivía en su propia categoría del
+// eje X, lo que las separaba a los extremos de la gráfica en vez de
+// dejarlas lado a lado como en el reporte real. barGap/barSize
+// calibrados para que la etiqueta de valor (arriba de cada barra) no
+// toque la de la barra vecina en el caso más ancho real (acumulado,
+// 7 dígitos: "Q6,943,846"/"Q8,440,050") -- verificado midiendo el
+// bounding box real de las 2 etiquetas en el navegador, no a ojo. Eje Y
+// con dominio y ticks pasados por props (compartido entre las 3
+// gráficas de la página), SIN línea de eje visible, etiquetas en
+// negrita. Etiqueta de valor en negrita arriba de cada barra
+// (labels.bold=true en el visual real; color adaptativo al tema en vez
+// del blanco fijo del visual real -- en modo oscuro (el único que tiene
+// el .pbix) ese color adaptativo YA se ve blanco; en modo claro, que el
+// .pbix no contempla, queda legible en vez de invisible).
+function GraficoColumnasGrupoEjecucion({
+  presupuesto,
+  ejecutado,
+  escalaMax,
+  escalaTicks,
+}: {
+  presupuesto: number;
+  ejecutado: number;
+  escalaMax: number;
+  escalaTicks: number[];
+}) {
+  const fila = [{ presupuesto, ejecutado }];
+  const estiloEtiquetaEje = { fontSize: 10, fontWeight: 700, fill: "rgb(var(--color-ink))" };
   return (
     <ResponsiveContainer width="100%" height={ALTO_GRAFICA_GRUPO}>
-      <BarChart data={filas} margin={{ top: 20, right: 16, bottom: 4, left: 4 }}>
-        <XAxis dataKey="etiqueta" fontSize={10} tickLine={false} />
-        <YAxis type="number" tickFormatter={(v: number) => formatQ(v)} fontSize={10} width={60} stroke="rgb(var(--color-ink-faint))" />
-        {/* Mismo bug que las 3 gráficas de Cuotas Asociados (mismo
-            archivo): quedó fuera del reemplazo de la ronda anterior por
-            error -- corregido acá también para no dejar el mismo bug
-            sin arreglar en otra vista de este mismo archivo. */}
+      <BarChart data={fila} margin={{ top: 24, right: 16, bottom: 4, left: 4 }} barGap={24}>
+        <XAxis dataKey={() => ""} tick={false} axisLine={false} tickLine={false} />
+        <YAxis
+          type="number"
+          domain={[0, escalaMax]}
+          ticks={escalaTicks}
+          tickFormatter={(v: number) => formatQ(v)}
+          tick={estiloEtiquetaEje}
+          axisLine={false}
+          tickLine={false}
+          // 60px alcanzaba para "Q1,000,000" (mensual) pero no para
+          // "Q10,000,000" (acumulado, 1 dígito más) -- la etiqueta se
+          // salía por la izquierda del área del SVG y quedaba cortada
+          // por el overflow-hidden de la tarjeta. Se calcula el ancho
+          // según el texto más largo de los ticks reales de cada
+          // gráfica en vez de un valor fijo.
+          width={Math.max(60, 12 + Math.max(...escalaTicks.map((v) => formatQ(v).length)) * 6)}
+        />
         <Tooltip
           cursor={{ fill: "rgb(var(--color-ink-faint) / 0.08)" }}
           formatter={(v: number) => formatQ(v)}
@@ -826,25 +1038,39 @@ function GraficoColumnasGrupo({ presupuesto, ejecutado }: { presupuesto: number;
           labelStyle={{ color: "rgb(var(--color-ink))" }}
           itemStyle={{ color: "rgb(var(--color-ink))" }}
         />
+        {/* formatter fuerza el MISMO color de texto en las 2 entradas --
+            sin esto, Recharts pinta "Presupuesto" con un gris apagado
+            por default en vez del color de texto normal (bug reportado:
+            se veía "como deshabilitado" comparado con "Ejecutado"). */}
         <Legend
           wrapperStyle={{ fontSize: 10 }}
+          formatter={(value: string) => <span style={{ color: "rgb(var(--color-ink))" }}>{value}</span>}
           payload={[
-            { value: "Presupuesto", type: "square", color: COLOR_PRESUPUESTO },
-            { value: "Ejecutado", type: "square", color: COLOR_EJECUTADO },
+            { value: "Presupuesto", type: "circle", color: COLOR_PRESUPUESTO },
+            { value: "Ejecutado", type: "circle", color: COLOR_EJECUTADO },
           ]}
         />
-        {/* isAnimationActive={false}: Recharts solo pinta el LabelList
-            DESPUÉS de que termina la animación de entrada de las barras
-            (Bar.renderLabelList espera isAnimationFinished) -- en la
-            práctica esa animación no siempre llega a completar/disparar
-            su callback, y la etiqueta de valor quedaba invisible pese a
-            estar en el árbol de props. Sin animación, la etiqueta se
-            pinta de inmediato y de forma confiable. */}
-        <Bar dataKey="valor" radius={[4, 4, 0, 0]} isAnimationActive={false}>
-          {filas.map((f) => (
-            <Cell key={f.etiqueta} fill={f.color} />
-          ))}
-          <LabelList dataKey="valor" position="top" formatter={(v: number) => formatQ(v)} fontSize={12} fill="rgb(var(--color-ink))" />
+        <Bar dataKey="presupuesto" fill={COLOR_PRESUPUESTO} radius={[4, 4, 0, 0]} isAnimationActive={false} barSize={58}>
+          <LabelList
+            dataKey="presupuesto"
+            position="top"
+            formatter={(v: number) => formatQ(v)}
+            fontSize={12}
+            fontWeight={700}
+            fill="rgb(var(--color-ink))"
+            fillOpacity={1}
+          />
+        </Bar>
+        <Bar dataKey="ejecutado" fill={COLOR_EJECUTADO} radius={[4, 4, 0, 0]} isAnimationActive={false} barSize={58}>
+          <LabelList
+            dataKey="ejecutado"
+            position="top"
+            formatter={(v: number) => formatQ(v)}
+            fontSize={12}
+            fontWeight={700}
+            fill="rgb(var(--color-ink))"
+            fillOpacity={1}
+          />
         </Bar>
       </BarChart>
     </ResponsiveContainer>
@@ -902,39 +1128,43 @@ function PaginaEjecucionGastos({ acumulado }: { acumulado: boolean }) {
     }
   }
 
+  // "Ejecución Gastos {Mes} {Año}" (mensual) -- queda igual, ya
+  // confirmado contra el reporte real. Acumulado: texto real confirmado
+  // por el usuario contra su captura de Power BI -- "Detalle de
+  // Ejecución Gastos vs. Presupuesto al {último día del mes} de {Mes} de
+  // {Año}", con el día siendo el último día REAL del mes (28/29 en
+  // febrero según año bisiesto, 30 o 31 el resto).
   const tituloPagina = data
     ? acumulado
-      ? `Detalle de Ejecución Gastos vs. Presupuesto al ${MESES_LARGOS[data.mes - 1]} ${data.anio}`
-      : `Ejecución de Gastos por Mes — ${MESES_LARGOS[data.mes - 1]} ${data.anio}`
+      ? `Detalle de Ejecución Gastos vs. Presupuesto al ${ultimoDiaDelMes(data.anio, data.mes)} de ${MESES_LARGOS[data.mes - 1]} de ${data.anio}`
+      : `Ejecución Gastos ${MESES_LARGOS[data.mes - 1]} ${data.anio}`
     : `Ejecución de Gastos ${acumulado ? "Acumulado" : "por Mes"}`;
+
+  // Escala del eje Y: mensual usa el valor fijo validado contra Agosto
+  // 2026 real; acumulado la calcula de los datos reales cargados, porque
+  // los montos acumulados crecen mes a mes (ver comentario en
+  // calcularEscalaEjeY).
+  const escalaEjeY =
+    acumulado && data ? calcularEscalaEjeY(data.tarjetas.flatMap((t) => [t.presupuesto, t.ejecutado])) : ESCALA_EJE_Y_MENSUAL;
 
   return (
     <div className="space-y-3">
       <div className="relative flex min-h-[40px] items-center justify-center">
-        <Title className="px-4 text-center text-xl text-ink">{tituloPagina}</Title>
-        <div className="absolute right-0 top-0 flex gap-2">
-          <select
-            value={anio}
-            onChange={(e) => cambiarAnio(e.target.value)}
-            className="rounded-tremor-default border border-line bg-surface px-2 py-1 text-xs text-ink"
-          >
-            {aniosDisponibles.map((a) => (
-              <option key={a} value={a}>
-                {a}
-              </option>
-            ))}
-          </select>
-          <select
-            value={mes}
-            onChange={(e) => setMes(e.target.value)}
-            className="rounded-tremor-default border border-line bg-surface px-2 py-1 text-xs text-ink"
-          >
-            {mesesDelAnio.map((m) => (
-              <option key={m} value={m}>
-                {MESES_LARGOS[m - 1]}
-              </option>
-            ))}
-          </select>
+        <Title className="px-4 text-center text-2xl font-bold text-ink">{tituloPagina}</Title>
+        {/* Selector "Año y Mes" único (slicer real del .pbix, mismo en
+            las 2 páginas) -- mismo FilterYearMonth ya aprobado y usado en
+            Estados Financieros. */}
+        <div className="absolute right-0 top-0">
+          <FilterYearMonth
+            label="Año y Mes"
+            anio={anio}
+            mes={mes}
+            onChangeAnio={cambiarAnio}
+            onChangeMes={setMes}
+            aniosOpciones={aniosDisponibles.map(String)}
+            mesesOpciones={mesesDelAnio.map((m) => ({ value: String(m), label: MESES_LARGOS[m - 1] }))}
+            theme="gris"
+          />
         </div>
       </div>
 
@@ -942,43 +1172,32 @@ function PaginaEjecucionGastos({ acumulado }: { acumulado: boolean }) {
 
       {data && (
         <>
-          {/* Tabla dinámica principal + los 12 textos de resumen,
-              centrados al mismo 55% de ancho que ya usan las tablas de
-              Estados Financieros (ANCHO_TABLA_FINANCIERO en
-              DashboardFinancieroPage.tsx) -- antes 58%, un valor propio
-              de esta página que no coincidía con el resto del sistema. */}
-          <div className="mx-auto space-y-2" style={{ width: "55%" }}>
-            <TablaEjecucionGastos data={data} />
-
-            {/* 12 textos de resumen en línea, no tarjetas -- fila 1:
-                Presupuesto y Ejecutado de los 3 grupos; fila 2: % de
-                Ejecución y Diferencia de los 3 grupos. Mismos 3 grupos
-                que ya calcula el backend (Administración/Operación/
-                Consolidado, en ese orden fijo). */}
-            <div className="flex flex-wrap gap-x-4 gap-y-1 pt-1">
-              <TextoResumen label="Presupuesto Admin." valor={formatQ(data.fila_presupuesto.administracion)} />
-              <TextoResumen label="Presupuesto Oper." valor={formatQ(data.fila_presupuesto.operacion)} />
-              <TextoResumen label="Presupuesto Consol." valor={formatQ(data.fila_presupuesto.consolidado)} />
-              <TextoResumen label="Ejecutado Admin." valor={formatQ(data.fila_total_ejecutado.administracion)} />
-              <TextoResumen label="Ejecutado Oper." valor={formatQ(data.fila_total_ejecutado.operacion)} />
-              <TextoResumen label="Ejecutado Consol." valor={formatQ(data.fila_total_ejecutado.consolidado)} />
-              <TextoResumen label="% Ejec. Admin." valor={formatPercent(data.tarjetas[0].porcentaje_ejecucion)} />
-              <TextoResumen label="% Ejec. Oper." valor={formatPercent(data.tarjetas[1].porcentaje_ejecucion)} />
-              <TextoResumen label="% Ejec. Consol." valor={formatPercent(data.tarjetas[2].porcentaje_ejecucion)} />
-              <TextoResumen label="Diferencia Admin." valor={formatQ(data.tarjetas[0].diferencia)} />
-              <TextoResumen label="Diferencia Oper." valor={formatQ(data.tarjetas[1].diferencia)} />
-              <TextoResumen label="Diferencia Consol." valor={formatQ(data.tarjetas[2].diferencia)} />
-            </div>
+          {/* Tabla + filas Presupuesto/Ejecución, centrada y más angosta
+              que el ancho total (60%, calcado de la proporción tabla vs.
+              lienzo del .pbix real: ~1115px de 1920px ≈ 58%). Mismo
+              componente para mensual y acumulado -- solo cambian anchos
+              de columna y negrita de encabezado (ver TablaEjecucionGastos). */}
+          <div className="mx-auto" style={{ width: "60%" }}>
+            <TablaEjecucionGastos data={data} variante={acumulado ? "acumulado" : "mensual"} />
+            <ResumenPresupuestoEjecucion data={data} variante={acumulado ? "acumulado" : "mensual"} />
           </div>
 
-          {/* Las 3 gráficas de columnas (Administración/Operación/
-              Consolidado) van más anchas que la tabla, a propósito --
-              calcado del .pbix (w=480 cada una, las 3 iguales entre sí). */}
-          <div className="mx-auto grid grid-cols-3 gap-3 pt-2" style={{ width: "90%" }}>
+          {/* Las 3 gráficas (Administración/Operación/Consolidado) con
+              chips de resumen AFUERA y ARRIBA de la tarjeta -- calcado
+              del .pbix (w=480 cada una, las 3 iguales entre sí,
+              separadas con espacio real). */}
+          <div className="mx-auto grid grid-cols-3 gap-4 pt-3" style={{ width: "90%" }}>
             {data.tarjetas.map((t) => (
-              <div key={t.grupo} className="overflow-hidden rounded-tremor-default ring-1 ring-line" style={{ backgroundColor: FINANCIERO_SURFACE }}>
-                <div className="px-2 py-1 text-center text-xs font-semibold text-ink">{t.grupo}</div>
-                <GraficoColumnasGrupo presupuesto={t.presupuesto} ejecutado={t.ejecutado} />
+              <div key={t.grupo}>
+                <ChipsResumenGrupo tarjeta={t} />
+                <div className="overflow-hidden rounded-tremor-default ring-1 ring-line" style={{ backgroundColor: FINANCIERO_SURFACE }}>
+                  <GraficoColumnasGrupoEjecucion
+                    presupuesto={t.presupuesto}
+                    ejecutado={t.ejecutado}
+                    escalaMax={escalaEjeY.max}
+                    escalaTicks={escalaEjeY.ticks}
+                  />
+                </div>
               </div>
             ))}
           </div>

@@ -255,6 +255,24 @@ def _presupuesto_grupo(db: Session, anio: int, mes: int, acumulado: bool, es_adm
     return _num(valor)
 
 
+# Los nombres reales de Power BI llevan comas que dbo.CatalogoAgrupadorCuentas.Nombre
+# NO tiene -- confirmado con SQL directo contra esa tabla (sin comas en
+# el campo). La vista que usa el .pbix (vw_piq_balance_saldos) no existe
+# en esta base para comparar directo, así que no se puede saber con
+# certeza por qué difieren; se corrige solo el TEXTO de presentación de
+# las 3 categorías que el usuario confirmó contra su captura real, sin
+# tocar el nombre que se usa como clave de agrupamiento/suma.
+_NOMBRES_DISPLAY_EJECUCION_GASTOS = {
+    "Literatura y Material para Capacitación Programa Educación": "Literatura y Material para Capacitación, Programa Educación",
+    "Viáticos Mantenimiento Incineración Programa CampoLimpio": "Viáticos, Mantenimiento, Incineración Programa CampoLimpio",
+    "Sueldos Bonificaciones y Prestaciones de Ley": "Sueldos, Bonificaciones y Prestaciones de Ley",
+}
+
+
+def _nombre_display_ejecucion_gastos(categoria: str) -> str:
+    return _NOMBRES_DISPLAY_EJECUCION_GASTOS.get(categoria, categoria)
+
+
 def _ejecucion_gastos(db: Session, anio: int, mes: int, acumulado: bool) -> EjecucionGastosResponse:
     periodos = _periodos_disponibles_gastos(db)
 
@@ -264,10 +282,17 @@ def _ejecucion_gastos(db: Session, anio: int, mes: int, acumulado: bool) -> Ejec
     total_ejecutado_admin = sum(por_categoria_admin.values())
     total_ejecutado_op = sum(por_categoria_op.values())
 
-    nombres_categoria = sorted(set(list(por_categoria_admin) + list(por_categoria_op)))
+    # Desempate alfabético SIN distinguir mayúsculas/minúsculas -- Python
+    # ordena strings por valor de código (case-sensitive), así que
+    # "Gastos Proyectos..." (P mayúscula, 0x50) quedaba ANTES que
+    # "Gastos de Apoyo..." (d minúscula, 0x64) aunque alfabéticamente
+    # "de" va antes que "Proyectos". El sort final de más abajo es
+    # estable, así que este orden inicial es el que decide el empate
+    # entre categorías con el mismo valor (ej. Administración=0).
+    nombres_categoria = sorted(set(list(por_categoria_admin) + list(por_categoria_op)), key=str.lower)
     categorias = [
         FilaGastoCategoria(
-            categoria=cat,
+            categoria=_nombre_display_ejecucion_gastos(cat),
             administracion=por_categoria_admin.get(cat, 0.0),
             peso_administracion=(por_categoria_admin.get(cat, 0.0) / total_ejecutado_admin * 100) if total_ejecutado_admin else 0.0,
             operacion=por_categoria_op.get(cat, 0.0),
@@ -276,14 +301,26 @@ def _ejecucion_gastos(db: Session, anio: int, mes: int, acumulado: bool) -> Ejec
         )
         for cat in nombres_categoria
     ]
-    categorias.sort(key=lambda f: -f.consolidado)
+    # Orden ASCENDENTE -- calcado del pivotTable real de cada página del
+    # .pbix: "Centros de Costo" (mensual) ordena por TotalEjecutado
+    # (Consolidado); "Centros de Costo acumulado" ordena por
+    # EjecutadoAdministrativo_Acumulado (Administración) -- son medidas
+    # DAX distintas con OrderBy distinto, confirmado comparando ambos
+    # pivotTable.config extraídos del Layout.json. No es el mismo
+    # criterio en las 2 páginas, así que no se puede asumir uno para
+    # ambas.
+    categorias.sort(key=lambda f: (f.administracion if acumulado else f.consolidado))
 
     fila_total_ejecutado = FilaGastoCategoria(
         categoria="Total ejecutado",
         administracion=total_ejecutado_admin,
-        peso_administracion=100.0,
+        # Guardia contra el bug reportado: si el total de una columna es
+        # 0 (esa mitad del reporte no tiene ejecución en el período), su
+        # Peso % debe ser 0.0, NO 100.0 -- antes quedaba fijo en 100.0
+        # sin importar si la columna tenía datos.
+        peso_administracion=100.0 if total_ejecutado_admin else 0.0,
         operacion=total_ejecutado_op,
-        peso_operacion=100.0,
+        peso_operacion=100.0 if total_ejecutado_op else 0.0,
         consolidado=total_ejecutado_admin + total_ejecutado_op,
     )
 
@@ -293,9 +330,9 @@ def _ejecucion_gastos(db: Session, anio: int, mes: int, acumulado: bool) -> Ejec
     fila_presupuesto = FilaGastoCategoria(
         categoria="Presupuesto",
         administracion=presupuesto_admin,
-        peso_administracion=100.0,
+        peso_administracion=100.0 if presupuesto_admin else 0.0,
         operacion=presupuesto_op,
-        peso_operacion=100.0,
+        peso_operacion=100.0 if presupuesto_op else 0.0,
         consolidado=presupuesto_admin + presupuesto_op,
     )
 
