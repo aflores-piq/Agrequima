@@ -304,7 +304,25 @@ function GraficoCuotaVsCancelado({ data }: { data: CuotasAsociadosResponse }) {
             {filas.map((f) => (
               <Cell key={f.tipo} fill={f.color} fillOpacity={FILL_OPACITY_BARRA_BASE} />
             ))}
-            <LabelList dataKey="cuota" position="top" formatter={(v: number) => formatQ(v)} fontSize={10} fontWeight={700} fill="rgb(var(--color-ink))" />
+            {/* fillOpacity={1} EXPLÍCITO -- BUG REAL encontrado
+                inspeccionando el DOM real: Recharts filtra el
+                fillOpacity de los <Cell> de arriba hacia el <text> del
+                LabelList hermano (confirmado con fill-opacity="0.4"
+                real en el atributo del <text>, mismo valor que
+                FILL_OPACITY_BARRA_BASE) -- por eso la etiqueta "Q
+                280,000" salía gris (blanco al 40% sobre fondo oscuro),
+                pese a que su propio `fill` ya era el ink correcto. Con
+                fillOpacity={1} en el propio LabelList se corta esa
+                herencia y queda 100% opaco. */}
+            <LabelList
+              dataKey="cuota"
+              position="top"
+              formatter={(v: number) => formatQ(v)}
+              fontSize={10}
+              fontWeight={700}
+              fill="rgb(var(--color-ink))"
+              fillOpacity={1}
+            />
           </Bar>
         </BarChart>
       </ResponsiveContainer>
@@ -415,7 +433,16 @@ function DonutCuotasPorTipo({ data }: { data: CuotasAsociadosResponse }) {
           payload={filas.map((f) => ({ value: f.nombre, type: "square" as const, color: f.color }))}
           formatter={(value: string) => <span style={{ color: "rgb(var(--color-ink))" }}>{value}</span>}
         />
-        <Tooltip formatter={(v: number) => formatQ(v)} contentStyle={{ background: "rgb(var(--color-bg-surface))", border: "1px solid rgb(var(--color-line))", borderRadius: 8 }} />
+        {/* Mismo tooltip aprobado que BalanceDonut.tsx (Estados
+            Financieros): fondo FINANCIERO_SURFACE + labelStyle/
+            itemStyle en ink, sin `cursor` (las donas no lo necesitan,
+            es un concepto de gráficas cartesianas/de barras). */}
+        <Tooltip
+          formatter={(v: number) => formatQ(v)}
+          contentStyle={{ background: FINANCIERO_SURFACE, border: "1px solid rgb(var(--color-line))", borderRadius: 8 }}
+          labelStyle={{ color: "rgb(var(--color-ink))" }}
+          itemStyle={{ color: "rgb(var(--color-ink))" }}
+        />
       </PieChart>
     </ResponsiveContainer>
   );
@@ -450,7 +477,12 @@ function DonutRecuperacion({ data }: { data: CuotasAsociadosResponse }) {
           payload={filas.map((f) => ({ value: f.nombre, type: "square" as const, color: f.color }))}
           formatter={(value: string) => <span style={{ color: "rgb(var(--color-ink))" }}>{value}</span>}
         />
-        <Tooltip formatter={(v: number) => formatQ(v)} contentStyle={{ background: "rgb(var(--color-bg-surface))", border: "1px solid rgb(var(--color-line))", borderRadius: 8 }} />
+        <Tooltip
+          formatter={(v: number) => formatQ(v)}
+          contentStyle={{ background: FINANCIERO_SURFACE, border: "1px solid rgb(var(--color-line))", borderRadius: 8 }}
+          labelStyle={{ color: "rgb(var(--color-ink))" }}
+          itemStyle={{ color: "rgb(var(--color-ink))" }}
+        />
       </PieChart>
     </ResponsiveContainer>
   );
@@ -783,7 +815,17 @@ function GraficoColumnasGrupo({ presupuesto, ejecutado }: { presupuesto: number;
       <BarChart data={filas} margin={{ top: 20, right: 16, bottom: 4, left: 4 }}>
         <XAxis dataKey="etiqueta" fontSize={10} tickLine={false} />
         <YAxis type="number" tickFormatter={(v: number) => formatQ(v)} fontSize={10} width={60} stroke="rgb(var(--color-ink-faint))" />
-        <Tooltip formatter={(v: number) => formatQ(v)} contentStyle={{ background: "rgb(var(--color-bg-surface))", border: "1px solid rgb(var(--color-line))", borderRadius: 8 }} />
+        {/* Mismo bug que las 3 gráficas de Cuotas Asociados (mismo
+            archivo): quedó fuera del reemplazo de la ronda anterior por
+            error -- corregido acá también para no dejar el mismo bug
+            sin arreglar en otra vista de este mismo archivo. */}
+        <Tooltip
+          cursor={{ fill: "rgb(var(--color-ink-faint) / 0.08)" }}
+          formatter={(v: number) => formatQ(v)}
+          contentStyle={{ background: FINANCIERO_SURFACE, border: "1px solid rgb(var(--color-line))", borderRadius: 8 }}
+          labelStyle={{ color: "rgb(var(--color-ink))" }}
+          itemStyle={{ color: "rgb(var(--color-ink))" }}
+        />
         <Legend
           wrapperStyle={{ fontSize: 10 }}
           payload={[
