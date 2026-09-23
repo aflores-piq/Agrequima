@@ -560,14 +560,21 @@ function PaginaCuotasAsociados() {
         // 55% de una tabla sola porque son 3 tablas de 4 columnas cada
         // una lado a lado, pero con el mismo espíritu de margen visible.
         <div className="mx-auto" style={{ width: "72%" }}>
-          {/* Fila de KPI a 80.6% de ESTE contenedor (que a su vez ya es
-              72% del área de contenido de la página) = 72% × 80.6% ≈
-              58% del área de contenido total -- medido con
-              getBoundingClientRect contra el ~58% real del .pbix
-              (antes cada tarjeta tenía maxWidth:320 sin tope de fila,
-              y las 3 juntas terminaban ocupando ~70% del área de
-              contenido, notablemente más ancho que el original). */}
-          <div className="mx-auto flex justify-center gap-2" style={{ width: "80.6%" }}>
+          {/* Reducido de 80.6% a 58% de ESTE contenedor (72% del área de
+              contenido) = 72%×58% ≈ 42% del área de contenido total.
+              Rondas anteriores habían llegado a ~56.7% (verificado
+              exacto en 2 navegadores distintos: el Browser pane de
+              Claude Y un Chromium de Playwright 100% independiente,
+              sin caché previo -- ambos dieron el mismo número, así que
+              NO era un problema de caché ni de medición) pero a ese
+              ancho cada tarjeta (~275px) deja un hueco vacío visible
+              entre el ícono y el texto (KpiCardIcono alinea el
+              texto al borde derecho de la tarjeta, no pegado al
+              ícono) -- la diferencia con el .pbix se notaba ahí, no
+              en el % de la fila en sí. Bajado agresivamente a ~42%
+              (dentro del rango 40-45% pedido) para que la tarjeta sea
+              angosta de verdad y el hueco deje de ser visible. */}
+          <div className="mx-auto flex justify-center gap-2" style={{ width: "58%" }}>
             <div className="flex-1">
               <KpiCardIcono letra="T" color={COLOR_TEAL} label="Total" valor={formatQ(data.kpis.total)} />
             </div>
