@@ -55,6 +55,24 @@ const MENU_FINANCIERO: NodoMenu = {
       ],
     },
     {
+      // Distinto del sistema hermano "Importaciones" (Plaguicidas/
+      // Nutrientes, MENU_IMPORTACIONES más abajo): esta es la sección de
+      // ingresos de la gremial por importaciones dentro del propio
+      // Financiero (fuentes vw_piq_* de CONTACC), páginas reales del
+      // .pbix "Ingresos por importación", "Ingresos por Importación
+      // Gremiagro", "Comparación importaciones Kilolitros" e "Ingresos
+      // por contribución 4.5 por millar" -- todavía sin construir, por
+      // eso sin href (mismo patrón usado antes con Conciliación/Flujo).
+      id: "importaciones-financiero",
+      titulo: "Importaciones",
+      hijos: [
+        { id: "if-ingresos", titulo: "Ingresos por importación" },
+        { id: "if-ingresos-comparativo", titulo: "Ingresos por importación comparativo" },
+        { id: "if-kilolitros", titulo: "Comparación importaciones kilolitros y precio kilolitro" },
+        { id: "if-contribucion", titulo: "Ingresos por contribución 4.5 por millar" },
+      ],
+    },
+    {
       id: "otros-ingresos",
       titulo: "Otros ingresos",
       hijos: [{ id: "oi-generados", titulo: "Otros ingresos generados" }],
@@ -73,11 +91,54 @@ const MENU_IMPORTACIONES: NodoMenu = {
   ],
 };
 
+// Color de acento distinto por sistema (opción "A + C" del diagnóstico
+// de menú): Importaciones conserva el sky que ya tenía (sin cambio
+// visual para quien ya lo conocía); Financiero pasa a ámbar, para que
+// ambos bloques se distingan de un vistazo sin cambiar la navegación.
+interface TemaSistema {
+  activo: string;
+  inactivo: string;
+  deshabilitado: string;
+}
+
+const TEMA_FINANCIERO: TemaSistema = {
+  activo: "bg-amber-500/20 text-amber-300",
+  inactivo: "text-amber-400 hover:bg-white/5 hover:text-amber-300",
+  deshabilitado: "text-amber-400/40",
+};
+
+const TEMA_IMPORTACIONES: TemaSistema = {
+  activo: "bg-sky-500/20 text-sky-300",
+  inactivo: "text-sky-400 hover:bg-white/5 hover:text-sky-300",
+  deshabilitado: "text-sky-400/40",
+};
+
 function estaActivo(location: ReturnType<typeof useLocation>, href: string): boolean {
   const [path, query] = href.split("?");
   if (location.pathname !== path) return false;
   if (!query) return true;
   return new URLSearchParams(location.search).get("vista") === new URLSearchParams(query).get("vista");
+}
+
+/** IDs de todas las secciones colapsables que hay que dejar abiertas para
+ * que la pantalla activa (según la ruta actual) quede visible sin tocar
+ * nada a mano -- recorre el árbol y devuelve el camino completo (sistema
+ * + sub-secciones anidadas) hasta la hoja con href activo. Si ninguna
+ * hoja de este árbol está activa (parado en una pantalla fuera de él,
+ * ej. Plaguicidas mientras se recorre MENU_FINANCIERO), devuelve un Set
+ * vacío -- ese árbol queda completamente colapsado. */
+function idsHastaActivo(nodos: NodoMenu[], location: ReturnType<typeof useLocation>): Set<string> {
+  for (const nodo of nodos) {
+    if (!nodo.hijos || nodo.hijos.length === 0) continue;
+    if (nodo.hijos.some((hijo) => hijo.href && estaActivo(location, hijo.href))) {
+      return new Set([nodo.id]);
+    }
+    const idsAnidados = idsHastaActivo(nodo.hijos, location);
+    if (idsAnidados.size > 0) {
+      return new Set([nodo.id, ...idsAnidados]);
+    }
+  }
+  return new Set();
 }
 
 function NodoView({
@@ -86,12 +147,16 @@ function NodoView({
   abiertos,
   alternar,
   location,
+  tema,
+  icono,
 }: {
   nodo: NodoMenu;
   nivel: number;
   abiertos: Set<string>;
   alternar: (id: string) => void;
   location: ReturnType<typeof useLocation>;
+  tema: TemaSistema;
+  icono?: string;
 }) {
   const esHoja = !nodo.hijos || nodo.hijos.length === 0;
 
@@ -101,16 +166,14 @@ function NodoView({
       return (
         <Link
           to={nodo.href}
-          className={`${claseBase} ${
-            estaActivo(location, nodo.href) ? "bg-sky-500/20 text-sky-300" : "text-sky-400 hover:bg-white/5 hover:text-sky-300"
-          }`}
+          className={`${claseBase} ${estaActivo(location, nodo.href) ? tema.activo : tema.inactivo}`}
         >
           {nodo.titulo}
         </Link>
       );
     }
     return (
-      <span className={`${claseBase} text-sky-400/40`} title="Todavía no implementado">
+      <span className={`${claseBase} ${tema.deshabilitado}`} title="Todavía no implementado">
         {nodo.titulo}
       </span>
     );
@@ -129,7 +192,10 @@ function NodoView({
         }`}
         title={nodo.titulo}
       >
-        <span className="leading-tight">{nodo.titulo}</span>
+        <span className="leading-tight">
+          {esNivelSuperior && icono ? <span aria-hidden="true">{icono} </span> : null}
+          {nodo.titulo}
+        </span>
         <svg
           viewBox="0 0 20 20"
           fill="currentColor"
@@ -147,7 +213,7 @@ function NodoView({
         <ul className="mb-1 mt-0.5 space-y-0.5 pl-3">
           {nodo.hijos!.map((hijo) => (
             <li key={hijo.id}>
-              <NodoView nodo={hijo} nivel={nivel + 1} abiertos={abiertos} alternar={alternar} location={location} />
+              <NodoView nodo={hijo} nivel={nivel + 1} abiertos={abiertos} alternar={alternar} location={location} tema={tema} />
             </li>
           ))}
         </ul>
@@ -166,8 +232,27 @@ export function Sidebar() {
   const { sesion } = useAuth();
   const location = useLocation();
   const [expandido, setExpandido] = useState(false);
-  const [seccionesAbiertas, setSeccionesAbiertas] = useState<Set<string>>(
-    () => new Set(["financiero", "estados-financieros"])
+
+  // Un sistema por bloque de primer nivel -- encabezado no clicable +
+  // ícono + tema de color propios (opciones A+C del diagnóstico de
+  // menú), respetando los mismos flags de acceso que ya decidían si el
+  // bloque se muestra o no.
+  const sistemas = [
+    { nodo: MENU_FINANCIERO, encabezado: "Dashboard Financiero", icono: "💰", tema: TEMA_FINANCIERO, visible: !!sesion?.accesoFinanciero },
+    { nodo: MENU_IMPORTACIONES, encabezado: "Dashboard Importaciones", icono: "📦", tema: TEMA_IMPORTACIONES, visible: !!sesion?.accesoImportaciones },
+  ].filter((s) => s.visible);
+
+  // Set inicial de secciones abiertas: SOLO el sistema y la(s)
+  // sub-sección(es) que contienen la pantalla activa según la ruta
+  // actual (antes hardcodeado siempre a "financiero"+"estados-
+  // financieros", sin importar dónde estuviera parado el usuario). Se
+  // calcula una sola vez al montar el Sidebar (lazy initializer) -- a
+  // partir de ahí el usuario abre/cierra secciones a mano sin que se
+  // le vuelvan a forzar. Si la ruta activa no está en ningún árbol
+  // (ej. una pantalla fuera de Financiero/Importaciones), todo queda
+  // colapsado.
+  const [seccionesAbiertas, setSeccionesAbiertas] = useState<Set<string>>(() =>
+    idsHastaActivo(sistemas.map((s) => s.nodo), location)
   );
 
   function alternarSeccion(id: string) {
@@ -178,11 +263,6 @@ export function Sidebar() {
       return siguiente;
     });
   }
-
-  const nodosRaiz: NodoMenu[] = [
-    ...(sesion?.accesoFinanciero ? [MENU_FINANCIERO] : []),
-    ...(sesion?.accesoImportaciones ? [MENU_IMPORTACIONES] : []),
-  ];
 
   const puedeVerAdministracion = sesion?.rol === "Administrador" || sesion?.rol === "Administrador de Usuarios";
 
@@ -200,15 +280,33 @@ export function Sidebar() {
 
       {expandido ? (
         <nav className="flex-1 space-y-1 overflow-y-auto overflow-x-hidden px-2 py-3">
-          {nodosRaiz.map((nodo) => (
-            <NodoView key={nodo.id} nodo={nodo} nivel={0} abiertos={seccionesAbiertas} alternar={alternarSeccion} location={location} />
+          {sistemas.map((sistema, indice) => (
+            <div key={sistema.nodo.id}>
+              {indice > 0 && <div className="mb-1 mt-2 border-t border-white/10" />}
+              {/* Encabezado no clicable por sistema -- deja claro que
+                  "Financiero" e "Importaciones" son 2 dashboards
+                  distintos, no 2 secciones del mismo. Sin cambiar la
+                  navegación: el botón colapsable de abajo sigue igual. */}
+              <div className="px-2 pb-1 pt-1 text-[10px] font-bold uppercase tracking-wide text-white/40">
+                {sistema.encabezado}
+              </div>
+              <NodoView
+                nodo={sistema.nodo}
+                nivel={0}
+                abiertos={seccionesAbiertas}
+                alternar={alternarSeccion}
+                location={location}
+                tema={sistema.tema}
+                icono={sistema.icono}
+              />
+            </div>
           ))}
         </nav>
       ) : (
         <nav className="flex-1 space-y-2 overflow-hidden px-2 py-3 text-center" aria-hidden="true">
-          {nodosRaiz.map((nodo) => (
-            <div key={nodo.id} className="text-white/60">
-              •
+          {sistemas.map((sistema) => (
+            <div key={sistema.nodo.id} className="text-base leading-none">
+              {sistema.icono}
             </div>
           ))}
         </nav>

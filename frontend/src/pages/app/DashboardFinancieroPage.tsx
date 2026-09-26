@@ -18,6 +18,7 @@ import {
 } from "../../components/TablaGrupoExpandible";
 import { formatPercent, formatQ, MESES_LARGOS } from "../../utils/format";
 import type { DashboardFinancieroResponse } from "../../types/dashboardFinanciero";
+import { useFinancieroFilterGrupo1 } from "../../financiero/FinancieroFilterContext";
 
 // Mismos colores confirmados pixel a pixel contra las capturas reales
 // (docs/legacy/Financiero_capturas/): Ingresos/Activo teal, Egresos/
@@ -102,11 +103,14 @@ export function DashboardFinancieroPage() {
   // redundantes).
   const pagina = Math.max(0, VISTAS.indexOf(vistaParam as (typeof VISTAS)[number]));
 
-  const [anio, setAnio] = useState("");
-  const [mes, setMes] = useState("");
   const [data, setData] = useState<DashboardFinancieroResponse | null>(null);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Año+Mes sincronizado con el resto del Grupo 1 (Otros informes
+  // financieros, y a futuro Presupuestos / Comparación importaciones
+  // kilolitros) -- ver FinancieroFilterContext.
+  const { anio, mes, setAnioMes, cambiarAnio, cambiarMes } = useFinancieroFilterGrupo1(data?.periodos_disponibles ?? []);
 
   useEffect(() => {
     let cancelado = false;
@@ -116,8 +120,7 @@ export function DashboardFinancieroPage() {
         if (cancelado) return;
         setData(res);
         setError(null);
-        if (!anio) setAnio(String(res.anio));
-        if (!mes) setMes(String(res.mes));
+        if (!anio || !mes) setAnioMes(String(res.anio), String(res.mes));
       })
       .catch((err) => {
         if (!cancelado) setError(mensajeError(err));
@@ -145,17 +148,6 @@ export function DashboardFinancieroPage() {
     .map((p) => p.mes)
     .sort((a, b) => a - b);
   const mesOpciones = mesesDelAnioSeleccionado.map((m) => ({ value: String(m), label: MESES_LARGOS[m - 1] }));
-
-  // Al cambiar de año, si el mes elegido no existe en el año nuevo, se
-  // ajusta al último mes disponible de ese año en vez de dejar una
-  // combinación inválida.
-  function cambiarAnio(nuevoAnio: string) {
-    const mesesDelNuevoAnio = periodos.filter((p) => String(p.anio) === nuevoAnio).map((p) => p.mes);
-    setAnio(nuevoAnio);
-    if (!mesesDelNuevoAnio.includes(Number(mes))) {
-      setMes(String(Math.max(...mesesDelNuevoAnio)));
-    }
-  }
 
   const tituloPagina = data
     ? [
@@ -192,7 +184,7 @@ export function DashboardFinancieroPage() {
             anio={anio}
             mes={mes}
             onChangeAnio={cambiarAnio}
-            onChangeMes={setMes}
+            onChangeMes={cambiarMes}
             aniosOpciones={aniosDisponibles.map(String)}
             mesesOpciones={mesOpciones}
           />

@@ -5,6 +5,14 @@ services/dashboard_otros_informes.py para el detalle de cada página."""
 from pydantic import BaseModel
 
 
+# Compartido por todas las páginas de "Otros informes financieros" (y por
+# Estados Financieros) -- un par año+mes real, para el selector "hasta el
+# mes" que solo ofrece combinaciones que existen de verdad en los datos.
+class PeriodoDisponibleGastos(BaseModel):
+    anio: int
+    mes: int
+
+
 # --- Cuotas Asociados ---------------------------------------------------
 
 
@@ -32,7 +40,7 @@ class KpisCuotasAsociados(BaseModel):
 class CuotasAsociadosResponse(BaseModel):
     anio: int
     mes: int
-    periodos_disponibles: list[int]
+    periodos_disponibles: list[PeriodoDisponibleGastos]
     kpis: KpisCuotasAsociados
     tipos: list[TipoCuotaAsociados]
 
@@ -44,11 +52,6 @@ class CuotasAsociadosResponse(BaseModel):
 # DAX del .pbix original Y por las capturas de referencia, ambas
 # coinciden) agrupa por CATEGORÍA DE GASTO (GroupEgresos), no por centro
 # de costo. Ver services/dashboard_otros_informes.py.
-
-
-class PeriodoDisponibleGastos(BaseModel):
-    anio: int
-    mes: int
 
 
 class FilaGastoCategoria(BaseModel):

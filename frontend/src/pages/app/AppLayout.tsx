@@ -1,6 +1,7 @@
 import { Outlet, useLocation } from "react-router-dom";
 import { Header } from "../../components/layout/Header";
 import { Sidebar } from "../../components/layout/Sidebar";
+import { FinancieroFilterProvider } from "../../financiero/FinancieroFilterContext";
 
 /** Financiero e Importaciones (Plaguicidas/Nutrientes) comparten este
  * layout -- antes navegaban por un nav superior (Plaguicidas/
@@ -37,7 +38,15 @@ export function AppLayout() {
       <div className="min-w-0 flex-1">
         <Header />
         <main className={`mx-auto px-4 py-6 ${esFinanciero ? "max-w-[1658px]" : "max-w-7xl"}`}>
-          <Outlet />
+          {/* Arriba del Outlet para que sobreviva a la navegación entre
+              rutas/vistas del módulo Financiero (Estados financieros,
+              Otros informes financieros, y a futuro Presupuestos /
+              Importaciones del Financiero) -- ver FinancieroFilterContext
+              para el detalle de los 2 grupos de sincronización. No afecta
+              a Plaguicidas/Nutrientes, que no lo consumen. */}
+          <FinancieroFilterProvider>
+            <Outlet />
+          </FinancieroFilterProvider>
         </main>
       </div>
     </div>

@@ -34,12 +34,22 @@ Q660,000 / Q96,000):
         acumulado por mes es monótono creciente y CORRECTO (12,000 en
         enero -> 634,000 en julio -> 660,000 desde agosto en adelante,
         que es el último mes con pagos cargados a la fecha) -- 634,000
-        es simplemente el acumulado REAL hasta julio, no un error. El
-        filtro de mes SÍ aplica: por default (mes=None o mes=12) se
-        obtiene el total anual completo (660,000, igual que antes),
-        y con un mes específico se obtiene el acumulado real hasta ese
-        mes.
+        es simplemente el acumulado REAL hasta julio, no un error.
     Saldo (Por cobrar) = CuotaTotal - Cancelado (del mismo corte de mes).
+
+Selector de período (CORREGIDO): el .pbix real define MiCalendario =
+CALENDAR(DATE(2023,1,1),
+EOMONTH(MAX(vw_piq_balance_general[Fecha]), 0)) -- el filtro de mes llega
+solo hasta el último mes con datos de BalanceGeneral (hoy Septiembre
+2026), igual que las demás páginas de "Otros informes financieros". Antes
+`periodos_disponibles` traía solo años (de AsociadosCuota) y el mes
+"siempre disponible 1-12" -- eso permitía elegir Diciembre 2026 aunque no
+exista ese dato todavía. Ahora usa pares año+mes reales de
+dbo.BalanceGeneral (mismo criterio y misma función de resolución de
+default, `_anio_mes_default_gastos`, que Ejecución de Gastos/Conciliación/
+Flujo), y por default apunta al último período real en vez de a
+diciembre -- el cálculo de Cancelado/Saldo en sí NO cambia (mismo SQL,
+mismo filtro Sal_Mes <= mes), solo cambia qué meses son seleccionables.
 """
 
 from datetime import date, timedelta
@@ -72,25 +82,25 @@ def _num(valor) -> float:
     return float(valor) if valor is not None else 0.0
 
 
-def _anios_disponibles_cuotas(db: Session) -> list[int]:
-    filas = db.execute(text("SELECT DISTINCT Sal_Ano FROM dbo.AsociadosCuota ORDER BY Sal_Ano")).all()
-    return [int(a) for (a,) in filas if a is not None]
+def _periodos_disponibles_cuotas(db: Session) -> list[PeriodoDisponibleGastos]:
+    # Misma fuente que el filtro de mes real del .pbix (MiCalendario, ver
+    # docstring del módulo): dbo.BalanceGeneral es continuo desde 2023-01
+    # sin huecos (confirmado con SELECT DISTINCT), así que esto reproduce
+    # exactamente CALENDAR(DATE(2023,1,1), EOMONTH(MAX(Fecha), 0)) sin
+    # necesidad de generar un calendario aparte.
+    filas = db.execute(
+        text("SELECT DISTINCT Sal_Ano, Sal_Mes FROM dbo.BalanceGeneral ORDER BY Sal_Ano, Sal_Mes")
+    ).all()
+    return [PeriodoDisponibleGastos(anio=int(a), mes=int(m)) for a, m in filas if a is not None and m is not None]
 
 
 def obtener_cuotas_asociados(db: Session, anio: int | None, mes: int | None = None) -> CuotasAsociadosResponse:
-    periodos = _anios_disponibles_cuotas(db)
-    if anio is not None:
-        anio_resuelto = anio
-    elif periodos:
-        anio_resuelto = periodos[-1]
-    else:
-        anio_resuelto = date.today().year
-
-    # mes=None (default) equivale a mes=12: "Cancelado" acumulado hasta
-    # diciembre = el total anual completo, exactamente lo mismo que se
-    # verificó antes de que este filtro existiera -- así el estado por
-    # default de la página no cambia ningún número ya confirmado.
-    mes_resuelto = mes if mes is not None else 12
+    periodos = _periodos_disponibles_cuotas(db)
+    # Misma función de resolución de default que Ejecución de Gastos/
+    # Conciliación/Flujo: si falta año y/o mes, usa el último período real
+    # disponible (antes: año más reciente de AsociadosCuota + mes=12 fijo,
+    # lo que permitía llegar hasta diciembre aunque no hubiera datos).
+    anio_resuelto, mes_resuelto = _anio_mes_default_gastos(anio, mes, periodos)
 
     filas = (
         db.execute(

@@ -10,6 +10,7 @@ import {
   obtenerFlujoCaja,
 } from "../../api/dashboardOtrosInformes";
 import { mensajeError } from "../../api/client";
+import { useFinancieroFilterGrupo1 } from "../../financiero/FinancieroFilterContext";
 import { ChartCard } from "../../components/ChartCard";
 import { FilterYearMonth } from "../../components/filters/PowerBiFilter";
 import { FINANCIERO_SURFACE, KpiCardIcono, VERDE_ENCABEZADO } from "../../components/TablaGrupoExpandible";
@@ -523,28 +524,21 @@ export function DashboardOtrosInformesPage() {
   return <PaginaCuotasAsociados />;
 }
 
-// Los 12 meses siempre están disponibles como corte de "hasta el mes"
-// (a diferencia de Ejecución de Gastos, donde `mesesOpciones` depende de
-// qué combinaciones año+mes existen de verdad en los datos, acá
-// cualquier mes 1-12 es un corte válido del acumulado de Cancelado
-// dentro del año elegido, sin importar si ese mes específico tuvo
-// movimientos).
-const MES_OPCIONES = MESES_LARGOS.map((nombre, i) => ({ value: String(i + 1), label: nombre }));
-
 function PaginaCuotasAsociados() {
-  const [anio, setAnio] = useState("");
-  // Selector de Mes -- FUNCIONAL: filtra "Cancelado" (y por lo tanto
-  // Saldo/Por cobrar) acumulado hasta el mes elegido dentro del año.
-  // "Cuota" no varía por mes (es un monto fijo anual). Ver el docstring
-  // de obtener_cuotas_asociados (backend) para el detalle de la
-  // corrección: una nota anterior decía que filtrar por mes "no
-  // aplicaba" a este concepto -- investigado de nuevo con una consulta
-  // directa, el acumulado por mes es correcto (crece mes a mes hasta
-  // llegar al total anual verificado en el último mes con datos).
-  const [mes, setMes] = useState("");
   const [data, setData] = useState<CuotasAsociadosResponse | null>(null);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Año+Mes sincronizado con el resto del Grupo 1 (Estados financieros y
+  // las otras 4 de Otros informes financieros) -- ver
+  // FinancieroFilterContext. CORREGIDO: antes el selector de mes ofrecía
+  // los 12 meses siempre (el filtro real de "Cancelado" SÍ acepta
+  // cualquier mes 1-12 como corte del acumulado, pero el .pbix real
+  // limita el SELECTOR al último mes con datos de BalanceGeneral,
+  // MiCalendario = CALENDAR(DATE(2023,1,1), EOMONTH(MAX(Fecha),0)) --
+  // ver docstring de obtener_cuotas_asociados, backend). Ahora usa pares
+  // año+mes reales, mismo criterio que las demás pantallas.
+  const { anio, mes, cambiarAnio, cambiarMes, setAnioMes } = useFinancieroFilterGrupo1(data?.periodos_disponibles ?? []);
 
   useEffect(() => {
     let cancelado = false;
@@ -554,8 +548,7 @@ function PaginaCuotasAsociados() {
         if (cancelado) return;
         setData(res);
         setError(null);
-        if (!anio) setAnio(String(res.anio));
-        if (!mes) setMes(String(res.mes));
+        if (!anio || !mes) setAnioMes(String(res.anio), String(res.mes));
       })
       .catch((err) => {
         if (!cancelado) setError(mensajeError(err));
@@ -573,7 +566,12 @@ function PaginaCuotasAsociados() {
     return <p className="rounded-tremor-small bg-danger-surface px-4 py-3 text-sm text-danger">{error}</p>;
   }
 
-  const aniosDisponibles = data?.periodos_disponibles ?? [];
+  const periodos = data?.periodos_disponibles ?? [];
+  const aniosDisponibles = Array.from(new Set(periodos.map((p) => p.anio))).sort((a, b) => a - b);
+  const mesesDelAnio = periodos
+    .filter((p) => String(p.anio) === anio)
+    .map((p) => p.mes)
+    .sort((a, b) => a - b);
 
   return (
     // Mismo patrón EXACTO que DashboardFinancieroPage (Estados
@@ -590,10 +588,10 @@ function PaginaCuotasAsociados() {
             theme="gris"
             anio={anio}
             mes={mes}
-            onChangeAnio={setAnio}
-            onChangeMes={setMes}
+            onChangeAnio={cambiarAnio}
+            onChangeMes={cambiarMes}
             aniosOpciones={aniosDisponibles.map(String)}
-            mesesOpciones={MES_OPCIONES}
+            mesesOpciones={mesesDelAnio.map((m) => ({ value: String(m), label: MESES_LARGOS[m - 1] }))}
           />
         </div>
       </div>
@@ -1096,11 +1094,13 @@ function GraficoColumnasGrupoEjecucion({
 }
 
 function PaginaEjecucionGastos({ acumulado }: { acumulado: boolean }) {
-  const [anio, setAnio] = useState("");
-  const [mes, setMes] = useState("");
   const [data, setData] = useState<EjecucionGastosResponse | null>(null);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Año+Mes sincronizado con el resto del Grupo 1 -- ver
+  // FinancieroFilterContext.
+  const { anio, mes, cambiarAnio, cambiarMes, setAnioMes } = useFinancieroFilterGrupo1(data?.periodos_disponibles ?? []);
 
   const obtener = acumulado ? obtenerEjecucionGastosAcumulado : obtenerEjecucionGastosMes;
 
@@ -1112,8 +1112,7 @@ function PaginaEjecucionGastos({ acumulado }: { acumulado: boolean }) {
         if (cancelado) return;
         setData(res);
         setError(null);
-        if (!anio) setAnio(String(res.anio));
-        if (!mes) setMes(String(res.mes));
+        if (!anio || !mes) setAnioMes(String(res.anio), String(res.mes));
       })
       .catch((err) => {
         if (!cancelado) setError(mensajeError(err));
@@ -1137,14 +1136,6 @@ function PaginaEjecucionGastos({ acumulado }: { acumulado: boolean }) {
     .filter((p) => String(p.anio) === anio)
     .map((p) => p.mes)
     .sort((a, b) => a - b);
-
-  function cambiarAnio(nuevoAnio: string) {
-    const mesesDelNuevoAnio = periodos.filter((p) => String(p.anio) === nuevoAnio).map((p) => p.mes);
-    setAnio(nuevoAnio);
-    if (!mesesDelNuevoAnio.includes(Number(mes))) {
-      setMes(String(Math.max(...mesesDelNuevoAnio)));
-    }
-  }
 
   // "Ejecución Gastos {Mes} {Año}" (mensual) -- queda igual, ya
   // confirmado contra el reporte real. Acumulado: texto real confirmado
@@ -1178,7 +1169,7 @@ function PaginaEjecucionGastos({ acumulado }: { acumulado: boolean }) {
             anio={anio}
             mes={mes}
             onChangeAnio={cambiarAnio}
-            onChangeMes={setMes}
+            onChangeMes={cambiarMes}
             aniosOpciones={aniosDisponibles.map(String)}
             mesesOpciones={mesesDelAnio.map((m) => ({ value: String(m), label: MESES_LARGOS[m - 1] }))}
             theme="gris"
@@ -1290,11 +1281,13 @@ function BloqueBanco({ banco }: { banco: BancoConciliacion }) {
 }
 
 function PaginaConciliacionBancaria() {
-  const [anio, setAnio] = useState("");
-  const [mes, setMes] = useState("");
   const [data, setData] = useState<ConciliacionBancariaResponse | null>(null);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Año+Mes sincronizado con el resto del Grupo 1 -- ver
+  // FinancieroFilterContext.
+  const { anio, mes, cambiarAnio, cambiarMes, setAnioMes } = useFinancieroFilterGrupo1(data?.periodos_disponibles ?? []);
 
   useEffect(() => {
     let cancelado = false;
@@ -1304,8 +1297,7 @@ function PaginaConciliacionBancaria() {
         if (cancelado) return;
         setData(res);
         setError(null);
-        if (!anio) setAnio(String(res.anio));
-        if (!mes) setMes(String(res.mes));
+        if (!anio || !mes) setAnioMes(String(res.anio), String(res.mes));
       })
       .catch((err) => {
         if (!cancelado) setError(mensajeError(err));
@@ -1330,14 +1322,6 @@ function PaginaConciliacionBancaria() {
     .map((p) => p.mes)
     .sort((a, b) => a - b);
 
-  function cambiarAnio(nuevoAnio: string) {
-    const mesesDelNuevoAnio = periodos.filter((p) => String(p.anio) === nuevoAnio).map((p) => p.mes);
-    setAnio(nuevoAnio);
-    if (!mesesDelNuevoAnio.includes(Number(mes))) {
-      setMes(String(Math.max(...mesesDelNuevoAnio)));
-    }
-  }
-
   const tituloPagina = data ? `Conciliación de bancos ${MESES_LARGOS[data.mes - 1]} ${data.anio}` : "Conciliación de bancos";
 
   return (
@@ -1350,7 +1334,7 @@ function PaginaConciliacionBancaria() {
             anio={anio}
             mes={mes}
             onChangeAnio={cambiarAnio}
-            onChangeMes={setMes}
+            onChangeMes={cambiarMes}
             aniosOpciones={aniosDisponibles.map(String)}
             mesesOpciones={mesesDelAnio.map((m) => ({ value: String(m), label: MESES_LARGOS[m - 1] }))}
             theme="gris"
@@ -1495,11 +1479,13 @@ function GraficoFlujoCaja({ barras }: { barras: { etiqueta: string; valor: numbe
 }
 
 function PaginaFlujoCaja() {
-  const [anio, setAnio] = useState("");
-  const [mes, setMes] = useState("");
   const [data, setData] = useState<FlujoCajaResponse | null>(null);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Año+Mes sincronizado con el resto del Grupo 1 -- ver
+  // FinancieroFilterContext.
+  const { anio, mes, cambiarAnio, cambiarMes, setAnioMes } = useFinancieroFilterGrupo1(data?.periodos_disponibles ?? []);
 
   useEffect(() => {
     let cancelado = false;
@@ -1509,8 +1495,7 @@ function PaginaFlujoCaja() {
         if (cancelado) return;
         setData(res);
         setError(null);
-        if (!anio) setAnio(String(res.anio));
-        if (!mes) setMes(String(res.mes));
+        if (!anio || !mes) setAnioMes(String(res.anio), String(res.mes));
       })
       .catch((err) => {
         if (!cancelado) setError(mensajeError(err));
@@ -1535,14 +1520,6 @@ function PaginaFlujoCaja() {
     .map((p) => p.mes)
     .sort((a, b) => a - b);
 
-  function cambiarAnio(nuevoAnio: string) {
-    const mesesDelNuevoAnio = periodos.filter((p) => String(p.anio) === nuevoAnio).map((p) => p.mes);
-    setAnio(nuevoAnio);
-    if (!mesesDelNuevoAnio.includes(Number(mes))) {
-      setMes(String(Math.max(...mesesDelNuevoAnio)));
-    }
-  }
-
   const fechaTitulo = data ? `${ultimoDiaDelMes(data.anio, data.mes)} de ${MESES_LARGOS[data.mes - 1]} de ${data.anio}` : "";
   const tituloPagina = data ? `Flujo de caja al ${fechaTitulo}` : "Flujo de caja";
 
@@ -1556,7 +1533,7 @@ function PaginaFlujoCaja() {
             anio={anio}
             mes={mes}
             onChangeAnio={cambiarAnio}
-            onChangeMes={setMes}
+            onChangeMes={cambiarMes}
             aniosOpciones={aniosDisponibles.map(String)}
             mesesOpciones={mesesDelAnio.map((m) => ({ value: String(m), label: MESES_LARGOS[m - 1] }))}
             theme="gris"
