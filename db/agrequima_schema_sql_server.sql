@@ -981,3 +981,40 @@ BEGIN
     );
 END
 GO
+
+-- vw_piq_saldos_bancos (docs/legacy/financiero/vw_piq_saldos_bancos.csv):
+-- saldo bancario CONTABLE (columna "Saldo Contabilidad" de la
+-- conciliación real, no el saldo del banco -- ver
+-- Instrucciones_claude_code_agrequima.MD, sección Conciliación
+-- bancaria/Flujo de caja). BANRURAL trae 3 filas por período en el CSV
+-- (2 en cero); se suman por banco/mes al cargar.
+IF OBJECT_ID('dbo.SaldosBancos') IS NULL
+BEGIN
+    CREATE TABLE dbo.SaldosBancos(
+        saldobancoid INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
+        ban_codigo   VARCHAR(50) NULL,
+        Sal_Mes      INT NULL,
+        Sal_Ano      INT NULL,
+        InicialL     DECIMAL(18,2) NULL,
+        EntradasL    DECIMAL(18,2) NULL,
+        SalidasL     DECIMAL(18,2) NULL,
+        FinalL       DECIMAL(18,2) NULL,
+        fechamod     DATETIME NULL,
+        userid       INT NULL
+    );
+END
+GO
+
+IF OBJECT_ID('dbo.stg_SaldosBancos') IS NULL
+BEGIN
+    CREATE TABLE dbo.stg_SaldosBancos(
+        ban_codigo VARCHAR(MAX) NULL,
+        Sal_Mes    FLOAT NULL,
+        Sal_Ano    FLOAT NULL,
+        InicialL   FLOAT NULL,
+        EntradasL  FLOAT NULL,
+        SalidasL   FLOAT NULL,
+        FinalL     FLOAT NULL
+    );
+END
+GO

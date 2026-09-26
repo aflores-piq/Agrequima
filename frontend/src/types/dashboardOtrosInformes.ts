@@ -65,3 +65,61 @@ export interface EjecucionGastosResponse {
   fila_ejecucion: FilaGastoCategoria;
   tarjetas: TarjetaResumenGasto[];
 }
+
+// --- Conciliación bancaria -----------------------------------------------
+
+export interface FilaConciliacionBanco {
+  descripcion: string;
+  saldo_banco: number | null;
+  saldo_contabilidad: number | null;
+  negrita: boolean;
+}
+
+export interface BancoConciliacion {
+  nombre: string;
+  color: string;
+  filas: FilaConciliacionBanco[];
+}
+
+export interface ConciliacionBancariaResponse {
+  anio: number;
+  mes: number;
+  periodos_disponibles: PeriodoDisponibleGastos[];
+  bancos: BancoConciliacion[];
+}
+
+// --- Flujo de caja ---------------------------------------------------------
+
+export type TipoFilaFlujoCaja =
+  | "TITULO_BANCOS"
+  | "CAJA"
+  | "BANCO"
+  | "TOTAL_BANCOS"
+  | "TITULO_CHEQUES"
+  | "CHEQUE"
+  | "TOTAL_CHEQUES"
+  | "DISPONIBILIDAD"
+  | "INVERSION_BAC"
+  | "INVERSION_PROMERICA"
+  | "TOTAL_FINAL";
+
+export interface FilaFlujoCaja {
+  tipo: TipoFilaFlujoCaja;
+  descripcion: string;
+  saldos: number | null;
+  disponibilidad: number | null;
+}
+
+export interface BarraFlujoCaja {
+  etiqueta: string;
+  valor: number;
+  color: string;
+}
+
+export interface FlujoCajaResponse {
+  anio: number;
+  mes: number;
+  periodos_disponibles: PeriodoDisponibleGastos[];
+  filas: FilaFlujoCaja[];
+  grafica: BarraFlujoCaja[];
+}

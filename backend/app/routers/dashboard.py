@@ -16,13 +16,20 @@ from app.schemas.dashboard import (
     OpcionesFiltroPlaguicidas,
 )
 from app.schemas.dashboard_financiero import DashboardFinancieroResponse
-from app.schemas.dashboard_otros_informes import CuotasAsociadosResponse, EjecucionGastosResponse
+from app.schemas.dashboard_otros_informes import (
+    ConciliacionBancariaResponse,
+    CuotasAsociadosResponse,
+    EjecucionGastosResponse,
+    FlujoCajaResponse,
+)
 from app.services import export as export_service
 from app.services.dashboard_financiero import obtener_dashboard_financiero
 from app.services.dashboard_otros_informes import (
+    obtener_conciliacion_bancaria,
     obtener_cuotas_asociados,
     obtener_ejecucion_gastos_acumulado,
     obtener_ejecucion_gastos_mensual,
+    obtener_flujo_caja,
 )
 from app.services.dashboard_nutrientes import (
     construir_contexto_nutrientes,
@@ -136,6 +143,28 @@ def dashboard_financiero_ejecucion_gastos_acumulado(
     _acceso: UsuarioToken = Depends(require_acceso_financiero),
 ) -> EjecucionGastosResponse:
     return obtener_ejecucion_gastos_acumulado(db, anio, mes)
+
+
+@router.get("/financiero/conciliacion-bancaria", response_model=ConciliacionBancariaResponse)
+def dashboard_financiero_conciliacion_bancaria(
+    anio: int | None = None,
+    mes: int | None = Query(None, ge=1, le=12),
+    db: Session = Depends(get_db),
+    _usuario: UsuarioToken = Depends(get_current_user),
+    _acceso: UsuarioToken = Depends(require_acceso_financiero),
+) -> ConciliacionBancariaResponse:
+    return obtener_conciliacion_bancaria(db, anio, mes)
+
+
+@router.get("/financiero/flujo-caja", response_model=FlujoCajaResponse)
+def dashboard_financiero_flujo_caja(
+    anio: int | None = None,
+    mes: int | None = Query(None, ge=1, le=12),
+    db: Session = Depends(get_db),
+    _usuario: UsuarioToken = Depends(get_current_user),
+    _acceso: UsuarioToken = Depends(require_acceso_financiero),
+) -> FlujoCajaResponse:
+    return obtener_flujo_caja(db, anio, mes)
 
 
 def _respuesta_xlsx(contenido: bytes, nombre_archivo: str) -> Response:

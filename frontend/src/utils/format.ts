@@ -19,6 +19,15 @@ export function formatQ(v: number): string {
   return `${signo}Q${Math.round(Math.abs(v)).toLocaleString("es-GT")}`;
 }
 
+// Igual que formatQ pero con 2 decimales fijos -- usado en Conciliación
+// Bancaria, calcado del spec Deneb real ("Q2,975,052.10", con 2
+// decimales, a diferencia del resto del módulo que usa formatQ sin
+// decimales).
+export function formatQ2(v: number): string {
+  const signo = v < 0 ? "-" : "";
+  return `${signo}Q${Math.abs(v).toLocaleString("es-GT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
 export function formatNumber(v: number): string {
   return numberFormatter.format(v);
 }

@@ -1,7 +1,10 @@
-"""Carga inicial (UNA SOLA VEZ) de los 7 CSV reales exportados de
+"""Carga inicial (UNA SOLA VEZ) de los 9 CSV reales exportados de
 CONTACC hacia las tablas del módulo Financiero: BalanceSaldos,
 BalanceGeneral, CatalogoCuentas, CentrosDeCosto, Presupuestos,
-AsociadosCuota, ChequesCirculacion.
+AsociadosCuota, ChequesCirculacion, SaldosBancos, SaldoBancario.
+SaldoBancario.csv es distinto de los otros 8: no viene de CONTACC, es un
+export directo de Agrequima.dbo.SaldoBancario del servidor 10.10.0.6
+(la fuente real de "Saldo Banco" en Conciliación Bancaria).
 
 Esto NO es el sync nocturno (sync_piq_ia.py no toca estas tablas
 todavía, a propósito) -- es carga manual, pensada para tener datos
@@ -219,6 +222,69 @@ def _cargar_cheques_circulacion() -> int:
     return len(df)
 
 
+def _cargar_saldos_bancos() -> int:
+    # vw_piq_saldos_bancos.csv (agregado después de los otros 7, mismo
+    # patrón) -- sin encabezado, columnas confirmadas contra el .pbix
+    # real: ban_codigo, Mes, Año, InicialL, EntradasL, SalidasL, FinalL.
+    # Es el saldo CONTABLE (columna "Saldo Contabilidad" de la
+    # conciliación bancaria), no el saldo del banco -- ver la sección
+    # Conciliación bancaria / Flujo de caja de la bitácora.
+    columnas = ["ban_codigo", "Sal_Mes", "Sal_Ano", "InicialL", "EntradasL", "SalidasL", "FinalL"]
+    df = _leer_csv("vw_piq_saldos_bancos.csv", columnas)
+    _a_numerico(df, ["Sal_Mes", "Sal_Ano", "InicialL", "EntradasL", "SalidasL", "FinalL"])
+    df = _nan_a_none(df)
+    # BANRURAL trae 3 filas por período en el CSV (2 en cero, confirmado
+    # en la investigación previa) -- se suman por banco/mes antes de
+    # insertar, para no duplicar filas con el mismo período.
+    df = df.groupby(["ban_codigo", "Sal_Mes", "Sal_Ano"], as_index=False)[
+        ["InicialL", "EntradasL", "SalidasL", "FinalL"]
+    ].sum()
+    df.to_sql("stg_SaldosBancos", engine, if_exists="replace", index=False)
+
+    with engine.begin() as conn:
+        conn.execute(text("TRUNCATE TABLE dbo.SaldosBancos"))
+        conn.execute(text(
+            """
+            INSERT INTO dbo.SaldosBancos
+                (ban_codigo, Sal_Mes, Sal_Ano, InicialL, EntradasL, SalidasL, FinalL, fechamod)
+            SELECT ban_codigo, CAST(Sal_Mes AS INT), CAST(Sal_Ano AS INT),
+                   CAST(InicialL AS DECIMAL(18,2)), CAST(EntradasL AS DECIMAL(18,2)),
+                   CAST(SalidasL AS DECIMAL(18,2)), CAST(FinalL AS DECIMAL(18,2)), GETDATE()
+            FROM dbo.stg_SaldosBancos
+            """
+        ))
+    return len(df)
+
+
+def _cargar_saldo_bancario() -> int:
+    # SaldoBancario.csv (export real de Agrequima.dbo.SaldoBancario del
+    # servidor 10.10.0.6, agregado después de los otros 8) -- sin
+    # encabezado, columnas: Concepto, Anio, Mes, Banco, Valor. Es la
+    # fuente real de la columna "Saldo Banco" de Conciliación Bancaria
+    # (medida DAX "Saldo Banco Conciliacion" del .pbix): 3 filas por
+    # banco/mes (Concepto "Saldo inicial" / "Creditos" / "Debitos").
+    # Mismo esquema que ya usaba dbo.SaldoBancario (con el ETL de Excel
+    # de etl_saldo_bancario.py, que hasta ahora nunca se había usado) --
+    # no hace falta ninguna migración nueva.
+    columnas = ["Concepto", "Anio", "Mes", "Banco", "Valor"]
+    df = _leer_csv("SaldoBancario.csv", columnas)
+    _a_numerico(df, ["Anio", "Mes", "Valor"])
+    df = _nan_a_none(df)
+    df.to_sql("stg_SaldoBancario", engine, if_exists="replace", index=False)
+
+    with engine.begin() as conn:
+        conn.execute(text("TRUNCATE TABLE dbo.SaldoBancario"))
+        conn.execute(text(
+            """
+            INSERT INTO dbo.SaldoBancario (Concepto, Anio, Mes, Banco, Valor, FechaMod)
+            SELECT Concepto, CAST(Anio AS INT), CAST(Mes AS INT), Banco,
+                   CAST(Valor AS DECIMAL(18,2)), GETDATE()
+            FROM dbo.stg_SaldoBancario
+            """
+        ))
+    return len(df)
+
+
 CARGAS = [
     ("BalanceSaldos", _cargar_balance_saldos),
     ("BalanceGeneral", _cargar_balance_general),
@@ -227,6 +293,8 @@ CARGAS = [
     ("Presupuestos", _cargar_presupuestos),
     ("AsociadosCuota", _cargar_asociados_cuota),
     ("ChequesCirculacion", _cargar_cheques_circulacion),
+    ("SaldosBancos", _cargar_saldos_bancos),
+    ("SaldoBancario", _cargar_saldo_bancario),
 ]
 
 

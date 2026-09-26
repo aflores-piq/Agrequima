@@ -42,16 +42,22 @@ Q660,000 / Q96,000):
     Saldo (Por cobrar) = CuotaTotal - Cancelado (del mismo corte de mes).
 """
 
-from datetime import date
+from datetime import date, timedelta
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.schemas.dashboard_otros_informes import (
+    BancoConciliacion,
+    BarraFlujoCaja,
+    ConciliacionBancariaResponse,
     CuotasAsociadosResponse,
     EjecucionGastosResponse,
+    FilaConciliacionBanco,
     FilaCuotaAsociado,
+    FilaFlujoCaja,
     FilaGastoCategoria,
+    FlujoCajaResponse,
     KpisCuotasAsociados,
     PeriodoDisponibleGastos,
     TarjetaResumenGasto,
@@ -397,3 +403,313 @@ def obtener_ejecucion_gastos_acumulado(db: Session, anio: int | None, mes: int |
     periodos = _periodos_disponibles_gastos(db)
     anio_resuelto, mes_resuelto = _anio_mes_default_gastos(anio, mes, periodos)
     return _ejecucion_gastos(db, anio_resuelto, mes_resuelto, acumulado=True)
+
+
+# --- Conciliación bancaria / Flujo de caja --------------------------------
+#
+# Fuentes reales:
+#     dbo.SaldosBancos(ban_codigo, Sal_Mes, Sal_Ano, InicialL, EntradasL,
+#         SalidasL, FinalL) -- cargada de vw_piq_saldos_bancos.csv, ES EL
+#         SALDO CONTABLE por banco/mes (columna "Saldo Contabilidad" de
+#         la conciliación real), confirmado contra el .pbix real: para
+#         los 4 bancos en Agosto 2026, EntradasL/SalidasL cuadran EXACTO
+#         (al centavo) contra SUM(Debitos)/SUM(Creditos) de
+#         dbo.BalanceGeneral para esas mismas cuentas de banco. BANRURAL
+#         trae 3 filas por período en el CSV (2 en cero) -- ya vienen
+#         sumadas por banco/mes en la carga (cargar_datos_financiero_inicial.py).
+#     dbo.ChequesCirculacion(ban_codigo, doc_fecha, doc_fchcobro, doc_monto)
+#         -- "Documentos en Circulación" = emitidos hasta el cierre del
+#         mes Y no cobrados a esa fecha (doc_fecha <= fin de mes AND
+#         (doc_fchcobro IS NULL OR doc_fchcobro > fin de mes)) --
+#         confirmado exacto contra Agosto 2026 (Q19,250.00 BAC / Q4,000.00
+#         BANRURAL, los valores de control dados por el usuario). El
+#         filtro anterior (agrupar por par_ano/par_mes del cheque) daba
+#         un número distinto -- ESE era el filtro equivocado, no este.
+#     dbo.BalanceGeneral -- Caja (cod_n5 110101001) e Inversión a Plazo
+#         Fijo (110103003 BAC, 110103004 Promérica), acumulado DENTRO DEL
+#         AÑO (Sal_Ano = :anio AND Sal_Mes <= :mes, MISMA semántica YTD
+#         que ya usa dashboard_financiero.py para el balance general --
+#         NO acumulado desde 2023, ese fue un error de una investigación
+#         previa que sumaba todos los años). Confirmado exacto contra
+#         Agosto 2026 (Q1,200 / Q2,300,001 / Q1,500,000).
+#
+# "Saldo Banco" (columna independiente de la conciliación, el estado de
+# cuenta real que reporta cada banco) NO es derivable de lo que tenemos:
+# dbo.SaldoBancario existe pero está vacía, y aunque tuviera datos su
+# esquema (Concepto/Año/Mes/Banco/Valor, un solo "Valor") no alcanza
+# para las 4 cifras que hacen falta por banco/mes (Saldo inicial,
+# Créditos, Débitos, Totales). Confirmado con BANRURAL Agosto 2026: el
+# saldo inicial y el total que dio el usuario como referencia difieren
+# en Q0.16 del saldo contable -- una diferencia real, no redondeo, que
+# demuestra que es una fuente independiente.
+#
+# [ACTUALIZADO] El usuario pasó docs/legacy/financiero/SaldoBancario.csv
+# -- export real de Agrequima.dbo.SaldoBancario del servidor 10.10.0.6,
+# cargado en dbo.SaldoBancario (Concepto/Anio/Mes/Banco/Valor). 3
+# conceptos por banco/mes: "Saldo inicial", "Creditos", "Debitos".
+# Totales = Inicial + Créditos − Débitos − Documentos en Circulación
+# (medida DAX real "Saldo Banco Conciliacion" del .pbix) -- verificado
+# exacto contra Agosto 2026 para los 4 bancos. El banco se cruza SIN
+# tilde (PROMÉRICA interno -> "PROMERICA" en este CSV).
+
+_ORDEN_BANCOS_CONCILIACION = [
+    ("BANCOR", "BAC", "#E31B23"),
+    ("BANRURAL", "BANRURAL", "#009B4D"),
+    ("BI", "BI", "#004B87"),
+    ("PROMÉRICA", "PROMÉRICA", "#00A651"),
+]
+
+# ban_codigo interno (con tilde donde corresponde) -> Banco tal como
+# aparece en SaldoBancario.csv (sin tilde).
+_MAPA_BANCO_SALDO_BANCARIO = {
+    "BANCOR": "BANCOR",
+    "BANRURAL": "BANRURAL",
+    "BI": "BI",
+    "PROMÉRICA": "PROMERICA",
+}
+
+# Orden y nombres para Flujo de Caja -- DISTINTOS a los de Conciliación
+# (el usuario los dio en este orden y con estos nombres exactos en el
+# prompt: "Caja y Caja chica / Banrural / Banco Industrial / BAC
+# Reformador / Promerica").
+_ORDEN_BANCOS_FLUJO = [
+    ("BANRURAL", "Banrural"),
+    ("BI", "Banco Industrial"),
+    ("BANCOR", "BAC Reformador"),
+    ("PROMÉRICA", "Promerica"),
+]
+
+
+def _ultimo_dia_mes(anio: int, mes: int) -> date:
+    if mes == 12:
+        return date(anio, 12, 31)
+    return date(anio, mes + 1, 1) - timedelta(days=1)
+
+
+def _periodos_disponibles_saldos_bancos(db: Session) -> list[PeriodoDisponibleGastos]:
+    filas = db.execute(
+        text("SELECT DISTINCT Sal_Ano, Sal_Mes FROM dbo.SaldosBancos ORDER BY Sal_Ano, Sal_Mes")
+    ).all()
+    return [PeriodoDisponibleGastos(anio=int(a), mes=int(m)) for a, m in filas if a is not None and m is not None]
+
+
+def _saldos_bancos_del_mes(db: Session, anio: int, mes: int) -> dict[str, tuple[float, float, float, float]]:
+    filas = db.execute(
+        text(
+            """
+            SELECT ban_codigo, InicialL, EntradasL, SalidasL, FinalL
+            FROM dbo.SaldosBancos
+            WHERE Sal_Ano = :anio AND Sal_Mes = :mes
+            """
+        ),
+        {"anio": anio, "mes": mes},
+    ).all()
+    return {
+        codigo: (_num(inicial), _num(entradas), _num(salidas), _num(final))
+        for codigo, inicial, entradas, salidas, final in filas
+    }
+
+
+def _saldo_banco_del_mes(db: Session, anio: int, mes: int) -> dict[str, tuple[float, float, float]]:
+    filas = db.execute(
+        text(
+            """
+            SELECT Banco, Concepto, SUM(Valor)
+            FROM dbo.SaldoBancario
+            WHERE Anio = :anio AND Mes = :mes
+            GROUP BY Banco, Concepto
+            """
+        ),
+        {"anio": anio, "mes": mes},
+    ).all()
+    por_banco: dict[str, dict[str, float]] = {}
+    for banco, concepto, valor in filas:
+        por_banco.setdefault(banco, {})[concepto] = _num(valor)
+    return {
+        banco: (
+            valores.get("Saldo inicial", 0.0),
+            valores.get("Creditos", 0.0),
+            valores.get("Debitos", 0.0),
+        )
+        for banco, valores in por_banco.items()
+    }
+
+
+def _documentos_circulacion_por_banco(db: Session, anio: int, mes: int) -> dict[str, float]:
+    ultimo_dia = _ultimo_dia_mes(anio, mes)
+    filas = db.execute(
+        text(
+            """
+            SELECT ban_codigo, SUM(doc_monto)
+            FROM dbo.ChequesCirculacion
+            WHERE doc_fecha <= :ultimo_dia
+              AND (doc_fchcobro IS NULL OR doc_fchcobro > :ultimo_dia)
+            GROUP BY ban_codigo
+            """
+        ),
+        {"ultimo_dia": ultimo_dia},
+    ).all()
+    return {codigo: _num(monto) for codigo, monto in filas if _num(monto)}
+
+
+def obtener_conciliacion_bancaria(db: Session, anio: int | None, mes: int | None) -> ConciliacionBancariaResponse:
+    periodos = _periodos_disponibles_saldos_bancos(db)
+    anio_resuelto, mes_resuelto = _anio_mes_default_gastos(anio, mes, periodos)
+
+    saldos_por_banco = _saldos_bancos_del_mes(db, anio_resuelto, mes_resuelto)
+    saldo_banco_por_banco = _saldo_banco_del_mes(db, anio_resuelto, mes_resuelto)
+    documentos = _documentos_circulacion_por_banco(db, anio_resuelto, mes_resuelto)
+
+    bancos: list[BancoConciliacion] = []
+    for codigo_bd, nombre_mostrar, color in _ORDEN_BANCOS_CONCILIACION:
+        datos = saldos_por_banco.get(codigo_bd)
+        inicial, entradas, salidas, final = datos if datos else (None, None, None, None)
+
+        clave_saldo_banco = _MAPA_BANCO_SALDO_BANCARIO.get(codigo_bd, codigo_bd)
+        datos_banco = saldo_banco_por_banco.get(clave_saldo_banco)
+        inicial_banco, creditos_banco, debitos_banco = datos_banco if datos_banco else (None, None, None)
+        doc_circulacion = documentos.get(codigo_bd, 0.0)
+        # Totales (Saldo Banco) = Inicial + Créditos − Débitos −
+        # Documentos en Circulación -- medida DAX real "Saldo Banco
+        # Conciliacion" del .pbix, verificada exacta contra Agosto 2026.
+        total_banco = (
+            inicial_banco + creditos_banco - debitos_banco - doc_circulacion if datos_banco is not None else None
+        )
+
+        filas = [
+            FilaConciliacionBanco(descripcion="Saldo inicial", saldo_banco=inicial_banco, saldo_contabilidad=inicial),
+            FilaConciliacionBanco(descripcion="(+) Créditos", saldo_banco=creditos_banco, saldo_contabilidad=entradas),
+            FilaConciliacionBanco(descripcion="(−) Débitos", saldo_banco=debitos_banco, saldo_contabilidad=salidas),
+            FilaConciliacionBanco(
+                # 0.0 explícito (no None) -- un banco sin cheques
+                # pendientes SÍ tiene un valor real (cero), no es un dato
+                # faltante. La columna Contabilidad de esta fila queda
+                # vacía siempre (no aplica ahí).
+                descripcion="(−) Documentos en Circulación",
+                saldo_banco=doc_circulacion,
+                saldo_contabilidad=None,
+            ),
+            FilaConciliacionBanco(descripcion="Totales", saldo_banco=total_banco, saldo_contabilidad=final, negrita=True),
+        ]
+        bancos.append(BancoConciliacion(nombre=nombre_mostrar, color=color, filas=filas))
+
+    return ConciliacionBancariaResponse(
+        anio=anio_resuelto, mes=mes_resuelto, periodos_disponibles=periodos, bancos=bancos
+    )
+
+
+def obtener_flujo_caja(db: Session, anio: int | None, mes: int | None) -> FlujoCajaResponse:
+    periodos = _periodos_disponibles_saldos_bancos(db)
+    anio_resuelto, mes_resuelto = _anio_mes_default_gastos(anio, mes, periodos)
+
+    caja = _num(
+        db.execute(
+            text(
+                """
+                SELECT SUM(Saldo) FROM dbo.BalanceGeneral
+                WHERE cod_n5 = '110101001' AND Sal_Ano = :anio AND Sal_Mes <= :mes
+                """
+            ),
+            {"anio": anio_resuelto, "mes": mes_resuelto},
+        ).scalar()
+    )
+    inversion_bac = _num(
+        db.execute(
+            text(
+                """
+                SELECT SUM(Saldo) FROM dbo.BalanceGeneral
+                WHERE cod_n5 = '110103003' AND Sal_Ano = :anio AND Sal_Mes <= :mes
+                """
+            ),
+            {"anio": anio_resuelto, "mes": mes_resuelto},
+        ).scalar()
+    )
+    inversion_promerica = _num(
+        db.execute(
+            text(
+                """
+                SELECT SUM(Saldo) FROM dbo.BalanceGeneral
+                WHERE cod_n5 = '110103004' AND Sal_Ano = :anio AND Sal_Mes <= :mes
+                """
+            ),
+            {"anio": anio_resuelto, "mes": mes_resuelto},
+        ).scalar()
+    )
+
+    saldos_por_banco = _saldos_bancos_del_mes(db, anio_resuelto, mes_resuelto)
+    documentos = _documentos_circulacion_por_banco(db, anio_resuelto, mes_resuelto)
+
+    filas: list[FilaFlujoCaja] = [
+        FilaFlujoCaja(tipo="TITULO_BANCOS", descripcion="Disponibilidad en bancos", saldos=None, disponibilidad=None),
+        FilaFlujoCaja(tipo="CAJA", descripcion="Caja y Caja chica", saldos=caja, disponibilidad=None),
+    ]
+    total_bancos = caja
+    for codigo_bd, nombre_mostrar in _ORDEN_BANCOS_FLUJO:
+        datos = saldos_por_banco.get(codigo_bd)
+        final = datos[3] if datos else 0.0
+        total_bancos += final
+        filas.append(FilaFlujoCaja(tipo="BANCO", descripcion=nombre_mostrar, saldos=final, disponibilidad=None))
+    # Sin la palabra "Total" -- en Power BI/el spec Deneb la fila de
+    # total no lleva descripción, solo los montos.
+    filas.append(FilaFlujoCaja(tipo="TOTAL_BANCOS", descripcion="", saldos=total_bancos, disponibilidad=total_bancos))
+
+    filas.append(
+        FilaFlujoCaja(
+            tipo="TITULO_CHEQUES",
+            descripcion="(−) Cheques en circulación según conciliaciones bancarias",
+            saldos=None,
+            disponibilidad=None,
+        )
+    )
+    total_cheques = 0.0
+    # Mismo orden que la sección de bancos; bancos sin cheques pendientes
+    # no se muestran (igual que en el reporte real).
+    for codigo_bd, nombre_mostrar in _ORDEN_BANCOS_FLUJO:
+        monto = documentos.get(codigo_bd)
+        if monto:
+            total_cheques += monto
+            filas.append(FilaFlujoCaja(tipo="CHEQUE", descripcion=nombre_mostrar, saldos=monto, disponibilidad=None))
+    filas.append(
+        FilaFlujoCaja(tipo="TOTAL_CHEQUES", descripcion="", saldos=total_cheques, disponibilidad=total_cheques)
+    )
+
+    # OJO (instrucción explícita del usuario, verificada contra el
+    # reporte real): NO se le restan los cheques -- el saldo contable
+    # que ya trae dbo.SaldosBancos los tiene descontados.
+    filas.append(
+        FilaFlujoCaja(
+            tipo="DISPONIBILIDAD",
+            descripcion="Disponibilidad en depósitos monetarios y caja",
+            saldos=None,
+            disponibilidad=total_bancos,
+        )
+    )
+    filas.append(
+        FilaFlujoCaja(
+            tipo="INVERSION_BAC", descripcion="(+) Inversiones Plazo Fijo Bac", saldos=None, disponibilidad=inversion_bac
+        )
+    )
+    filas.append(
+        FilaFlujoCaja(
+            tipo="INVERSION_PROMERICA",
+            descripcion="(+) Inversiones Plazo Fijo Promerica",
+            saldos=None,
+            disponibilidad=inversion_promerica,
+        )
+    )
+
+    total_final = total_bancos + inversion_bac + inversion_promerica
+    filas.append(
+        FilaFlujoCaja(tipo="TOTAL_FINAL", descripcion="Disponibilidad", saldos=None, disponibilidad=total_final)
+    )
+
+    total_inversiones = inversion_bac + inversion_promerica
+    grafica = [
+        BarraFlujoCaja(etiqueta="Monetarios, Ahorro", valor=total_bancos, color="#4DB6AC"),
+        BarraFlujoCaja(etiqueta="Inversiones", valor=total_inversiones, color="#90A4AE"),
+        BarraFlujoCaja(etiqueta="Total disponibilidad", valor=total_final, color="#2C786C"),
+    ]
+
+    return FlujoCajaResponse(
+        anio=anio_resuelto, mes=mes_resuelto, periodos_disponibles=periodos, filas=filas, grafica=grafica
+    )

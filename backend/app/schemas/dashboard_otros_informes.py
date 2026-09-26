@@ -82,3 +82,59 @@ class EjecucionGastosResponse(BaseModel):
     fila_presupuesto: FilaGastoCategoria
     fila_ejecucion: FilaGastoCategoria
     tarjetas: list[TarjetaResumenGasto]
+
+
+# --- Conciliación bancaria ------------------------------------------------
+#
+# "Saldo Contabilidad" sale de dbo.SaldosBancos (vw_piq_saldos_bancos.csv
+# real). "Saldo Banco" es un estado de cuenta bancario independiente que
+# HOY no tenemos cargado en ningún lado (dbo.SaldoBancario existe pero
+# vacía, y aunque tuviera datos su esquema actual -- Concepto/Año/Mes/
+# Banco/Valor, un solo "Valor" -- no alcanza para las 4 cifras que hacen
+# falta por banco/mes) -- ver services/dashboard_otros_informes.py. Los
+# campos *_saldo_banco quedan en None salvo "Documentos en Circulación",
+# que SÍ es derivable de dbo.ChequesCirculacion.
+
+
+class FilaConciliacionBanco(BaseModel):
+    descripcion: str
+    saldo_banco: float | None
+    saldo_contabilidad: float | None
+    negrita: bool = False
+
+
+class BancoConciliacion(BaseModel):
+    nombre: str
+    color: str
+    filas: list[FilaConciliacionBanco]
+
+
+class ConciliacionBancariaResponse(BaseModel):
+    anio: int
+    mes: int
+    periodos_disponibles: list[PeriodoDisponibleGastos]
+    bancos: list[BancoConciliacion]
+
+
+# --- Flujo de caja ---------------------------------------------------------
+
+
+class FilaFlujoCaja(BaseModel):
+    tipo: str
+    descripcion: str
+    saldos: float | None
+    disponibilidad: float | None
+
+
+class BarraFlujoCaja(BaseModel):
+    etiqueta: str
+    valor: float
+    color: str
+
+
+class FlujoCajaResponse(BaseModel):
+    anio: int
+    mes: int
+    periodos_disponibles: list[PeriodoDisponibleGastos]
+    filas: list[FilaFlujoCaja]
+    grafica: list[BarraFlujoCaja]

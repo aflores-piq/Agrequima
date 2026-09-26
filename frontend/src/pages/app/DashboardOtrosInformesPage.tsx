@@ -3,19 +3,25 @@ import { useSearchParams } from "react-router-dom";
 import { Title } from "@tremor/react";
 import { Bar, BarChart, Cell, Legend, LabelList, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import {
+  obtenerConciliacionBancaria,
   obtenerCuotasAsociados,
   obtenerEjecucionGastosAcumulado,
   obtenerEjecucionGastosMes,
+  obtenerFlujoCaja,
 } from "../../api/dashboardOtrosInformes";
 import { mensajeError } from "../../api/client";
 import { ChartCard } from "../../components/ChartCard";
 import { FilterYearMonth } from "../../components/filters/PowerBiFilter";
 import { FINANCIERO_SURFACE, KpiCardIcono, VERDE_ENCABEZADO } from "../../components/TablaGrupoExpandible";
-import { formatPercent, formatQ, MESES_LARGOS } from "../../utils/format";
+import { formatPercent, formatQ, formatQ2, MESES_LARGOS } from "../../utils/format";
 import type {
+  BancoConciliacion,
+  ConciliacionBancariaResponse,
   CuotasAsociadosResponse,
   EjecucionGastosResponse,
+  FilaFlujoCaja,
   FilaGastoCategoria,
+  FlujoCajaResponse,
   TarjetaResumenGasto,
   TipoCuotaAsociados,
 } from "../../types/dashboardOtrosInformes";
@@ -491,11 +497,7 @@ function DonutRecuperacion({ data }: { data: CuotasAsociadosResponse }) {
 
 // "Otros informes financieros" -- 5 páginas hermanas de "Estados
 // financieros" en el Sidebar (mismo patrón: 1 sola ruta + ?vista=, ver
-// DashboardFinancieroPage). Cuotas Asociados y Ejecución de gastos (mes/
-// acumulado) ya están implementadas; Conciliación Bancaria y Flujo de
-// Caja quedan con placeholder (la primera bloqueada por falta de datos
-// de Saldo Bancario, la segunda a la espera del layout exacto -- ver
-// Sidebar.tsx, que todavía no les da href a esas 2 a propósito).
+// DashboardFinancieroPage). Las 5 ya están implementadas.
 const VISTAS = ["cuotas-asociados", "conciliacion-bancaria", "flujo-caja", "gastos-mes", "gastos-acumulado"] as const;
 
 export function DashboardOtrosInformesPage() {
@@ -511,8 +513,11 @@ export function DashboardOtrosInformesPage() {
   if (vista === "gastos-acumulado") {
     return <PaginaEjecucionGastos acumulado={true} />;
   }
-  if (vista !== "cuotas-asociados") {
-    return <p className="text-sm text-ink-muted">Todavía no implementado.</p>;
+  if (vista === "conciliacion-bancaria") {
+    return <PaginaConciliacionBancaria />;
+  }
+  if (vista === "flujo-caja") {
+    return <PaginaFlujoCaja />;
   }
 
   return <PaginaCuotasAsociados />;
@@ -786,10 +791,13 @@ function FilaTabla({
 // ("Centros de Costo" vs "Centros de Costo acumulado") con anchos
 // propios, no el mismo layout reusado:
 // mensual: GroupEgresos≈542px de ~1115px (49%), EjecutadoOperativo≈9%.
-// acumulado: GroupEgresos≈483px de ~1113px (43%), EjecutadoAdministrativo≈
-// 14%, EjecutadoOperativo≈11%, TotalEjecutado≈12%, ambos Peso≈9%.
+// acumulado: GroupEgresos≈483px de ~1113px (43->45%, ajustado para que la
+// fila sume 100% -- el 43% era una aproximación del .pbix que dejaba un
+// 2% sin asignar, lo que en un grid de % literales deja un hueco real de
+// ese ancho en vez de estirarse), EjecutadoAdministrativo≈14%,
+// EjecutadoOperativo≈11%, TotalEjecutado≈12%, ambos Peso≈9%.
 const ANCHOS_COLUMNA_MENSUAL = ["49%", "12%", "9%", "12%", "9%", "9%"];
-const ANCHOS_COLUMNA_ACUMULADO = ["43%", "14%", "9%", "11%", "9%", "12%"];
+const ANCHOS_COLUMNA_ACUMULADO = ["45%", "14%", "9%", "11%", "9%", "12%"];
 
 function ColgroupEjecucion({ variante }: { variante: "mensual" | "acumulado" }) {
   const anchos = variante === "mensual" ? ANCHOS_COLUMNA_MENSUAL : ANCHOS_COLUMNA_ACUMULADO;
@@ -868,17 +876,27 @@ function FilaResumenGrande({ fila, variante }: { fila: FilaGastoCategoria; varia
   ];
   return (
     <div
-      className="grid items-center gap-1.5 rounded px-2 py-2"
+      // Sin gap: igual que el bug ya corregido en Conciliación Bancaria,
+      // el gap de un grid con columnas en % se suma POR FUERA del 100%
+      // (ej. gap-1.5 con 6 columnas = 5 gaps de 6px = 30px de más), lo
+      // que hacía que la última celda (Consolidado) se saliera del
+      // borde derecho de la franja y de la tabla. La separación visual
+      // entre celdas queda a cargo del padding de cada celda (px-2), no
+      // del gap del grid. Tampoco lleva px-* horizontal en el propio
+      // contenedor del grid: un padding acá reduce el content-box donde
+      // se reparten las columnas en %, dejando la última celda ~8px
+      // adentro del borde derecho real de la franja/tabla.
+      className="grid items-center rounded py-2"
       style={{ backgroundColor: FINANCIERO_SURFACE, gridTemplateColumns: anchosGrid(variante) }}
     >
-      <div className="truncate text-base font-bold text-ink">{fila.categoria}</div>
+      <div className="truncate pr-1.5 text-base font-bold text-ink">{fila.categoria}</div>
       {/* Mismo gris que la tabla y las tarjetas de las gráficas
           (FINANCIERO_SURFACE) -- antes usaba bg-app (--color-bg-app,
           casi negro en modo oscuro), un token distinto que no coincidía
           con el resto de la página. Sin ring/borde: las celdas quedan
-          separadas solo por el gap del grid, sin contorno oscuro -- el
-          ring-1 anterior se veía como un borde/sombra marcada, no como
-          el reporte real. */}
+          separadas solo por su propio padding (px-2), no por gap del
+          grid -- el ring-1 anterior se veía como un borde/sombra
+          marcada, no como el reporte real. */}
       {valores.map((v, i) => (
         <div
           key={i}
@@ -1172,21 +1190,24 @@ function PaginaEjecucionGastos({ acumulado }: { acumulado: boolean }) {
 
       {data && (
         <>
-          {/* Tabla + filas Presupuesto/Ejecución, centrada y más angosta
-              que el ancho total (60%, calcado de la proporción tabla vs.
-              lienzo del .pbix real: ~1115px de 1920px ≈ 58%). Mismo
-              componente para mensual y acumulado -- solo cambian anchos
-              de columna y negrita de encabezado (ver TablaEjecucionGastos). */}
-          <div className="mx-auto" style={{ width: "60%" }}>
+          {/* Tabla + filas Presupuesto/Ejecución, MISMO ancho y MISMA
+              posición que la tabla (67.2% del área de contenido --
+              medido directo del .pbix real, "Centros de Costo":
+              pivotTable x=552 ancho=1115px de un área de contenido de
+              1658px). Mismo componente para mensual y acumulado -- solo
+              cambian anchos de columna y negrita de encabezado (ver
+              TablaEjecucionGastos). */}
+          <div className="mx-auto" style={{ width: "67.2%" }}>
             <TablaEjecucionGastos data={data} variante={acumulado ? "acumulado" : "mensual"} />
             <ResumenPresupuestoEjecucion data={data} variante={acumulado ? "acumulado" : "mensual"} />
           </div>
 
           {/* Las 3 gráficas (Administración/Operación/Consolidado) con
-              chips de resumen AFUERA y ARRIBA de la tarjeta -- calcado
-              del .pbix (w=480 cada una, las 3 iguales entre sí,
-              separadas con espacio real). */}
-          <div className="mx-auto grid grid-cols-3 gap-4 pt-3" style={{ width: "90%" }}>
+              chips de resumen AFUERA y ARRIBA de la tarjeta -- 94.3% del
+              área de contenido (medido directo del .pbix real: fila de
+              gráficas de x=307 a x=1870, más ancha que la tabla, como en
+              Power BI). */}
+          <div className="mx-auto grid grid-cols-3 gap-4 pt-3" style={{ width: "94.3%" }}>
             {data.tarjetas.map((t) => (
               <div key={t.grupo}>
                 <ChipsResumenGrupo tarjeta={t} />
@@ -1200,6 +1221,388 @@ function PaginaEjecucionGastos({ acumulado }: { acumulado: boolean }) {
                 </div>
               </div>
             ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// --- Conciliación bancaria -------------------------------------------------
+//
+// Fuente de verdad: spec Deneb (Vega) real del .pbix, dado por el
+// usuario -- encabezado verde (Banco | Saldo Banco | Saldo
+// Contabilidad), una franja de color por banco (BAC/BANRURAL/BI/
+// PROMÉRICA, en ese orden, colores exactos del spec), 5 filas de detalle
+// por banco (Saldo inicial, (+) Créditos, (−) Débitos, (−) Documentos en
+// Circulación, Totales en negrita) con espacio entre bancos, moneda con
+// 2 decimales (formatQ2), celdas null = vacías. "Saldo Banco" queda
+// vacío salvo Documentos en Circulación (ver comentario en
+// obtener_conciliacion_bancaria, backend) -- no es un error de la web,
+// es la fuente que falta.
+// "Saldo Banco" casi siempre está vacía (solo trae Documentos en
+// Circulación, números cortos); "Saldo Contabilidad" tiene los números
+// más largos (hasta "Q3,061,395.55") -- le doy más ancho a esa columna
+// en vez de repartir parejo, para que el texto right-aligned no quede
+// pegado al borde derecho del contenedor.
+// Posiciones de columna calcadas del spec Deneb real: "Saldo Banco"
+// termina (alineado a la derecha) en el 69% del ancho de la tabla,
+// "Saldo Contabilidad" en el borde derecho (100%) -- 46%+23%=69%.
+const ANCHOS_COLUMNA_CONCILIACION = "46% 23% 31%";
+
+function FilaConciliacion({ descripcion, saldoBanco, saldoContabilidad, negrita }: {
+  descripcion: string;
+  saldoBanco: number | null;
+  saldoContabilidad: number | null;
+  negrita: boolean;
+}) {
+  return (
+    <div
+      className={`grid items-center px-3 py-1 text-sm text-ink ${negrita ? "font-bold" : ""}`}
+      style={{ gridTemplateColumns: ANCHOS_COLUMNA_CONCILIACION }}
+    >
+      <div>{descripcion}</div>
+      <div className="pr-3 text-right">{saldoBanco === null ? "" : formatQ2(saldoBanco)}</div>
+      <div className="text-right">{saldoContabilidad === null ? "" : formatQ2(saldoContabilidad)}</div>
+    </div>
+  );
+}
+
+function BloqueBanco({ banco }: { banco: BancoConciliacion }) {
+  return (
+    <div className="mb-3 overflow-hidden rounded">
+      <div className="px-3 py-1.5 text-base font-bold text-white" style={{ backgroundColor: banco.color }}>
+        {banco.nombre}
+      </div>
+      <div style={{ backgroundColor: FINANCIERO_SURFACE }}>
+        {banco.filas.map((f) => (
+          <FilaConciliacion
+            key={f.descripcion}
+            descripcion={f.descripcion}
+            saldoBanco={f.saldo_banco}
+            saldoContabilidad={f.saldo_contabilidad}
+            negrita={f.negrita}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function PaginaConciliacionBancaria() {
+  const [anio, setAnio] = useState("");
+  const [mes, setMes] = useState("");
+  const [data, setData] = useState<ConciliacionBancariaResponse | null>(null);
+  const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelado = false;
+    setCargando(true);
+    obtenerConciliacionBancaria(anio ? Number(anio) : undefined, mes ? Number(mes) : undefined)
+      .then((res) => {
+        if (cancelado) return;
+        setData(res);
+        setError(null);
+        if (!anio) setAnio(String(res.anio));
+        if (!mes) setMes(String(res.mes));
+      })
+      .catch((err) => {
+        if (!cancelado) setError(mensajeError(err));
+      })
+      .finally(() => {
+        if (!cancelado) setCargando(false);
+      });
+    return () => {
+      cancelado = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [anio, mes]);
+
+  if (error) {
+    return <p className="rounded-tremor-small bg-danger-surface px-4 py-3 text-sm text-danger">{error}</p>;
+  }
+
+  const periodos = data?.periodos_disponibles ?? [];
+  const aniosDisponibles = Array.from(new Set(periodos.map((p) => p.anio))).sort((a, b) => a - b);
+  const mesesDelAnio = periodos
+    .filter((p) => String(p.anio) === anio)
+    .map((p) => p.mes)
+    .sort((a, b) => a - b);
+
+  function cambiarAnio(nuevoAnio: string) {
+    const mesesDelNuevoAnio = periodos.filter((p) => String(p.anio) === nuevoAnio).map((p) => p.mes);
+    setAnio(nuevoAnio);
+    if (!mesesDelNuevoAnio.includes(Number(mes))) {
+      setMes(String(Math.max(...mesesDelNuevoAnio)));
+    }
+  }
+
+  const tituloPagina = data ? `Conciliación de bancos ${MESES_LARGOS[data.mes - 1]} ${data.anio}` : "Conciliación de bancos";
+
+  return (
+    <div className="space-y-3">
+      <div className="relative flex min-h-[40px] items-center justify-center">
+        <Title className="px-4 text-center text-2xl font-bold text-ink">{tituloPagina}</Title>
+        <div className="absolute right-0 top-0">
+          <FilterYearMonth
+            label="Año y Mes"
+            anio={anio}
+            mes={mes}
+            onChangeAnio={cambiarAnio}
+            onChangeMes={setMes}
+            aniosOpciones={aniosDisponibles.map(String)}
+            mesesOpciones={mesesDelAnio.map((m) => ({ value: String(m), label: MESES_LARGOS[m - 1] }))}
+            theme="gris"
+          />
+        </div>
+      </div>
+
+      {cargando && !data && <p className="text-sm text-ink-muted">Cargando…</p>}
+
+      {data && (
+        // 54.3% del área de contenido -- medido directo del .pbix real
+        // (pivotTable w=899.63 de un área de contenido de 1658px,
+        // canvas 1920px menos los 262px del menú lateral).
+        <div className="mx-auto overflow-hidden rounded-tremor-default" style={{ width: "54.3%" }}>
+          <div
+            className="grid items-center px-3 py-1.5 text-sm font-semibold text-white"
+            style={{ backgroundColor: VERDE_ENCABEZADO, gridTemplateColumns: ANCHOS_COLUMNA_CONCILIACION }}
+          >
+            <div>Banco</div>
+            <div className="pr-3 text-right">Saldo Banco</div>
+            <div className="text-right">Saldo Contabilidad</div>
+          </div>
+          <div className="pt-2">
+            {data.bancos.map((banco) => (
+              <BloqueBanco key={banco.nombre} banco={banco} />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// --- Flujo de caja -----------------------------------------------------------
+//
+// Fuente de verdad: spec Deneb (Vega) real del .pbix, dado por el
+// usuario -- tabla con tipos de fila (CAJA/BANCO/TOTAL_BANCOS/CHEQUE/
+// TOTAL_CHEQUES/DISPONIBILIDAD/INVERSION_BAC/INVERSION_PROMERICA/
+// TOTAL_FINAL), columnas Saldos/Disponibilidad, línea separadora después
+// de cada total, fila final en verde. Gráfica de 3 barras debajo (NO 2
+// como en Ejecución Gastos): Monetarios/Ahorro, Inversiones, Total
+// disponibilidad -- colores COLOR_TURQUESA/COLOR_GRIS_AZULADO/COLOR_TEAL
+// (ya definidos arriba, reusados tal cual en vez de inventar hex nuevos).
+// Posiciones de columna calcadas del spec Deneb real: el detalle
+// (xDetalle) arranca en el 30% del ancho de la tabla -- ya calcado vía
+// el padding-left de la sangría en FilaFlujoCajaVista. "Saldos" termina
+// (alineado a la derecha) en el 72%, "Disponibilidad" en el 94% (NO en
+// el borde -- queda un margen real del 6% a la derecha en el visual
+// real, no un padding inventado) -- 48%+24%=72%, 72%+22%=94%, +6% de
+// columna vacía al final para llegar a 100%.
+const ANCHOS_COLUMNA_FLUJO = "48% 24% 22% 6%";
+const ANCHO_FLUJO_CAJA = "61.8%";
+const _TIPOS_TITULO_FLUJO = new Set(["TITULO_BANCOS", "TITULO_CHEQUES"]);
+const _TIPOS_NEGRITA_FLUJO = new Set([
+  "TOTAL_BANCOS",
+  "TOTAL_CHEQUES",
+  "DISPONIBILIDAD",
+  "INVERSION_BAC",
+  "INVERSION_PROMERICA",
+  "TOTAL_FINAL",
+]);
+const _TIPOS_LINEA_FLUJO = new Set(["TOTAL_BANCOS", "TOTAL_CHEQUES"]);
+// CAJA/BANCO/CHEQUE son el detalle con sangría (xDetalle del spec Deneb
+// real, ≈30% del ancho total de la fila); los títulos de sección y las
+// filas de total van al margen izquierdo, sin sangría.
+const _TIPOS_DETALLE_FLUJO = new Set(["CAJA", "BANCO", "CHEQUE"]);
+
+function FilaFlujoCajaVista({ fila, fechaTitulo }: { fila: FilaFlujoCaja; fechaTitulo: string }) {
+  if (_TIPOS_TITULO_FLUJO.has(fila.tipo)) {
+    return <div className="px-3 pb-1 pt-3 text-sm font-semibold text-ink">{fila.descripcion}</div>;
+  }
+  const esFinal = fila.tipo === "TOTAL_FINAL";
+  const descripcion = esFinal ? `${fila.descripcion} Al ${fechaTitulo}` : fila.descripcion;
+  return (
+    <div
+      className={`grid items-center px-3 py-1 text-sm ${_TIPOS_NEGRITA_FLUJO.has(fila.tipo) ? "font-bold" : ""} ${
+        _TIPOS_LINEA_FLUJO.has(fila.tipo) ? "border-b border-line" : ""
+      }`}
+      style={{
+        gridTemplateColumns: ANCHOS_COLUMNA_FLUJO,
+        backgroundColor: esFinal ? VERDE_ENCABEZADO : undefined,
+        color: esFinal ? "#fff" : "rgb(var(--color-ink))",
+      }}
+    >
+      {/* paddingLeft en % es relativo al ancho de ESTA celda (48% de la
+          fila) -- 62.5% de 48% ≈ 30% del ancho total de la fila, calcado
+          de xDetalle = width*0.30 del spec Deneb real. */}
+      <div style={_TIPOS_DETALLE_FLUJO.has(fila.tipo) ? { paddingLeft: "62.5%" } : undefined}>{descripcion}</div>
+      <div className="pr-3 text-right">{fila.saldos === null ? "" : formatQ(fila.saldos)}</div>
+      <div className="text-right">{fila.disponibilidad === null ? "" : formatQ(fila.disponibilidad)}</div>
+      <div />
+    </div>
+  );
+}
+
+// Eje Y fijo Q0 a Q8,000,000 cada Q2,000,000 (dado explícitamente por el
+// usuario para esta gráfica en particular, no calculado -- a diferencia
+// del eje dinámico de Ejecución Gastos Acumulado).
+const ESCALA_EJE_Y_FLUJO_MAX = 8_000_000;
+const ESCALA_EJE_Y_FLUJO_TICKS = [0, 2_000_000, 4_000_000, 6_000_000, 8_000_000];
+
+function GraficoFlujoCaja({ barras }: { barras: { etiqueta: string; valor: number; color: string }[] }) {
+  const estiloEtiqueta = { fontSize: 11, fontWeight: 700, fill: "rgb(var(--color-ink))" };
+  return (
+    <ResponsiveContainer width="100%" height={320}>
+      <BarChart data={barras} margin={{ top: 28, right: 16, bottom: 4, left: 4 }} barCategoryGap="20%">
+        <XAxis dataKey="etiqueta" tick={estiloEtiqueta} axisLine={false} tickLine={false} />
+        <YAxis
+          type="number"
+          domain={[0, ESCALA_EJE_Y_FLUJO_MAX]}
+          ticks={ESCALA_EJE_Y_FLUJO_TICKS}
+          tickFormatter={(v: number) => formatQ(v)}
+          tick={estiloEtiqueta}
+          axisLine={false}
+          tickLine={false}
+          width={80}
+        />
+        <Tooltip
+          cursor={{ fill: "rgb(var(--color-ink-faint) / 0.08)" }}
+          formatter={(v: number) => formatQ(v)}
+          contentStyle={{ background: FINANCIERO_SURFACE, border: "1px solid rgb(var(--color-line))", borderRadius: 8 }}
+          labelStyle={{ color: "rgb(var(--color-ink))" }}
+          itemStyle={{ color: "rgb(var(--color-ink))" }}
+        />
+        <Bar dataKey="valor" radius={[4, 4, 0, 0]} isAnimationActive={false} maxBarSize={140}>
+          {barras.map((b) => (
+            <Cell key={b.etiqueta} fill={b.color} />
+          ))}
+          <LabelList
+            dataKey="valor"
+            position="top"
+            formatter={(v: number) => formatQ(v)}
+            fontSize={12}
+            fontWeight={700}
+            fill="rgb(var(--color-ink))"
+            fillOpacity={1}
+          />
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
+  );
+}
+
+function PaginaFlujoCaja() {
+  const [anio, setAnio] = useState("");
+  const [mes, setMes] = useState("");
+  const [data, setData] = useState<FlujoCajaResponse | null>(null);
+  const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelado = false;
+    setCargando(true);
+    obtenerFlujoCaja(anio ? Number(anio) : undefined, mes ? Number(mes) : undefined)
+      .then((res) => {
+        if (cancelado) return;
+        setData(res);
+        setError(null);
+        if (!anio) setAnio(String(res.anio));
+        if (!mes) setMes(String(res.mes));
+      })
+      .catch((err) => {
+        if (!cancelado) setError(mensajeError(err));
+      })
+      .finally(() => {
+        if (!cancelado) setCargando(false);
+      });
+    return () => {
+      cancelado = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [anio, mes]);
+
+  if (error) {
+    return <p className="rounded-tremor-small bg-danger-surface px-4 py-3 text-sm text-danger">{error}</p>;
+  }
+
+  const periodos = data?.periodos_disponibles ?? [];
+  const aniosDisponibles = Array.from(new Set(periodos.map((p) => p.anio))).sort((a, b) => a - b);
+  const mesesDelAnio = periodos
+    .filter((p) => String(p.anio) === anio)
+    .map((p) => p.mes)
+    .sort((a, b) => a - b);
+
+  function cambiarAnio(nuevoAnio: string) {
+    const mesesDelNuevoAnio = periodos.filter((p) => String(p.anio) === nuevoAnio).map((p) => p.mes);
+    setAnio(nuevoAnio);
+    if (!mesesDelNuevoAnio.includes(Number(mes))) {
+      setMes(String(Math.max(...mesesDelNuevoAnio)));
+    }
+  }
+
+  const fechaTitulo = data ? `${ultimoDiaDelMes(data.anio, data.mes)} de ${MESES_LARGOS[data.mes - 1]} de ${data.anio}` : "";
+  const tituloPagina = data ? `Flujo de caja al ${fechaTitulo}` : "Flujo de caja";
+
+  return (
+    <div className="space-y-3">
+      <div className="relative flex min-h-[40px] items-center justify-center">
+        <Title className="px-4 text-center text-2xl font-bold text-ink">{tituloPagina}</Title>
+        <div className="absolute right-0 top-0">
+          <FilterYearMonth
+            label="Año y Mes"
+            anio={anio}
+            mes={mes}
+            onChangeAnio={cambiarAnio}
+            onChangeMes={setMes}
+            aniosOpciones={aniosDisponibles.map(String)}
+            mesesOpciones={mesesDelAnio.map((m) => ({ value: String(m), label: MESES_LARGOS[m - 1] }))}
+            theme="gris"
+          />
+        </div>
+      </div>
+
+      {cargando && !data && <p className="text-sm text-ink-muted">Cargando…</p>}
+
+      {data && (
+        <>
+          {/* 61.8% del área de contenido en las 2 -- medido directo del
+              .pbix real (tabla y gráfica de columnas miden EXACTAMENTE
+              1025px cada una, mismo x, de un área de contenido de
+              1658px), para que queden del mismo ancho y alineadas. */}
+          <div className="mx-auto overflow-hidden rounded-tremor-default" style={{ width: ANCHO_FLUJO_CAJA }}>
+            <div className="px-3 py-2 text-center" style={{ backgroundColor: VERDE_ENCABEZADO }}>
+              <div className="text-lg font-bold text-white">Flujo de Caja</div>
+              <div className="text-xs text-white">Cifras Expresadas en Quetzales al {fechaTitulo}</div>
+            </div>
+            <div style={{ backgroundColor: FINANCIERO_SURFACE }}>
+              {/* Orden real (Power BI/spec Deneb): primero el título de
+                  sección ("Disponibilidad en bancos"), DESPUÉS los
+                  encabezados de columna -- antes los encabezados iban
+                  arriba de todo, antes del título. */}
+              <FilaFlujoCajaVista fila={data.filas[0]} fechaTitulo={fechaTitulo} />
+              <div
+                className="grid items-center px-3 py-1 text-xs font-semibold text-ink"
+                style={{ gridTemplateColumns: ANCHOS_COLUMNA_FLUJO }}
+              >
+                <div />
+                <div className="pr-3 text-right">Saldos</div>
+                <div className="text-right">Disponibilidad</div>
+                <div />
+              </div>
+              {data.filas.slice(1).map((f, i) => (
+                <FilaFlujoCajaVista key={i} fila={f} fechaTitulo={fechaTitulo} />
+              ))}
+            </div>
+          </div>
+
+          <div className="mx-auto" style={{ width: ANCHO_FLUJO_CAJA }}>
+            <p className="pt-2 text-center text-sm font-semibold text-ink">Disponibilidad Al {fechaTitulo}</p>
+            <div className="overflow-hidden rounded-tremor-default ring-1 ring-line" style={{ backgroundColor: FINANCIERO_SURFACE }}>
+              <GraficoFlujoCaja barras={data.grafica} />
+            </div>
           </div>
         </>
       )}
