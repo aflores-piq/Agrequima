@@ -219,3 +219,35 @@ Este documento no tenía nada documentado sobre estas 2 páginas (es previo a to
 2. Revisión pendiente de las líneas/bordes de TODAS las tablas del módulo Financiero (no solo esta página) — quedó explícitamente fuera de alcance de esta ronda, a pedido del usuario ("eso se revisa después en todas las tablas").
 
 Finalmente, para el despliegue en DESARROLLO-2 conviene decidir si el backend corre como servicio de Windows (con NSSM o una tarea programada que mantenga `uvicorn` corriendo) o detrás de IIS con un proxy inverso, y si el frontend se sirve como build estático desde el propio FastAPI o desde IIS también — esto no bloquea el desarrollo, pero sí conviene resolverlo antes de poner la aplicación en manos de los usuarios finales.
+
+## 11. Módulo Financiero — Conciliación bancaria y Flujo de caja (2026-09-25)
+
+Estas 2 pantallas estaban detenidas desde antes por falta de datos (el `.pbix` no traía ningún origen para "Saldo Banco" ni para los saldos contables por banco/mes). Esta sección deja constancia de cómo se destrabaron y se construyeron, para que una sesión futura no repita la investigación.
+
+**Hallazgo previo sobre el `.pbix`:** contrario a lo que se pensó al principio de la investigación (que era una "live connection" sin datos propios), el `.pbix` **sí trae el modelo completo** — es un archivo con datos importados, no solo layout. Con `pbixray` se puede leer el `DataModel` completo (tablas, medidas DAX, pasos de Power Query), y `Report/Layout` trae la posición y el tamaño exactos (x/y/width/height en píxeles) de cada visual de cada página — la misma fuente que ya se venía usando para los anchos de columna.
+
+**Fuentes de datos:**
+- **`dbo.SaldosBancos`** (nueva), cargada desde `vw_piq_saldos_bancos.csv` — export de la vista `vw_piq_saldos_bancos` de CONTACC. Es el lado **CONTABLE** de la conciliación (columna "Saldo Contabilidad"), NO el saldo que reporta el banco. Confirmado exacto (al centavo) contra `SUM(Debitos)`/`SUM(Creditos)` de `dbo.BalanceGeneral` para Agosto 2026.
+- **`dbo.SaldoBancario`** (tabla que ya existía, antes sin cargar), cargada desde `SaldoBancario.csv` — export directo de `Agrequima.dbo.SaldoBancario`, servidor real **10.10.0.6,65280**, con los conceptos `Saldo inicial` / `Creditos` / `Debitos` por banco/mes. Es el lado **BANCO** real de la conciliación (columna "Saldo Banco"), y también la fuente de los saldos por banco de Flujo de Caja.
+- **`dbo.ChequesCirculacion`** (ya existía) para los cheques/documentos en circulación de las 2 pantallas.
+- El cruce `BANCOR` (código informal usado en `SaldoBancario`) ↔ `BAC 701111600 MONETARIA` (cuenta formal de `BalanceGeneral`) se hizo por coincidencia numérica exacta de Entradas/Salidas contra Débitos/Créditos en Agosto 2026, no por texto.
+
+**Fórmulas reales usadas:**
+- Cheques en circulación a una fecha de corte: `doc_fecha <= fin_de_mes AND (doc_fchcobro IS NULL OR doc_fchcobro > fin_de_mes)` — outstanding real a cierre de período, sobre todo el histórico (no agrupado por el mes de emisión del cheque).
+- Caja ← `BalanceGeneral`, cuenta `110101001`, YTD dentro del año (`Sal_Ano = :anio AND Sal_Mes <= :mes`, la misma semántica ya documentada para Estados Financieros).
+- Inversión Plazo Fijo BAC ← `BalanceGeneral`, cuenta `110103003`, mismo YTD. Inversión Plazo Fijo Promérica ← cuenta `110103004`, mismo YTD.
+- Totales "Saldo Banco" por banco = Saldo inicial + Créditos − Débitos − Documentos en Circulación.
+
+**Números de control validados (Agosto 2026), cuadrando exacto contra el `.pbix` de referencia:**
+- Conciliación bancaria (Totales banco / contabilidad, por banco): BAC(BANCOR) Q3,061,395.55 / Q3,061,395.55. BANRURAL Q289,458.48 / Q289,458.64. BI Q41,349.17 / Q41,349.17. PROMÉRICA Q70,399.55 / Q70,399.55.
+- Flujo de caja: Caja Q1,200. Bancos — Banrural Q289,459, Banco Industrial Q41,349, BAC Reformador Q3,061,396, Promérica Q70,400 — Total bancos Q3,463,803. (−) Cheques en circulación (Banrural Q4,000 + BAC Q19,250) Q23,250. Disponibilidad en depósitos monetarios y caja Q3,463,803. (+) Inversiones Plazo Fijo BAC Q2,300,001. (+) Inversiones Plazo Fijo Promérica Q1,500,000. Disponibilidad al 31 de Agosto de 2026: **Q7,263,804**.
+
+**Hallazgo: BANRURAL no cuadra al centavo entre banco y contabilidad** (Q289,458.48 vs. Q289,458.64, diferencia de Q0.16). Confirmado que es real, existe también en el `.pbix` de referencia — no es un bug de la carga ni del cálculo.
+
+**Hallazgo: "Disponibilidad en depósitos monetarios y caja" no vuelve a restar los cheques en circulación** del "Total bancos" en Flujo de Caja (ambos dan Q3,463,803) — así lo muestra el `.pbix` real; el descuento de cheques ya queda reflejado en la fila de Conciliación bancaria, no se resta dos veces. Confirmado contra el control del cliente, no es un error de la implementación.
+
+**Regla para próximas pantallas (anchos y posiciones):** sacar siempre el ancho y la posición de cada visual directamente de `Report/Layout` dentro del `.pbix` (ZIP con JSON UTF-16LE con BOM). Referencia de canvas: página de **1920px**, menú lateral embebido del propio reporte de **262px**, área de contenido real de **1658px**. Expresar los anchos como % de esa área de contenido (no píxeles fijos) para que escale responsivo. Aplicado con este patrón en Conciliación bancaria (54.3%), Flujo de caja (61.8%, tabla y gráfica) y Ejecución de Gastos (67.2% tabla+resumen, 94.3% gráficas).
+
+**Pendientes:**
+1. Exportar `BalanceGeneral`, `SaldosBancos` y `SaldoBancario` juntos la próxima vez que se actualicen datos, para que los 3 queden sincronizados en el mismo período.
+2. Correr `backend/deploy_servidor_real/13_saldos_bancos_financiero.sql` contra el servidor real cuando se publique el módulo Financiero ahí — hoy solo está probado contra la base de desarrollo.
