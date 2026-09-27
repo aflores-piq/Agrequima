@@ -10,6 +10,7 @@ import { DashboardFinancieroPage } from "./pages/app/DashboardFinancieroPage";
 import { DashboardOtrosInformesPage } from "./pages/app/DashboardOtrosInformesPage";
 import { DashboardPresupuestosPage } from "./pages/app/DashboardPresupuestosPage";
 import { DashboardImportacionesFinancieroPage } from "./pages/app/DashboardImportacionesFinancieroPage";
+import { DashboardOtroIngresoPage } from "./pages/app/DashboardOtroIngresoPage";
 import { AdminLayout } from "./pages/admin/AdminLayout";
 import { CargaPlaguicidasPage } from "./pages/admin/CargaPlaguicidasPage";
 import { CargaNutrientesPage } from "./pages/admin/CargaNutrientesPage";
@@ -54,6 +55,7 @@ export default function App() {
             <Route path="financiero/otros-informes" element={<DashboardOtrosInformesPage />} />
             <Route path="financiero/presupuestos" element={<DashboardPresupuestosPage />} />
             <Route path="financiero/importaciones" element={<DashboardImportacionesFinancieroPage />} />
+            <Route path="financiero/otros-ingresos" element={<DashboardOtroIngresoPage />} />
           </Route>
 
           <Route

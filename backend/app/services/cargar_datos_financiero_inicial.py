@@ -285,6 +285,32 @@ def _cargar_saldo_bancario() -> int:
     return len(df)
 
 
+def _cargar_otro_ingreso() -> int:
+    # OtroIngreso.csv (agregado por el usuario, export real de
+    # Agrequima.dbo.OtroIngreso del servidor 10.10.0.6) -- sin
+    # encabezado, columnas: Tipo ('Ejecutado'|'Presupuesto'), Concepto,
+    # Anio, Mes, Valor. Fuente de "Otros ingresos generados" -- los
+    # valores guardados son ACUMULADOS por mes (no se suman meses entre
+    # sí, ver dashboard_otro_ingreso.py).
+    columnas = ["Tipo", "Concepto", "Anio", "Mes", "Valor"]
+    df = _leer_csv("OtroIngreso.csv", columnas)
+    _a_numerico(df, ["Anio", "Mes", "Valor"])
+    df = _nan_a_none(df)
+    df.to_sql("stg_OtroIngreso", engine, if_exists="replace", index=False)
+
+    with engine.begin() as conn:
+        conn.execute(text("TRUNCATE TABLE dbo.OtroIngreso"))
+        conn.execute(text(
+            """
+            INSERT INTO dbo.OtroIngreso (Tipo, Concepto, Anio, Mes, Valor, FechaMod)
+            SELECT Tipo, Concepto, CAST(Anio AS INT), CAST(Mes AS INT),
+                   CAST(Valor AS DECIMAL(18,2)), GETDATE()
+            FROM dbo.stg_OtroIngreso
+            """
+        ))
+    return len(df)
+
+
 CARGAS = [
     ("BalanceSaldos", _cargar_balance_saldos),
     ("BalanceGeneral", _cargar_balance_general),
@@ -295,6 +321,7 @@ CARGAS = [
     ("ChequesCirculacion", _cargar_cheques_circulacion),
     ("SaldosBancos", _cargar_saldos_bancos),
     ("SaldoBancario", _cargar_saldo_bancario),
+    ("OtroIngreso", _cargar_otro_ingreso),
 ]
 
 

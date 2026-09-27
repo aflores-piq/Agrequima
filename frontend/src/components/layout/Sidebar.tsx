@@ -91,7 +91,7 @@ const MENU_FINANCIERO: NodoMenu = {
     {
       id: "otros-ingresos",
       titulo: "Otros ingresos",
-      hijos: [{ id: "oi-generados", titulo: "Otros ingresos generados" }],
+      hijos: [{ id: "oi-generados", titulo: "Otros ingresos generados", href: "/app/financiero/otros-ingresos" }],
     },
   ],
 };

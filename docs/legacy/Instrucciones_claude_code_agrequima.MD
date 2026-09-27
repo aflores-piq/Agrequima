@@ -337,3 +337,22 @@ Las 4 pantallas de la sub-sección "Importaciones" del Financiero (ver sección 
 - Sin confirmar si `dbo.Importacion` del servidor real (`PIQ_IA` producción) tiene cargado el año 2024 — si no, al elegir 2025 la comparación con 2024 quedará vacía en producción hasta que se cargue ese año (dev tampoco lo tiene; se validó ese escenario con los datos cacheados del `.pbix` vía `pbixray`, no contra una base real).
 
 **Siguiente:** "Otros ingresos generados" (última pantalla del Financiero) — `dbo.OtroIngreso` en desarrollo está vacía (0 filas); el usuario ya agregó por su cuenta `docs/legacy/financiero/OtroIngreso.csv` con datos reales para esa construcción.
+
+## 15. Módulo Financiero — Otros ingresos generados (2026-09-27)
+
+Última pantalla del Financiero: con esta queda completo el menú (Estados financieros, Otros informes financieros, Presupuestos, Importaciones, Otros ingresos).
+
+**Fuente.** `dbo.OtroIngreso` (Tipo, Concepto, Anio, Mes, Valor) — export real de Agrequima.dbo.OtroIngreso del servidor 10.10.0.6, cargado desde `docs/legacy/financiero/OtroIngreso.csv` (480 filas, agregado por el usuario) con el mismo patrón que los demás CSV del módulo (`cargar_datos_financiero_inicial.py`, función `_cargar_otro_ingreso`). En desarrollo: años 2025 (12 meses completos) y 2026 (Enero-Agosto), 12 conceptos, todos con datos completos en ambos años. Script `14_otro_ingreso_financiero.sql` preparado para el servidor real (idempotente, solo crea la tabla si no existe) — no corrido.
+
+**DAX replicado (confirmado con pbixray contra `_Calculos_otros_ingresos`):** los valores guardados son ACUMULADOS -- NO se suman meses entre sí, se toma el valor del ÚLTIMO MES CON DATOS de cada año, por concepto y tipo (`Ejecutado_año_actual`/`Ejecutado_año_anterior`/`Presupuesto_año_actual`). `Ejecutado {Año-1}` = 0 si ese año no tiene ninguna fila para el concepto (el DAX real usa `IF(ISBLANK(...), 0, ...)`). `% ejecutado` = Ejecutado{Año} / Presupuesto{Año}, 0 si el presupuesto es 0 (`DIVIDE(...,...,0)`).
+
+**Números de control (Año 2026), validados exactos, los 12 conceptos + Total:** CropLife - Proyecto SPMF Q837,981/Q637,500/Q626,528/98%; Gremiagro Q300,000/Q300,000/Q100,000/33%; Venta de Material Reciclable Q354,690/Q275,000/Q255,115/93%; Aporte Industria Fertilizantes Q0/Q0/Q0/0%; Aporte Fundación Hanns R. Neumann Stiftung Q152,875/Q78,000/Q36,250/46%; Intereses Bancarios e Inversión Q176,472/Q229,950/Q131,301/57%; Carnet Aplicadores... Q144,449/Q125,000/Q96,799/77%; Venta de Sellos Q42,896/Q40,000/Q34,640/87%; Venta Minicentros de Plástico Reciclado Q24,554/Q20,000/Q4,464/22%; Proyecto ATRACSI Q0/Q0/Q0/0%; Localg.a.p. Guatemala Q0/Q0/Q0/0%; Venta de Vehículos Q15,000/Q225,000/Q0/0%; TOTAL Q2,048,918/Q1,930,450/Q1,285,097/67%.
+
+**Correcciones respecto de Power BI:**
+- Leyenda de la gráfica de barras: el `.pbix` real la trae MAL ETIQUETADA (dice "Ejecutado {Año} / Ejecutado {Año-1} / Presupuesto {Año}" para esos mismos 3 colores en ese orden) — en la web dice lo correcto según el color real de cada serie ("Ejecutado {Año-1}" #9FB6C3, "Presupuesto {Año}" #2F8C83, "Ejecutado {Año}" #00A6B8).
+- Título: donde el DAX real usa `YEAR(TODAY())` (medida `TituloOtrosIngresos`), acá se usa el AÑO SELECCIONADO por el filtro.
+
+**Pendiente para la revisión final (no bloqueante, ya reportado al usuario):**
+- Encabezados de la tabla de detalle: se partieron en 2-3 líneas con un criterio propio (preservando el texto completo), a falta de un spec de texto limpio extraíble del `.pbix` real (esa tabla se arma con decenas de tarjetas individuales en una grilla, no con un visual de tabla/Deneb). Falta reemplazarlos por los textos cortos reales del spec Vega (Titulo1/Titulo2/Titulo3): "Venta de Material" / "Reciclable"; "Aporte Fundación" / "Hanns R. Neumann" / "Stiftung"; "Carnet Aplicadores y" / "Certificados y Cursos" / "Capacitaciones"; "Intereses Bancarios e" / "Inversión"; "Venta Minicentros de" / "Plástico Reciclado"; "CropLife - Proyecto" / "SPMF"; "Aporte Industria" / "Fertilizantes".
+- Última marca del eje X cortada a la derecha, en las 2 gráficas (barras agrupadas y totales).
+- Año anterior sin datos (2025 vs 2024, sin 2024 cargado): falta el mismo tratamiento ya usado en Importaciones -- "(sin datos)" en la leyenda y "—" en la tabla en vez de Q0 engañoso (hoy muestra Q0 literal, matemáticamente correcto según el DAX pero visualmente igual a "sin movimiento").

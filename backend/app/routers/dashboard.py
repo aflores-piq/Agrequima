@@ -22,6 +22,7 @@ from app.schemas.dashboard_importaciones_financiero import (
     IngresosImportacionResponse,
     KilolitrosResponse,
 )
+from app.schemas.dashboard_otro_ingreso import OtroIngresoResponse
 from app.schemas.dashboard_otros_informes import (
     ComparativoEjecutadoResponse,
     ConciliacionBancariaResponse,
@@ -38,6 +39,7 @@ from app.services.dashboard_importaciones_financiero import (
     obtener_ingresos_importacion_comparativo,
     obtener_kilolitros,
 )
+from app.services.dashboard_otro_ingreso import obtener_otro_ingreso
 from app.services.dashboard_otros_informes import (
     obtener_comparativo_ejecutado,
     obtener_conciliacion_bancaria,
@@ -257,6 +259,16 @@ def dashboard_financiero_importaciones_contribucion_millar(
     _acceso: UsuarioToken = Depends(require_acceso_financiero),
 ) -> ContribucionMillarResponse:
     return obtener_contribucion_millar(db, anio, mes)
+
+
+@router.get("/financiero/otros-ingresos", response_model=OtroIngresoResponse)
+def dashboard_financiero_otros_ingresos(
+    anio: int | None = None,
+    db: Session = Depends(get_db),
+    _usuario: UsuarioToken = Depends(get_current_user),
+    _acceso: UsuarioToken = Depends(require_acceso_financiero),
+) -> OtroIngresoResponse:
+    return obtener_otro_ingreso(db, anio)
 
 
 def _respuesta_xlsx(contenido: bytes, nombre_archivo: str) -> Response:
