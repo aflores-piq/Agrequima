@@ -39,6 +39,16 @@ const TEMAS: Record<FilterTheme, { wrapper: string; header: string }> = {
 };
 
 const VALUE_WRAPPER_CLASS = "relative px-1.5 pb-1.5";
+
+// Ancho FIJO opcional (prop `anchoFijo`), usado SOLO por "Importaciones"
+// (dentro del Financiero): ahí el filtro de solo-Año debe verse del
+// MISMO tamaño de caja que el de Año+Mes de las demás pantallas del
+// módulo (misma esquina superior derecha, mismo top, mismo ancho),
+// aunque le sobre espacio -- así lo pidió el usuario explícitamente.
+// Detrás de un prop opt-in (no el default) para no afectar el ancho ya
+// aprobado de FilterYearMonth en Presupuestos/Otros informes, que se
+// autodimensiona a su contenido igual que siempre.
+const ANCHO_CAJA_FILTRO = "w-56";
 // El "chip" de cabecera (TEMAS, arriba) es un color fijo por dashboard y
 // no responde al tema — pero el control en sí (input, flecha, dropdown,
 // checkboxes) sí debe verse bien en claro y oscuro, así que usa los
@@ -77,6 +87,7 @@ export function FilterYearMonth({
   aniosOpciones,
   mesesOpciones,
   theme = "teal",
+  anchoFijo = false,
 }: {
   label?: string;
   anio: string;
@@ -86,10 +97,11 @@ export function FilterYearMonth({
   aniosOpciones: string[];
   mesesOpciones: { value: string; label: string }[];
   theme?: FilterTheme;
+  anchoFijo?: boolean;
 }) {
   const { wrapper, header } = TEMAS[theme];
   return (
-    <div className={wrapper}>
+    <div className={anchoFijo ? `${wrapper} ${ANCHO_CAJA_FILTRO}` : wrapper}>
       <div className={header}>{label}</div>
       <div className="flex items-center gap-1 px-1.5 pb-1.5">
         <div className="relative min-w-0 flex-1">
@@ -118,6 +130,50 @@ export function FilterYearMonth({
             {mesesOpciones.map((m) => (
               <option key={m.value} value={m.value}>
                 {m.label}
+              </option>
+            ))}
+          </select>
+          <Chevron />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Filtro de "solo Año" -- mismo envoltorio visual que FilterYearMonth
+ * (cabecera + caja con borde), pero con un único <select>, para las
+ * pantallas del Grupo 2 (Año solamente) del módulo Financiero:
+ * "Ingresos por importación" e "Ingresos por importación comparativo". */
+export function FilterYear({
+  label = "Año",
+  anio,
+  onChangeAnio,
+  aniosOpciones,
+  theme = "teal",
+  anchoFijo = false,
+}: {
+  label?: string;
+  anio: string;
+  onChangeAnio: (v: string) => void;
+  aniosOpciones: string[];
+  theme?: FilterTheme;
+  anchoFijo?: boolean;
+}) {
+  const { wrapper, header } = TEMAS[theme];
+  return (
+    <div className={anchoFijo ? `${wrapper} ${ANCHO_CAJA_FILTRO}` : wrapper}>
+      <div className={header}>{label}</div>
+      <div className="px-1.5 pb-1.5">
+        <div className="relative min-w-[96px]">
+          <select
+            value={anio}
+            onChange={(e: ChangeEvent<HTMLSelectElement>) => onChangeAnio(e.target.value)}
+            className={CONTROL_CLASS}
+            aria-label="Año"
+          >
+            {aniosOpciones.map((a) => (
+              <option key={a} value={a}>
+                {a}
               </option>
             ))}
           </select>

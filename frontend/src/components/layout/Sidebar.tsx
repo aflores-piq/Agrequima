@@ -70,10 +70,22 @@ const MENU_FINANCIERO: NodoMenu = {
       id: "importaciones-financiero",
       titulo: "Importaciones",
       hijos: [
-        { id: "if-ingresos", titulo: "Ingresos por importación" },
-        { id: "if-ingresos-comparativo", titulo: "Ingresos por importación comparativo" },
-        { id: "if-kilolitros", titulo: "Comparación importaciones kilolitros y precio kilolitro" },
-        { id: "if-contribucion", titulo: "Ingresos por contribución 4.5 por millar" },
+        { id: "if-ingresos", titulo: "Ingresos por importación", href: "/app/financiero/importaciones?vista=ingresos" },
+        {
+          id: "if-ingresos-comparativo",
+          titulo: "Ingresos por importación comparativo",
+          href: "/app/financiero/importaciones?vista=comparativo",
+        },
+        {
+          id: "if-kilolitros",
+          titulo: "Comparación importaciones kilolitros y precio kilolitro",
+          href: "/app/financiero/importaciones?vista=kilolitros",
+        },
+        {
+          id: "if-contribucion",
+          titulo: "Ingresos por contribución 4.5 por millar",
+          href: "/app/financiero/importaciones?vista=contribucion-millar",
+        },
       ],
     },
     {

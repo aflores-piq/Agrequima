@@ -4,10 +4,37 @@ const usdFormatter = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 0,
 });
 
+// currencySign:"accounting" -- formato contable real de Intl: negativos
+// entre paréntesis en vez de con signo "-" ("($10,239,048)" en vez de
+// "-$10,239,048"), usado en las tablas de "Importaciones" del
+// Financiero (Variación/VAR), calcado del formato real del .pbix.
+const usdContableFormatter = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  maximumFractionDigits: 0,
+  currencySign: "accounting",
+});
+
+const usd2Formatter = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
 const numberFormatter = new Intl.NumberFormat("es-GT");
 
 export function formatUSD(v: number): string {
   return usdFormatter.format(v);
+}
+
+export function formatUSDParen(v: number): string {
+  return usdContableFormatter.format(v);
+}
+
+/** USD con 2 decimales fijos -- precio por kilolitro ("$6.83"). */
+export function formatUSD2(v: number): string {
+  return usd2Formatter.format(v);
 }
 
 // Intl.NumberFormat con currency:"GTQ" inserta un espacio entre "Q" y el
@@ -41,6 +68,13 @@ export function formatPercent(v: number): string {
 // ("46.02%", a diferencia del resto del módulo que usa 1 decimal).
 export function formatPercent2(v: number): string {
   return `${v.toFixed(2)}%`;
+}
+
+// Igual que formatPercent pero sin decimales -- usado en la tabla de
+// precio por kilolitro de "Comparación importaciones Kilolitros"
+// ("-1%", "18%", calcado del FORMAT("0") real del .pbix).
+export function formatPercentEntero(v: number): string {
+  return `${Math.round(v)}%`;
 }
 
 function abreviarNumero(valor: number): string {

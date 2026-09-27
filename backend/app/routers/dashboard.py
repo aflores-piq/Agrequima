@@ -16,6 +16,12 @@ from app.schemas.dashboard import (
     OpcionesFiltroPlaguicidas,
 )
 from app.schemas.dashboard_financiero import DashboardFinancieroResponse
+from app.schemas.dashboard_importaciones_financiero import (
+    ContribucionMillarResponse,
+    ImportacionComparativoResponse,
+    IngresosImportacionResponse,
+    KilolitrosResponse,
+)
 from app.schemas.dashboard_otros_informes import (
     ComparativoEjecutadoResponse,
     ConciliacionBancariaResponse,
@@ -26,6 +32,12 @@ from app.schemas.dashboard_otros_informes import (
 )
 from app.services import export as export_service
 from app.services.dashboard_financiero import obtener_dashboard_financiero
+from app.services.dashboard_importaciones_financiero import (
+    obtener_contribucion_millar,
+    obtener_ingresos_importacion,
+    obtener_ingresos_importacion_comparativo,
+    obtener_kilolitros,
+)
 from app.services.dashboard_otros_informes import (
     obtener_comparativo_ejecutado,
     obtener_conciliacion_bancaria,
@@ -203,6 +215,48 @@ def dashboard_financiero_comparativo_ejecutado(
     _acceso: UsuarioToken = Depends(require_acceso_financiero),
 ) -> ComparativoEjecutadoResponse:
     return obtener_comparativo_ejecutado(db, anio, mes)
+
+
+@router.get("/financiero/importaciones/ingresos", response_model=IngresosImportacionResponse)
+def dashboard_financiero_importaciones_ingresos(
+    anio: int | None = None,
+    db: Session = Depends(get_db),
+    _usuario: UsuarioToken = Depends(get_current_user),
+    _acceso: UsuarioToken = Depends(require_acceso_financiero),
+) -> IngresosImportacionResponse:
+    return obtener_ingresos_importacion(db, anio)
+
+
+@router.get("/financiero/importaciones/comparativo", response_model=ImportacionComparativoResponse)
+def dashboard_financiero_importaciones_comparativo(
+    anio: int | None = None,
+    db: Session = Depends(get_db),
+    _usuario: UsuarioToken = Depends(get_current_user),
+    _acceso: UsuarioToken = Depends(require_acceso_financiero),
+) -> ImportacionComparativoResponse:
+    return obtener_ingresos_importacion_comparativo(db, anio)
+
+
+@router.get("/financiero/importaciones/kilolitros", response_model=KilolitrosResponse)
+def dashboard_financiero_importaciones_kilolitros(
+    anio: int | None = None,
+    mes: int | None = Query(None, ge=1, le=12),
+    db: Session = Depends(get_db),
+    _usuario: UsuarioToken = Depends(get_current_user),
+    _acceso: UsuarioToken = Depends(require_acceso_financiero),
+) -> KilolitrosResponse:
+    return obtener_kilolitros(db, anio, mes)
+
+
+@router.get("/financiero/importaciones/contribucion-millar", response_model=ContribucionMillarResponse)
+def dashboard_financiero_importaciones_contribucion_millar(
+    anio: int | None = None,
+    mes: int | None = Query(None, ge=1, le=12),
+    db: Session = Depends(get_db),
+    _usuario: UsuarioToken = Depends(get_current_user),
+    _acceso: UsuarioToken = Depends(require_acceso_financiero),
+) -> ContribucionMillarResponse:
+    return obtener_contribucion_millar(db, anio, mes)
 
 
 def _respuesta_xlsx(contenido: bytes, nombre_archivo: str) -> Response:
