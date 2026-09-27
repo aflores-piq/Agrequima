@@ -66,6 +66,45 @@ export interface EjecucionGastosResponse {
   tarjetas: TarjetaResumenGasto[];
 }
 
+// --- Presupuestos: Ejecución vs presupuesto (mensual / acumulado) --------
+
+export interface FilaPresupuesto {
+  categoria: string;
+  presupuesto: number;
+  ejecutado: number;
+  diferencia: number;
+  diferencia_pct: number;
+  negrita: boolean;
+}
+
+export interface EjecucionVsPresupuestoResponse {
+  anio: number;
+  mes: number;
+  periodos_disponibles: PeriodoDisponibleGastos[];
+  filas: FilaPresupuesto[];
+  fila_total: FilaPresupuesto;
+}
+
+// --- Presupuestos: Comparativo ejecutado (año-1 vs año, acumulado) -------
+
+export interface FilaComparativoEjecutado {
+  categoria: string;
+  anio_anterior: number;
+  anio_actual: number;
+  variacion: number;
+  variacion_pct: number;
+  negrita: boolean;
+}
+
+export interface ComparativoEjecutadoResponse {
+  anio: number;
+  mes: number;
+  anio_anterior: number;
+  periodos_disponibles: PeriodoDisponibleGastos[];
+  filas: FilaComparativoEjecutado[];
+  fila_total: FilaComparativoEjecutado;
+}
+
 // --- Conciliación bancaria -----------------------------------------------
 
 export interface FilaConciliacionBanco {

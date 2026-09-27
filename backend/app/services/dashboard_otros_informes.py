@@ -60,13 +60,17 @@ from sqlalchemy.orm import Session
 from app.schemas.dashboard_otros_informes import (
     BancoConciliacion,
     BarraFlujoCaja,
+    ComparativoEjecutadoResponse,
     ConciliacionBancariaResponse,
     CuotasAsociadosResponse,
     EjecucionGastosResponse,
+    EjecucionVsPresupuestoResponse,
+    FilaComparativoEjecutado,
     FilaConciliacionBanco,
     FilaCuotaAsociado,
     FilaFlujoCaja,
     FilaGastoCategoria,
+    FilaPresupuesto,
     FlujoCajaResponse,
     KpisCuotasAsociados,
     PeriodoDisponibleGastos,
@@ -413,6 +417,203 @@ def obtener_ejecucion_gastos_acumulado(db: Session, anio: int | None, mes: int |
     periodos = _periodos_disponibles_gastos(db)
     anio_resuelto, mes_resuelto = _anio_mes_default_gastos(anio, mes, periodos)
     return _ejecucion_gastos(db, anio_resuelto, mes_resuelto, acumulado=True)
+
+
+# --- Presupuestos: Ejecución vs presupuesto (mensual / acumulado) --------
+#
+# 3 páginas nuevas del menú "Presupuestos": "Ejecucion vs Presupuesto",
+# "Ejecucion vs Presupuesto Acumulado" y "Comparativo ejecutado" --
+# fuentes/fórmulas extraídas del DataModel real del .pbix con pbixray
+# (medidas DAX de las tablas EjecutadoVsPresupuestado, vw_piq_presupuestos,
+# vw_piq_balance_saldos) y del Report/Layout (OrderBy, formato condicional,
+# anchos de columna, spec Deneb de "Comparativo ejecutado").
+#
+# A diferencia de "Ejecución Gastos" (Centros de Costo, separada en
+# Administración/Operación), estas 2 primeras páginas muestran una sola
+# fila CONSOLIDADA por categoría -- mismas fuentes (dbo.BalanceSaldos +
+# dbo.Presupuestos), mismos filtros de Cod_Centro admin/operativo que ya
+# existen (_FILTRO_ADMIN_SQL/_FILTRO_OP_SQL, _presupuesto_grupo), solo que
+# acá se suman las 2 mitades en vez de mostrarlas por separado.
+#
+# Verificado con SQL directo contra Agosto 2026 (mensual y acumulado):
+# 20 categorías reales (el universo completo de
+# dbo.CatalogoAgrupadorCuentas con TipoAgrupador='Egresos', confirmado
+# contando esa tabla -- no 22, un conteo manual de la captura original que
+# el usuario confirmó que estaba mal). Totales, filas de control y orden
+# (ascendente por Gastos en mensual -- Direction=1 en el Layout real;
+# descendente por Presupuesto en acumulado -- Direction=2) cuadran exacto.
+
+
+def _presupuesto_por_categoria_grupo(db: Session, anio: int, mes: int, acumulado: bool, es_admin: bool) -> dict[str, float]:
+    condicion_mes = "p.par_mes <= :mes" if acumulado else "p.par_mes = :mes"
+    if es_admin:
+        filtro = "p.cod_centro IN ('AD-01', 'AD-02')"
+    else:
+        filtro = "p.cod_centro NOT IN ('AD-01', 'AD-02') AND p.cta_codigo <> '410104001'"
+    filas = db.execute(
+        text(
+            f"""
+            SELECT p.cta_codigo AS codigo, SUM(p.pre_presupuesto) AS presupuesto
+            FROM dbo.Presupuestos p
+            WHERE p.par_ano = :anio AND {condicion_mes} AND {filtro}
+            GROUP BY p.cta_codigo
+            """
+        ),
+        {"anio": anio, "mes": mes},
+    ).all()
+    mapas, _ = cargar_mapas_agrupador(db, "Egresos")
+    por_categoria: dict[str, float] = {}
+    for codigo, presupuesto in filas:
+        categoria = grupo_de_cuenta(mapas, codigo) or "Sin clasificar"
+        por_categoria[categoria] = por_categoria.get(categoria, 0.0) + _num(presupuesto)
+    return por_categoria
+
+
+def _presupuesto_por_categoria(db: Session, anio: int, mes: int, acumulado: bool) -> dict[str, float]:
+    admin = _presupuesto_por_categoria_grupo(db, anio, mes, acumulado, es_admin=True)
+    op = _presupuesto_por_categoria_grupo(db, anio, mes, acumulado, es_admin=False)
+    combinado = dict(admin)
+    for cat, val in op.items():
+        combinado[cat] = combinado.get(cat, 0.0) + val
+    return combinado
+
+
+def _ejecutado_por_categoria(db: Session, anio: int, mes: int, acumulado: bool) -> dict[str, float]:
+    admin = _neto_por_categoria(db, anio, mes, acumulado, _FILTRO_ADMIN_SQL)
+    op = _neto_por_categoria(db, anio, mes, acumulado, _FILTRO_OP_SQL)
+    combinado = dict(admin)
+    for cat, val in op.items():
+        combinado[cat] = combinado.get(cat, 0.0) + val
+    return combinado
+
+
+def _ejecucion_vs_presupuesto(db: Session, anio: int, mes: int, acumulado: bool) -> EjecucionVsPresupuestoResponse:
+    periodos = _periodos_disponibles_gastos(db)
+
+    ejecutado = _ejecutado_por_categoria(db, anio, mes, acumulado)
+    presupuesto = _presupuesto_por_categoria(db, anio, mes, acumulado)
+
+    # Orden ASCENDENTE por nombre de categoría (RAW, antes del mapeo de
+    # comas de presentación) -- Direction=1 en el Layout real de
+    # "Ejecucion vs Presupuesto" (mensual), mismo desempate case-
+    # insensitive que ya usa Ejecución Gastos.
+    nombres_categoria = sorted(set(list(ejecutado) + list(presupuesto)), key=str.lower)
+    filas = []
+    for cat in nombres_categoria:
+        pres = presupuesto.get(cat, 0.0)
+        ejec = ejecutado.get(cat, 0.0)
+        dif = ejec - pres
+        filas.append(
+            FilaPresupuesto(
+                categoria=_nombre_display_ejecucion_gastos(cat),
+                presupuesto=pres,
+                ejecutado=ejec,
+                diferencia=dif,
+                diferencia_pct=(dif / pres * 100) if pres else 0.0,
+            )
+        )
+
+    # Acumulado: Direction=2 en el Layout real de "Ejecucion vs
+    # Presupuesto Acumulado" -- descendente por Presupuesto (TotalPresupuesto_AcumuladoN),
+    # NO por nombre. El sort de Python es estable, así que las filas con
+    # el mismo presupuesto (ej. dos en Q0) quedan en el orden alfabético
+    # ya establecido arriba como desempate.
+    if acumulado:
+        filas.sort(key=lambda f: f.presupuesto, reverse=True)
+
+    presupuesto_total = sum(f.presupuesto for f in filas)
+    ejecutado_total = sum(f.ejecutado for f in filas)
+    diferencia_total = ejecutado_total - presupuesto_total
+    fila_total = FilaPresupuesto(
+        categoria="Total",
+        presupuesto=presupuesto_total,
+        ejecutado=ejecutado_total,
+        diferencia=diferencia_total,
+        diferencia_pct=(diferencia_total / presupuesto_total * 100) if presupuesto_total else 0.0,
+        negrita=True,
+    )
+
+    return EjecucionVsPresupuestoResponse(
+        anio=anio, mes=mes, periodos_disponibles=periodos, filas=filas, fila_total=fila_total
+    )
+
+
+def obtener_ejecucion_vs_presupuesto_mensual(db: Session, anio: int | None, mes: int | None) -> EjecucionVsPresupuestoResponse:
+    periodos = _periodos_disponibles_gastos(db)
+    anio_resuelto, mes_resuelto = _anio_mes_default_gastos(anio, mes, periodos)
+    return _ejecucion_vs_presupuesto(db, anio_resuelto, mes_resuelto, acumulado=False)
+
+
+def obtener_ejecucion_vs_presupuesto_acumulado(db: Session, anio: int | None, mes: int | None) -> EjecucionVsPresupuestoResponse:
+    periodos = _periodos_disponibles_gastos(db)
+    anio_resuelto, mes_resuelto = _anio_mes_default_gastos(anio, mes, periodos)
+    return _ejecucion_vs_presupuesto(db, anio_resuelto, mes_resuelto, acumulado=True)
+
+
+# --- Presupuestos: Comparativo ejecutado (año-1 vs año, acumulado) -------
+#
+# DAX real: EgresosAnioAnterior filtra el MISMO acumulado (Sal_Mes <=
+# mes) pero del año anterior -- no es el año anterior completo, es el
+# acumulado hasta el mismo mes en los 2 años, para que la comparación sea
+# pareja. Solo entran las categorías con movimiento en AL MENOS uno de
+# los 2 años (17 filas en Agosto 2026, confirmado); las que no tuvieron
+# ningún movimiento ni en 2025 ni en 2026 se excluyen -- a diferencia de
+# las 2 páginas de arriba, que sí incluyen categorías con presupuesto Q0.
+# Orden DESCENDENTE por Variación Q. (Direction=2 en el Layout real).
+# Encabezados: en el .pbix real las columnas de la tabla vienen CRUZADAS
+# (la medida TotalEjecutado_Acumulado -- año actual -- aparece bajo un
+# encabezado que dice el año anterior y viceversa) -- acá se corrige: la
+# columna "{año-1}" siempre trae EgresosAnioAnterior, "{año}" siempre
+# TotalEjecutado_Acumulado, igual que la gráfica.
+
+
+def obtener_comparativo_ejecutado(db: Session, anio: int | None, mes: int | None) -> ComparativoEjecutadoResponse:
+    periodos = _periodos_disponibles_gastos(db)
+    anio_resuelto, mes_resuelto = _anio_mes_default_gastos(anio, mes, periodos)
+
+    actual = _ejecutado_por_categoria(db, anio_resuelto, mes_resuelto, acumulado=True)
+    anterior = _ejecutado_por_categoria(db, anio_resuelto - 1, mes_resuelto, acumulado=True)
+
+    nombres_categoria = sorted(set(list(actual) + list(anterior)), key=str.lower)
+    filas = []
+    for cat in nombres_categoria:
+        a_anterior = anterior.get(cat, 0.0)
+        a_actual = actual.get(cat, 0.0)
+        if a_anterior == 0.0 and a_actual == 0.0:
+            continue
+        variacion = a_actual - a_anterior
+        filas.append(
+            FilaComparativoEjecutado(
+                categoria=_nombre_display_ejecucion_gastos(cat),
+                anio_anterior=a_anterior,
+                anio_actual=a_actual,
+                variacion=variacion,
+                variacion_pct=(variacion / a_anterior * 100) if a_anterior else 0.0,
+            )
+        )
+
+    filas.sort(key=lambda f: f.variacion, reverse=True)
+
+    total_anterior = sum(f.anio_anterior for f in filas)
+    total_actual = sum(f.anio_actual for f in filas)
+    variacion_total = total_actual - total_anterior
+    fila_total = FilaComparativoEjecutado(
+        categoria="Total",
+        anio_anterior=total_anterior,
+        anio_actual=total_actual,
+        variacion=variacion_total,
+        variacion_pct=(variacion_total / total_anterior * 100) if total_anterior else 0.0,
+        negrita=True,
+    )
+
+    return ComparativoEjecutadoResponse(
+        anio=anio_resuelto,
+        mes=mes_resuelto,
+        anio_anterior=anio_resuelto - 1,
+        periodos_disponibles=periodos,
+        filas=filas,
+        fila_total=fila_total,
+    )
 
 
 # --- Conciliación bancaria / Flujo de caja --------------------------------

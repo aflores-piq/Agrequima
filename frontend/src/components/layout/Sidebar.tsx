@@ -49,9 +49,13 @@ const MENU_FINANCIERO: NodoMenu = {
       id: "presupuestos",
       titulo: "Presupuestos",
       hijos: [
-        { id: "pr-ejecucion", titulo: "Ejecución vs presupuesto" },
-        { id: "pr-ejecucion-acum", titulo: "Ejecución vs presupuesto acumulado" },
-        { id: "pr-comparativo", titulo: "Comparativo ejecutado" },
+        { id: "pr-ejecucion", titulo: "Ejecución vs presupuesto", href: "/app/financiero/presupuestos?vista=ejecucion-vs-presupuesto" },
+        {
+          id: "pr-ejecucion-acum",
+          titulo: "Ejecución vs presupuesto acumulado",
+          href: "/app/financiero/presupuestos?vista=ejecucion-vs-presupuesto-acumulado",
+        },
+        { id: "pr-comparativo", titulo: "Comparativo ejecutado", href: "/app/financiero/presupuestos?vista=comparativo-ejecutado" },
       ],
     },
     {

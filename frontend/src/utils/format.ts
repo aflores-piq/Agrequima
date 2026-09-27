@@ -36,6 +36,13 @@ export function formatPercent(v: number): string {
   return `${v.toFixed(1)}%`;
 }
 
+// Igual que formatPercent pero con 2 decimales fijos -- usado en
+// "Comparativo ejecutado" (Presupuestos), calcado del spec real
+// ("46.02%", a diferencia del resto del módulo que usa 1 decimal).
+export function formatPercent2(v: number): string {
+  return `${v.toFixed(2)}%`;
+}
+
 function abreviarNumero(valor: number): string {
   const abs = Math.abs(valor);
   const signo = valor < 0 ? "-" : "";

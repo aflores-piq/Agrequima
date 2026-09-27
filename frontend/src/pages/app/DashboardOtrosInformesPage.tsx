@@ -68,8 +68,12 @@ const COLOR_GRIS_AZULADO = "#90A4AE";
 // idéntico en las 3. El primer color pasado (#118DFF/#12239E) resultó
 // ser el color del TEMA general del reporte, no el del visual -- se
 // reemplaza por el valor correcto leído a nivel de objeto.
-const COLOR_PRESUPUESTO = "#5C7285";
-const COLOR_EJECUTADO = "#A7B49E";
+// Exportados -- reusados tal cual por DashboardPresupuestosPage.tsx (las
+// 3 pantallas de "Presupuestos" comparten el mismo tema de colores
+// Presupuesto/Ejecutado y la misma gráfica de columnas que Ejecución
+// Gastos, calcado del mismo tema de reporte del .pbix).
+export const COLOR_PRESUPUESTO = "#5C7285";
+export const COLOR_EJECUTADO = "#A7B49E";
 
 // SIN abreviación K/M en ningún eje/etiqueta/tooltip de Financiero --
 // regla PERMANENTE para todo el módulo, confirmada contra el archivo
@@ -963,7 +967,7 @@ function calcularEscalaEjeY(valores: number[]): { max: number; ticks: number[] }
 
 // Último día real del mes (28/29 de febrero según año bisiesto, 30 o 31
 // el resto) -- para el título de "Ejecución gastos acumulado".
-function ultimoDiaDelMes(anio: number, mes: number): number {
+export function ultimoDiaDelMes(anio: number, mes: number): number {
   return new Date(anio, mes, 0).getDate();
 }
 
@@ -1014,7 +1018,7 @@ function ChipsResumenGrupo({ tarjeta }: { tarjeta: TarjetaResumenGasto }) {
 // del blanco fijo del visual real -- en modo oscuro (el único que tiene
 // el .pbix) ese color adaptativo YA se ve blanco; en modo claro, que el
 // .pbix no contempla, queda legible en vez de invisible).
-function GraficoColumnasGrupoEjecucion({
+export function GraficoColumnasGrupoEjecucion({
   presupuesto,
   ejecutado,
   escalaMax,
@@ -1576,8 +1580,18 @@ function PaginaFlujoCaja() {
           </div>
 
           <div className="mx-auto" style={{ width: ANCHO_FLUJO_CAJA }}>
-            <p className="pt-2 text-center text-sm font-semibold text-ink">Disponibilidad Al {fechaTitulo}</p>
-            <div className="overflow-hidden rounded-tremor-default ring-1 ring-line" style={{ backgroundColor: FINANCIERO_SURFACE }}>
+            {/* Título DENTRO del recuadro de la gráfica (parte superior,
+                centrado, negrita, 16px) -- calcado del .pbix real, donde
+                el título es parte del propio visual; antes vivía afuera,
+                arriba de la tarjeta. */}
+            <div className="overflow-hidden rounded-tremor-default pt-2 ring-1 ring-line" style={{ backgroundColor: FINANCIERO_SURFACE }}>
+              {/* El padding-top va en la TARJETA, no en el <p>: el
+                  padding de un elemento no mueve su propio borde
+                  superior, así que ponerlo en el <p> no separaba (según
+                  getBoundingClientRect) el borde del título del borde
+                  de la tarjeta, aunque el texto se viera visualmente
+                  separado. */}
+              <p className="text-center text-base font-bold text-ink">Disponibilidad Al {fechaTitulo}</p>
               <GraficoFlujoCaja barras={data.grafica} />
             </div>
           </div>

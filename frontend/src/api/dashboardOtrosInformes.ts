@@ -1,8 +1,10 @@
 import { apiClient } from "./client";
 import type {
+  ComparativoEjecutadoResponse,
   ConciliacionBancariaResponse,
   CuotasAsociadosResponse,
   EjecucionGastosResponse,
+  EjecucionVsPresupuestoResponse,
   FlujoCajaResponse,
 } from "../types/dashboardOtrosInformes";
 
@@ -40,5 +42,29 @@ export async function obtenerConciliacionBancaria(anio?: number, mes?: number): 
 
 export async function obtenerFlujoCaja(anio?: number, mes?: number): Promise<FlujoCajaResponse> {
   const { data } = await apiClient.get<FlujoCajaResponse>("/dashboard/financiero/flujo-caja", { params: { anio, mes } });
+  return data;
+}
+
+export async function obtenerEjecucionVsPresupuesto(anio?: number, mes?: number): Promise<EjecucionVsPresupuestoResponse> {
+  const { data } = await apiClient.get<EjecucionVsPresupuestoResponse>(
+    "/dashboard/financiero/ejecucion-vs-presupuesto",
+    { params: { anio, mes } }
+  );
+  return data;
+}
+
+export async function obtenerEjecucionVsPresupuestoAcumulado(anio?: number, mes?: number): Promise<EjecucionVsPresupuestoResponse> {
+  const { data } = await apiClient.get<EjecucionVsPresupuestoResponse>(
+    "/dashboard/financiero/ejecucion-vs-presupuesto-acumulado",
+    { params: { anio, mes } }
+  );
+  return data;
+}
+
+export async function obtenerComparativoEjecutado(anio?: number, mes?: number): Promise<ComparativoEjecutadoResponse> {
+  const { data } = await apiClient.get<ComparativoEjecutadoResponse>(
+    "/dashboard/financiero/comparativo-ejecutado",
+    { params: { anio, mes } }
+  );
   return data;
 }

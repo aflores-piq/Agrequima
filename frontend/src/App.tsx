@@ -8,6 +8,7 @@ import { DashboardPlaguicidasPage } from "./pages/app/DashboardPlaguicidasPage";
 import { DashboardNutrientesPage } from "./pages/app/DashboardNutrientesPage";
 import { DashboardFinancieroPage } from "./pages/app/DashboardFinancieroPage";
 import { DashboardOtrosInformesPage } from "./pages/app/DashboardOtrosInformesPage";
+import { DashboardPresupuestosPage } from "./pages/app/DashboardPresupuestosPage";
 import { AdminLayout } from "./pages/admin/AdminLayout";
 import { CargaPlaguicidasPage } from "./pages/admin/CargaPlaguicidasPage";
 import { CargaNutrientesPage } from "./pages/admin/CargaNutrientesPage";
@@ -50,6 +51,7 @@ export default function App() {
             <Route path="nutrientes" element={<DashboardNutrientesPage />} />
             <Route path="financiero" element={<DashboardFinancieroPage />} />
             <Route path="financiero/otros-informes" element={<DashboardOtrosInformesPage />} />
+            <Route path="financiero/presupuestos" element={<DashboardPresupuestosPage />} />
           </Route>
 
           <Route

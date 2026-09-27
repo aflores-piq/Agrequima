@@ -87,6 +87,47 @@ class EjecucionGastosResponse(BaseModel):
     tarjetas: list[TarjetaResumenGasto]
 
 
+# --- Presupuestos: Ejecución vs presupuesto (mensual / acumulado) --------
+
+
+class FilaPresupuesto(BaseModel):
+    categoria: str
+    presupuesto: float
+    ejecutado: float
+    diferencia: float
+    diferencia_pct: float
+    negrita: bool = False
+
+
+class EjecucionVsPresupuestoResponse(BaseModel):
+    anio: int
+    mes: int
+    periodos_disponibles: list[PeriodoDisponibleGastos]
+    filas: list[FilaPresupuesto]
+    fila_total: FilaPresupuesto
+
+
+# --- Presupuestos: Comparativo ejecutado (año-1 vs año, acumulado) -------
+
+
+class FilaComparativoEjecutado(BaseModel):
+    categoria: str
+    anio_anterior: float
+    anio_actual: float
+    variacion: float
+    variacion_pct: float
+    negrita: bool = False
+
+
+class ComparativoEjecutadoResponse(BaseModel):
+    anio: int
+    mes: int
+    anio_anterior: int
+    periodos_disponibles: list[PeriodoDisponibleGastos]
+    filas: list[FilaComparativoEjecutado]
+    fila_total: FilaComparativoEjecutado
+
+
 # --- Conciliación bancaria ------------------------------------------------
 #
 # "Saldo Contabilidad" sale de dbo.SaldosBancos (vw_piq_saldos_bancos.csv

@@ -17,18 +17,23 @@ from app.schemas.dashboard import (
 )
 from app.schemas.dashboard_financiero import DashboardFinancieroResponse
 from app.schemas.dashboard_otros_informes import (
+    ComparativoEjecutadoResponse,
     ConciliacionBancariaResponse,
     CuotasAsociadosResponse,
     EjecucionGastosResponse,
+    EjecucionVsPresupuestoResponse,
     FlujoCajaResponse,
 )
 from app.services import export as export_service
 from app.services.dashboard_financiero import obtener_dashboard_financiero
 from app.services.dashboard_otros_informes import (
+    obtener_comparativo_ejecutado,
     obtener_conciliacion_bancaria,
     obtener_cuotas_asociados,
     obtener_ejecucion_gastos_acumulado,
     obtener_ejecucion_gastos_mensual,
+    obtener_ejecucion_vs_presupuesto_acumulado,
+    obtener_ejecucion_vs_presupuesto_mensual,
     obtener_flujo_caja,
 )
 from app.services.dashboard_nutrientes import (
@@ -165,6 +170,39 @@ def dashboard_financiero_flujo_caja(
     _acceso: UsuarioToken = Depends(require_acceso_financiero),
 ) -> FlujoCajaResponse:
     return obtener_flujo_caja(db, anio, mes)
+
+
+@router.get("/financiero/ejecucion-vs-presupuesto", response_model=EjecucionVsPresupuestoResponse)
+def dashboard_financiero_ejecucion_vs_presupuesto(
+    anio: int | None = None,
+    mes: int | None = Query(None, ge=1, le=12),
+    db: Session = Depends(get_db),
+    _usuario: UsuarioToken = Depends(get_current_user),
+    _acceso: UsuarioToken = Depends(require_acceso_financiero),
+) -> EjecucionVsPresupuestoResponse:
+    return obtener_ejecucion_vs_presupuesto_mensual(db, anio, mes)
+
+
+@router.get("/financiero/ejecucion-vs-presupuesto-acumulado", response_model=EjecucionVsPresupuestoResponse)
+def dashboard_financiero_ejecucion_vs_presupuesto_acumulado(
+    anio: int | None = None,
+    mes: int | None = Query(None, ge=1, le=12),
+    db: Session = Depends(get_db),
+    _usuario: UsuarioToken = Depends(get_current_user),
+    _acceso: UsuarioToken = Depends(require_acceso_financiero),
+) -> EjecucionVsPresupuestoResponse:
+    return obtener_ejecucion_vs_presupuesto_acumulado(db, anio, mes)
+
+
+@router.get("/financiero/comparativo-ejecutado", response_model=ComparativoEjecutadoResponse)
+def dashboard_financiero_comparativo_ejecutado(
+    anio: int | None = None,
+    mes: int | None = Query(None, ge=1, le=12),
+    db: Session = Depends(get_db),
+    _usuario: UsuarioToken = Depends(get_current_user),
+    _acceso: UsuarioToken = Depends(require_acceso_financiero),
+) -> ComparativoEjecutadoResponse:
+    return obtener_comparativo_ejecutado(db, anio, mes)
 
 
 def _respuesta_xlsx(contenido: bytes, nombre_archivo: str) -> Response:
