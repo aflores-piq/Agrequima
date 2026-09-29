@@ -10,6 +10,8 @@ import {
 import { mensajeError } from "../../api/client";
 import { useFinancieroFilterGrupo1 } from "../../financiero/FinancieroFilterContext";
 import { FilterYearMonth } from "../../components/filters/PowerBiFilter";
+import { EncabezadoOrdenable } from "../../components/EncabezadoOrdenable";
+import { useTablaOrdenable, type ColumnaOrdenable } from "../../hooks/useTablaOrdenable";
 import { FINANCIERO_SURFACE, VERDE_ENCABEZADO } from "../../components/TablaGrupoExpandible";
 import { COLOR_EJECUTADO, COLOR_PRESUPUESTO, ultimoDiaDelMes } from "./DashboardOtrosInformesPage";
 import { formatPercent, formatPercent2, formatQ, MESES_LARGOS } from "../../utils/format";
@@ -190,6 +192,16 @@ function FilaTablaPresupuesto({ fila, coloreVerdeNegativo }: { fila: FilaPresupu
   );
 }
 
+// Ejecutado===0 se muestra vacío (ver comentario en FilaTablaPresupuesto)
+// -- para el orden se trata como vacío (null), igual que en pantalla.
+const COLUMNAS_ORDENABLES_PRESUPUESTO: ColumnaOrdenable<FilaPresupuesto>[] = [
+  { clave: "categoria", tipo: "texto", valor: (f) => f.categoria },
+  { clave: "presupuesto", tipo: "numero", valor: (f) => f.presupuesto },
+  { clave: "ejecutado", tipo: "numero", valor: (f) => (f.ejecutado === 0 ? null : f.ejecutado) },
+  { clave: "diferencia", tipo: "numero", valor: (f) => f.diferencia },
+  { clave: "diferencia_pct", tipo: "numero", valor: (f) => f.diferencia_pct },
+];
+
 function TablaPresupuesto({
   filas,
   filaTotal,
@@ -199,6 +211,7 @@ function TablaPresupuesto({
   filaTotal: FilaPresupuesto;
   coloreVerdeNegativo: boolean;
 }) {
+  const { filas: filasOrdenadas, alClickEncabezado, flechaColumna } = useTablaOrdenable(filas, COLUMNAS_ORDENABLES_PRESUPUESTO);
   const claseHeader = "px-2 py-1.5 text-center text-white font-normal";
   return (
     <div className="overflow-hidden rounded-tremor-default ring-1 ring-line">
@@ -206,15 +219,25 @@ function TablaPresupuesto({
         <ColgroupPresupuesto />
         <thead>
           <tr style={{ backgroundColor: VERDE_ENCABEZADO }}>
-            <th className={claseHeader}>Gastos</th>
-            <th className={claseHeader}>Presupuesto</th>
-            <th className={claseHeader}>Ejecutado</th>
-            <th className={claseHeader}>Diferencia Q.</th>
-            <th className={claseHeader}>Diferencia %</th>
+            <EncabezadoOrdenable className={claseHeader} flecha={flechaColumna("categoria")} onClick={() => alClickEncabezado("categoria")}>
+              Gastos
+            </EncabezadoOrdenable>
+            <EncabezadoOrdenable className={claseHeader} flecha={flechaColumna("presupuesto")} onClick={() => alClickEncabezado("presupuesto")}>
+              Presupuesto
+            </EncabezadoOrdenable>
+            <EncabezadoOrdenable className={claseHeader} flecha={flechaColumna("ejecutado")} onClick={() => alClickEncabezado("ejecutado")}>
+              Ejecutado
+            </EncabezadoOrdenable>
+            <EncabezadoOrdenable className={claseHeader} flecha={flechaColumna("diferencia")} onClick={() => alClickEncabezado("diferencia")}>
+              Diferencia Q.
+            </EncabezadoOrdenable>
+            <EncabezadoOrdenable className={claseHeader} flecha={flechaColumna("diferencia_pct")} onClick={() => alClickEncabezado("diferencia_pct")}>
+              Diferencia %
+            </EncabezadoOrdenable>
           </tr>
         </thead>
         <tbody>
-          {filas.map((f) => (
+          {filasOrdenadas.map((f) => (
             <FilaTablaPresupuesto key={f.categoria} fila={f} coloreVerdeNegativo={coloreVerdeNegativo} />
           ))}
           <FilaTablaPresupuesto fila={filaTotal} coloreVerdeNegativo={coloreVerdeNegativo} />
@@ -490,7 +513,16 @@ function FilaTablaComparativo({ fila }: { fila: FilaComparativoEjecutado }) {
   );
 }
 
+const COLUMNAS_ORDENABLES_COMPARATIVO: ColumnaOrdenable<FilaComparativoEjecutado>[] = [
+  { clave: "categoria", tipo: "texto", valor: (f) => f.categoria },
+  { clave: "anio_anterior", tipo: "numero", valor: (f) => f.anio_anterior },
+  { clave: "anio_actual", tipo: "numero", valor: (f) => f.anio_actual },
+  { clave: "variacion", tipo: "numero", valor: (f) => f.variacion },
+  { clave: "variacion_pct", tipo: "numero", valor: (f) => f.variacion_pct },
+];
+
 function TablaComparativo({ data }: { data: ComparativoEjecutadoResponse }) {
+  const { filas, alClickEncabezado, flechaColumna } = useTablaOrdenable(data.filas, COLUMNAS_ORDENABLES_COMPARATIVO);
   const claseHeader = "px-2 py-1.5 text-center text-white font-normal";
   return (
     <div className="overflow-hidden rounded-tremor-default ring-1 ring-line">
@@ -498,15 +530,25 @@ function TablaComparativo({ data }: { data: ComparativoEjecutadoResponse }) {
         <ColgroupComparativo />
         <thead>
           <tr style={{ backgroundColor: VERDE_ENCABEZADO }}>
-            <th className={claseHeader}>Gastos</th>
-            <th className={claseHeader}>{data.anio_anterior}</th>
-            <th className={claseHeader}>{data.anio}</th>
-            <th className={claseHeader}>Variación Q.</th>
-            <th className={claseHeader}>Variación %</th>
+            <EncabezadoOrdenable className={claseHeader} flecha={flechaColumna("categoria")} onClick={() => alClickEncabezado("categoria")}>
+              Gastos
+            </EncabezadoOrdenable>
+            <EncabezadoOrdenable className={claseHeader} flecha={flechaColumna("anio_anterior")} onClick={() => alClickEncabezado("anio_anterior")}>
+              {data.anio_anterior}
+            </EncabezadoOrdenable>
+            <EncabezadoOrdenable className={claseHeader} flecha={flechaColumna("anio_actual")} onClick={() => alClickEncabezado("anio_actual")}>
+              {data.anio}
+            </EncabezadoOrdenable>
+            <EncabezadoOrdenable className={claseHeader} flecha={flechaColumna("variacion")} onClick={() => alClickEncabezado("variacion")}>
+              Variación Q.
+            </EncabezadoOrdenable>
+            <EncabezadoOrdenable className={claseHeader} flecha={flechaColumna("variacion_pct")} onClick={() => alClickEncabezado("variacion_pct")}>
+              Variación %
+            </EncabezadoOrdenable>
           </tr>
         </thead>
         <tbody>
-          {data.filas.map((f) => (
+          {filas.map((f) => (
             <FilaTablaComparativo key={f.categoria} fila={f} />
           ))}
           <FilaTablaComparativo fila={data.fila_total} />

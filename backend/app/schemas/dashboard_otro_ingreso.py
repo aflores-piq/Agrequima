@@ -19,6 +19,7 @@ class FilaOtroIngreso(BaseModel):
 class OtroIngresoResponse(BaseModel):
     anio: int
     anio_anterior: int
+    anio_anterior_sin_datos: bool = False
     anios_disponibles: list[int]
     # Orden FIJO (ver ORDEN_CONCEPTOS en el service); conceptos nuevos no
     # listados van al final en orden alfabético.

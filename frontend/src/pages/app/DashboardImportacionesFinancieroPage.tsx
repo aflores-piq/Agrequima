@@ -10,8 +10,10 @@ import {
   obtenerKilolitros,
 } from "../../api/dashboardImportacionesFinanciero";
 import { mensajeError } from "../../api/client";
-import { useFinancieroFilterGrupo1, useFinancieroFilterGrupo2 } from "../../financiero/FinancieroFilterContext";
+import { useFinancieroFilterGrupo1, useFinancieroFilterGrupo2, useFinancieroFilterContribucion } from "../../financiero/FinancieroFilterContext";
 import { FilterYear, FilterYearMonth } from "../../components/filters/PowerBiFilter";
+import { EncabezadoOrdenable } from "../../components/EncabezadoOrdenable";
+import { useTablaOrdenable, type ColumnaOrdenable } from "../../hooks/useTablaOrdenable";
 import { FINANCIERO_SURFACE, VERDE_ENCABEZADO } from "../../components/TablaGrupoExpandible";
 import { COLOR_EJECUTADO, COLOR_PRESUPUESTO, ultimoDiaDelMes } from "./DashboardOtrosInformesPage";
 import { useTheme } from "../../theme/ThemeContext";
@@ -375,6 +377,16 @@ function FilaTablaCIF({ fila }: { fila: FilaCIFMes }) {
 // borde de color rodeando un hueco sin relleno. Con `alturaCompleta`, el
 // fondo gris se pone en el propio <div> (para que el hueco también quede
 // gris) y se saca el `ring` (Power BI no lo tiene ahí).
+const COLUMNAS_ORDENABLES_CIF: ColumnaOrdenable<FilaCIFMes>[] = [
+  { clave: "mes", tipo: "mes", valor: (f) => f.mes },
+  { clave: "cif_anio_anterior", tipo: "numero", valor: (f) => f.cif_anio_anterior },
+  { clave: "pct_anio_anterior", tipo: "numero", valor: (f) => f.pct_anio_anterior },
+  { clave: "cif_anio_actual", tipo: "numero", valor: (f) => f.cif_anio_actual },
+  { clave: "pct_anio_actual", tipo: "numero", valor: (f) => f.pct_anio_actual },
+  { clave: "variacion", tipo: "numero", valor: (f) => f.variacion },
+  { clave: "variacion_pct", tipo: "numero", valor: (f) => f.variacion_pct },
+];
+
 function TablaCIFMes({
   filas,
   filaTotal,
@@ -388,6 +400,7 @@ function TablaCIFMes({
   anioActual: number;
   alturaCompleta?: boolean;
 }) {
+  const { filas: filasOrdenadas, alClickEncabezado, flechaColumna } = useTablaOrdenable(filas, COLUMNAS_ORDENABLES_CIF);
   const claseHeader = "px-2 py-1.5 text-center text-white font-normal whitespace-nowrap";
   return (
     <div
@@ -398,17 +411,35 @@ function TablaCIFMes({
         <ColgroupCIF />
         <thead>
           <tr style={{ backgroundColor: VERDE_ENCABEZADO }}>
-            <th className={claseHeader}>Meses</th>
-            <th className={claseHeader}>CIF US$ {anioAnterior}</th>
-            <th className={claseHeader}>%</th>
-            <th className={claseHeader}>CIF US$ {anioActual}</th>
-            <th className={claseHeader}>%</th>
-            <th className={claseHeader}>VAR</th>
-            <th className={claseHeader}>%</th>
+            <EncabezadoOrdenable className={claseHeader} flecha={flechaColumna("mes")} onClick={() => alClickEncabezado("mes")}>
+              Meses
+            </EncabezadoOrdenable>
+            <EncabezadoOrdenable
+              className={claseHeader}
+              flecha={flechaColumna("cif_anio_anterior")}
+              onClick={() => alClickEncabezado("cif_anio_anterior")}
+            >
+              CIF US$ {anioAnterior}
+            </EncabezadoOrdenable>
+            <EncabezadoOrdenable className={claseHeader} flecha={flechaColumna("pct_anio_anterior")} onClick={() => alClickEncabezado("pct_anio_anterior")}>
+              %
+            </EncabezadoOrdenable>
+            <EncabezadoOrdenable className={claseHeader} flecha={flechaColumna("cif_anio_actual")} onClick={() => alClickEncabezado("cif_anio_actual")}>
+              CIF US$ {anioActual}
+            </EncabezadoOrdenable>
+            <EncabezadoOrdenable className={claseHeader} flecha={flechaColumna("pct_anio_actual")} onClick={() => alClickEncabezado("pct_anio_actual")}>
+              %
+            </EncabezadoOrdenable>
+            <EncabezadoOrdenable className={claseHeader} flecha={flechaColumna("variacion")} onClick={() => alClickEncabezado("variacion")}>
+              VAR
+            </EncabezadoOrdenable>
+            <EncabezadoOrdenable className={claseHeader} flecha={flechaColumna("variacion_pct")} onClick={() => alClickEncabezado("variacion_pct")}>
+              %
+            </EncabezadoOrdenable>
           </tr>
         </thead>
         <tbody>
-          {filas.map((f) => (
+          {filasOrdenadas.map((f) => (
             <FilaTablaCIF key={f.mes} fila={f} />
           ))}
           <FilaTablaCIF fila={filaTotal} />
@@ -1085,7 +1116,9 @@ function PaginaKilolitros() {
   return (
     <div>
       <div className="relative flex min-h-[40px] items-center justify-center">
-        <Title className="px-4 text-center text-xl font-bold text-ink">{tituloPagina}</Title>
+        {/* text-2xl (antes text-xl) -- unificado con el resto de las 14
+            pantallas del módulo (ronda de estandarización). */}
+        <Title className="px-4 text-center text-2xl font-bold text-ink">{tituloPagina}</Title>
         <div className="absolute right-0 top-0">
           <FilterYearMonth
             label="Año y Mes"
@@ -1429,9 +1462,10 @@ function TextoSinPresupuesto({ x, width }: { x?: number | string; width?: number
 
 function PaginaContribucionMillar() {
   // Independiente, sin sincronizar -- mismo componente visual Año/Mes
-  // que las demás, pero estado local propio.
-  const [anio, setAnioLocal] = useState("");
-  const [mes, setMesLocal] = useState("");
+  // que las demás, pero con memoria propia dentro de la sesión (ver
+  // FinancieroFilterContext): antes era estado local, que se perdía al
+  // navegar a otra pantalla y volver.
+  const { anio, mes, setAnioMes } = useFinancieroFilterContribucion();
   const [data, setData] = useState<ContribucionMillarResponse | null>(null);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -1444,8 +1478,7 @@ function PaginaContribucionMillar() {
         if (cancelado) return;
         setData(res);
         setError(null);
-        if (!anio) setAnioLocal(String(res.anio));
-        if (!mes) setMesLocal(String(res.mes));
+        if (!anio || !mes) setAnioMes(anio || String(res.anio), mes || String(res.mes));
       })
       .catch((err) => {
         if (!cancelado) setError(mensajeError(err));
@@ -1472,10 +1505,12 @@ function PaginaContribucionMillar() {
 
   function cambiarAnio(nuevoAnio: string) {
     const mesesDelNuevoAnio = periodos.filter((p) => String(p.anio) === nuevoAnio).map((p) => p.mes);
-    setAnioLocal(nuevoAnio);
-    if (!mesesDelNuevoAnio.includes(Number(mes))) {
-      setMesLocal(String(Math.max(...mesesDelNuevoAnio)));
-    }
+    const nuevoMes = mesesDelNuevoAnio.includes(Number(mes)) ? mes : String(Math.max(...mesesDelNuevoAnio));
+    setAnioMes(nuevoAnio, nuevoMes);
+  }
+
+  function cambiarMes(nuevoMes: string) {
+    setAnioMes(anio, nuevoMes);
   }
 
   const tituloPagina = data ? `Ingresos Contribución 4.5 por millar ${MESES_LARGOS[data.mes - 1]} Año ${data.anio}` : "Ingresos Contribución 4.5 por millar";
@@ -1490,7 +1525,7 @@ function PaginaContribucionMillar() {
             anio={anio}
             mes={mes}
             onChangeAnio={cambiarAnio}
-            onChangeMes={setMesLocal}
+            onChangeMes={cambiarMes}
             aniosOpciones={aniosDisponibles.map(String)}
             mesesOpciones={mesesDelAnio.map((m) => ({ value: String(m), label: MESES_LARGOS[m - 1] }))}
             theme="gris"

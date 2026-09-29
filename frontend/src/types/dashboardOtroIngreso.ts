@@ -12,6 +12,7 @@ export interface FilaOtroIngreso {
 export interface OtroIngresoResponse {
   anio: number;
   anio_anterior: number;
+  anio_anterior_sin_datos: boolean;
   anios_disponibles: number[];
   filas: FilaOtroIngreso[];
   total: FilaOtroIngreso;

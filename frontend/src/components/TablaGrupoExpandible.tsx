@@ -125,7 +125,7 @@ export function TablaGrupoExpandible({
               const abierto = expandidos.has(f.grupo);
               return (
                 <Fragment key={f.grupo}>
-                  <tr className="border-b border-line/50 hover:bg-surface-hover/60">
+                  <tr className="hover:bg-surface-hover/60">
                     <td className="break-words px-3 py-1.5 text-ink" title={f.grupo}>
                       <button
                         type="button"
@@ -146,7 +146,7 @@ export function TablaGrupoExpandible({
                   </tr>
                   {abierto &&
                     f.cuentas.map((c) => (
-                      <tr key={`${f.grupo}__${c.nombre}`} className="border-b border-line/50" style={{ backgroundColor: colorFondo }}>
+                      <tr key={`${f.grupo}__${c.nombre}`} style={{ backgroundColor: colorFondo }}>
                         <td className="break-words px-3 py-1 pl-10 text-ink-muted" title={c.nombre}>
                           {c.nombre}
                         </td>
@@ -160,7 +160,7 @@ export function TablaGrupoExpandible({
                 </Fragment>
               );
             })}
-            <tr className="font-semibold text-ink">
+            <tr className="border-t border-line font-semibold text-ink">
               <td className="px-3 py-2">{etiquetaTotal}</td>
               {totalValores.map((v, i) => (
                 <td key={i} className="px-3 py-2 text-right">

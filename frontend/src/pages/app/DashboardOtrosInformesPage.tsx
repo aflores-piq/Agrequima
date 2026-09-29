@@ -13,6 +13,8 @@ import { mensajeError } from "../../api/client";
 import { useFinancieroFilterGrupo1 } from "../../financiero/FinancieroFilterContext";
 import { ChartCard } from "../../components/ChartCard";
 import { FilterYearMonth } from "../../components/filters/PowerBiFilter";
+import { EncabezadoOrdenable } from "../../components/EncabezadoOrdenable";
+import { useTablaOrdenable, type ColumnaOrdenable } from "../../hooks/useTablaOrdenable";
 import { FINANCIERO_SURFACE, KpiCardIcono, VERDE_ENCABEZADO } from "../../components/TablaGrupoExpandible";
 import { formatPercent, formatQ, formatQ2, MESES_LARGOS } from "../../utils/format";
 import type {
@@ -20,6 +22,7 @@ import type {
   ConciliacionBancariaResponse,
   CuotasAsociadosResponse,
   EjecucionGastosResponse,
+  FilaCuotaAsociado,
   FilaFlujoCaja,
   FilaGastoCategoria,
   FlujoCajaResponse,
@@ -122,7 +125,15 @@ const ALTO_TABLA_CUOTAS = 560;
 // sola fila de tabla, coloreada por tipo y sin la columna "Nombre".
 const ALTO_TITULO_TABLA = 33;
 
+const COLUMNAS_ORDENABLES_CUOTAS: ColumnaOrdenable<FilaCuotaAsociado>[] = [
+  { clave: "nombre", tipo: "texto", valor: (f) => f.nombre },
+  { clave: "cuota", tipo: "numero", valor: (f) => f.cuota },
+  { clave: "cancelado", tipo: "numero", valor: (f) => f.cancelado },
+  { clave: "saldo", tipo: "numero", valor: (f) => f.saldo },
+];
+
 function TablaCuotasTipo({ tipo }: { tipo: TipoCuotaAsociados }) {
+  const { filas, alClickEncabezado, flechaColumna } = useTablaOrdenable(tipo.filas, COLUMNAS_ORDENABLES_CUOTAS);
   return (
     // backgroundColor en el contenedor EXTERNO -- BUG REAL encontrado
     // midiendo pixel a pixel contra una captura real: getBoundingClientRect
@@ -180,21 +191,43 @@ function TablaCuotasTipo({ tipo }: { tipo: TipoCuotaAsociados }) {
                 completas ("Cancelado", no "Canc."), columna "Nombre"
                 explícita -- antes esta fila combinaba "Tipo X" +
                 columnas con el color por tipo (COLOR_POR_TIPO), sin
-                columna "Nombre". Sin flechita de orden: no hay
-                funcionalidad real de ordenar por columna todavía (se
-                agregará en otra ronda, para todas las tablas del
-                sistema a la vez) -- tenerla ahí sin función era solo un
-                ícono sin sentido. */}
+                columna "Nombre". Ordenable por encabezado (ver
+                useTablaOrdenable) -- la fila "Total {tipo}" de abajo
+                queda SIEMPRE fija al final, fuera del orden. */}
             <tr style={{ backgroundColor: VERDE_ENCABEZADO }}>
-              <th className="truncate px-2 py-1 text-left font-semibold text-white">Nombre</th>
-              <th className="px-2 py-1 text-right font-semibold text-white">Cuota</th>
-              <th className="px-2 py-1 text-right font-semibold text-white">Cancelado</th>
-              <th className="px-2 py-1 text-right font-semibold text-white">Saldo</th>
+              <EncabezadoOrdenable
+                className="truncate px-2 py-1 text-left font-semibold text-white"
+                flecha={flechaColumna("nombre")}
+                onClick={() => alClickEncabezado("nombre")}
+              >
+                Nombre
+              </EncabezadoOrdenable>
+              <EncabezadoOrdenable
+                className="px-2 py-1 text-right font-semibold text-white"
+                flecha={flechaColumna("cuota")}
+                onClick={() => alClickEncabezado("cuota")}
+              >
+                Cuota
+              </EncabezadoOrdenable>
+              <EncabezadoOrdenable
+                className="px-2 py-1 text-right font-semibold text-white"
+                flecha={flechaColumna("cancelado")}
+                onClick={() => alClickEncabezado("cancelado")}
+              >
+                Cancelado
+              </EncabezadoOrdenable>
+              <EncabezadoOrdenable
+                className="px-2 py-1 text-right font-semibold text-white"
+                flecha={flechaColumna("saldo")}
+                onClick={() => alClickEncabezado("saldo")}
+              >
+                Saldo
+              </EncabezadoOrdenable>
             </tr>
           </thead>
           <tbody style={{ backgroundColor: FINANCIERO_SURFACE }}>
-            {tipo.filas.map((f) => (
-              <tr key={f.nombre} className="border-b border-line/50">
+            {filas.map((f) => (
+              <tr key={f.nombre}>
                 {/* Sin `truncate`: los nombres largos pasan a una
                     segunda línea (word wrap normal) en vez de cortarse
                     con "…" -- se puede leer el nombre completo. */}
@@ -206,7 +239,7 @@ function TablaCuotasTipo({ tipo }: { tipo: TipoCuotaAsociados }) {
                 <td className="whitespace-nowrap px-2 py-0.5 text-right text-ink">{formatQ(f.saldo)}</td>
               </tr>
             ))}
-            <tr className="font-semibold text-ink">
+            <tr className="border-t border-line font-semibold text-ink">
               <td className="px-2 py-1">Total {tipo.tipo}</td>
               <td className="whitespace-nowrap px-2 py-1 text-right">{formatQ(tipo.total_cuota)}</td>
               <td className="whitespace-nowrap px-2 py-1 text-right">{formatQ(tipo.total_cancelado)}</td>
@@ -578,16 +611,15 @@ function PaginaCuotasAsociados() {
     .sort((a, b) => a - b);
 
   return (
-    // Mismo patrón EXACTO que DashboardFinancieroPage (Estados
-    // Financieros, 4 páginas ya aprobadas): min-h-[64px] + título
-    // text-3xl centrado + filtro FilterYearMonth posicionado con
-    // `absolute right-0 top-full mt-5` (debajo de la fila del título,
-    // no encima) -- antes esta página tenía su propio min-h-[40px] +
-    // text-xl + 2 <select> sueltos, un patrón distinto al ya aprobado.
-    <div className="space-y-5">
-      <div className="relative flex min-h-[64px] items-center justify-center">
-        <Title className="px-4 text-center text-3xl text-ink">{`Cuotas Asociados ${data?.anio ?? ""}`}</Title>
-        <div className="absolute right-0 top-full mt-5">
+    // Título y filtro unificados al mismo patrón que las otras 13
+    // pantallas del módulo (min-h-[40px] + text-2xl font-bold + filtro
+    // top-0, misma fila) -- antes esta pantalla usaba min-h-[64px] +
+    // text-3xl + filtro `top-full mt-5` (debajo del título), un patrón
+    // distinto al resto (ronda de estandarización).
+    <div className="space-y-3">
+      <div className="relative flex min-h-[40px] items-center justify-center">
+        <Title className="px-4 text-center text-2xl font-bold text-ink">{`Cuotas Asociados ${data?.anio ?? ""}`}</Title>
+        <div className="absolute right-0 top-0">
           <FilterYearMonth
             theme="gris"
             anio={anio}
@@ -669,7 +701,7 @@ function PaginaCuotasAsociados() {
                   </thead>
                   <tbody>
                     {data.tipos.map((t) => (
-                      <tr key={t.tipo} className="border-b border-line/50">
+                      <tr key={t.tipo}>
                         <td className="px-2 py-1 text-ink">{`Tipo ${t.tipo}`}</td>
                         <td className="px-2 py-1 text-right text-ink">{formatQ(t.total_cuota)}</td>
                         <td className="px-2 py-1 text-right text-ink">{formatQ(t.total_cancelado)}</td>
@@ -690,7 +722,7 @@ function PaginaCuotasAsociados() {
                 <table className="w-full text-xs">
                   <tbody>
                     {data.tipos.map((t) => (
-                      <tr key={t.tipo} className="border-b border-line/50">
+                      <tr key={t.tipo}>
                         <td className="px-2 py-1 text-ink">{`Tipo ${t.tipo}`}</td>
                         <td className="px-2 py-1 text-right text-ink">{formatQ(t.total_cuota)}</td>
                       </tr>
@@ -709,7 +741,7 @@ function PaginaCuotasAsociados() {
               table={
                 <table className="w-full text-xs">
                   <tbody>
-                    <tr className="border-b border-line/50">
+                    <tr>
                       <td className="px-2 py-1 text-ink">Cancelado</td>
                       <td className="px-2 py-1 text-right text-ink">{formatQ(data.kpis.cancelado)}</td>
                     </tr>
@@ -770,7 +802,7 @@ function FilaTabla({
   const claseCelda = `whitespace-nowrap px-2 py-1 text-right ${fondoTotal ? "text-white" : ""}`;
   return (
     <tr
-      className={`border-b border-line/50 ${negrita ? "font-semibold" : ""} text-ink`}
+      className={`${negrita ? "font-semibold" : ""} text-ink`}
       style={fondoTotal ? { backgroundColor: VERDE_ENCABEZADO } : undefined}
     >
       <td
@@ -812,8 +844,21 @@ function ColgroupEjecucion({ variante }: { variante: "mensual" | "acumulado" }) 
   );
 }
 
+// 0 en estas columnas significa "sin dato" (COALESCE(...,0), ver
+// comentario en FilaTabla/ocultarCeros) -- para el orden se trata como
+// vacío (null), igual que se muestra en blanco en la celda.
+const COLUMNAS_ORDENABLES_GASTOS: ColumnaOrdenable<FilaGastoCategoria>[] = [
+  { clave: "categoria", tipo: "texto", valor: (f) => f.categoria },
+  { clave: "administracion", tipo: "numero", valor: (f) => (f.administracion === 0 ? null : f.administracion) },
+  { clave: "peso_administracion", tipo: "numero", valor: (f) => (f.administracion === 0 ? null : f.peso_administracion) },
+  { clave: "operacion", tipo: "numero", valor: (f) => (f.operacion === 0 ? null : f.operacion) },
+  { clave: "peso_operacion", tipo: "numero", valor: (f) => (f.operacion === 0 ? null : f.peso_operacion) },
+  { clave: "consolidado", tipo: "numero", valor: (f) => (f.consolidado === 0 ? null : f.consolidado) },
+];
+
 function TablaEjecucionGastos({ data, variante }: { data: EjecucionGastosResponse; variante: "mensual" | "acumulado" }) {
   const esAcumulado = variante === "acumulado";
+  const { filas, alClickEncabezado, flechaColumna } = useTablaOrdenable(data.categorias, COLUMNAS_ORDENABLES_GASTOS);
   // pivotTable real: values/columnHeaders/rowHeaders.fontSize=14D en las
   // 2 páginas -- antes esta tabla usaba 11px (un valor propio de una
   // versión anterior, nunca actualizado al dato real ya extraído del
@@ -834,18 +879,36 @@ function TablaEjecucionGastos({ data, variante }: { data: EjecucionGastosRespons
               mismo verde real que ya usan las demás tablas del sistema
               (leído pixel a pixel de las capturas de referencia) -- antes
               usaba COLOR_TEAL (#3f6f6b), un verde/teal distinto que no
-              coincidía con el resto del reporte. */}
+              coincidía con el resto del reporte. Ordenable -- "Total
+              ejecutado" queda fijo al final, fuera del <FilaTabla> ya
+              ordenado. */}
           <tr style={{ backgroundColor: VERDE_ENCABEZADO }}>
-            <th className={claseHeader}>Gastos</th>
-            <th className={claseHeader}>Administración</th>
-            <th className={claseHeader}>Peso en %</th>
-            <th className={claseHeader}>Operación</th>
-            <th className={claseHeader}>Peso en %</th>
-            <th className={claseHeader}>Consolidado</th>
+            <EncabezadoOrdenable className={claseHeader} flecha={flechaColumna("categoria")} onClick={() => alClickEncabezado("categoria")}>
+              Gastos
+            </EncabezadoOrdenable>
+            <EncabezadoOrdenable className={claseHeader} flecha={flechaColumna("administracion")} onClick={() => alClickEncabezado("administracion")}>
+              Administración
+            </EncabezadoOrdenable>
+            <EncabezadoOrdenable
+              className={claseHeader}
+              flecha={flechaColumna("peso_administracion")}
+              onClick={() => alClickEncabezado("peso_administracion")}
+            >
+              Peso en %
+            </EncabezadoOrdenable>
+            <EncabezadoOrdenable className={claseHeader} flecha={flechaColumna("operacion")} onClick={() => alClickEncabezado("operacion")}>
+              Operación
+            </EncabezadoOrdenable>
+            <EncabezadoOrdenable className={claseHeader} flecha={flechaColumna("peso_operacion")} onClick={() => alClickEncabezado("peso_operacion")}>
+              Peso en %
+            </EncabezadoOrdenable>
+            <EncabezadoOrdenable className={claseHeader} flecha={flechaColumna("consolidado")} onClick={() => alClickEncabezado("consolidado")}>
+              Consolidado
+            </EncabezadoOrdenable>
           </tr>
         </thead>
         <tbody style={{ backgroundColor: FINANCIERO_SURFACE }}>
-          {data.categorias.map((f) => (
+          {filas.map((f) => (
             <FilaTabla key={f.categoria} fila={f} ocultarCeros ajustarTexto />
           ))}
           <FilaTabla fila={data.fila_total_ejecutado} negrita ocultarCeros fondoTotal ajustarTexto />
@@ -950,19 +1013,31 @@ const ALTO_GRAFICA_GRUPO = 280;
 // 1/2/5×10^n "número redondo" como hace Power BI.
 const ESCALA_EJE_Y_MENSUAL = { max: 1_000_000, ticks: [0, 500_000, 1_000_000] };
 
-// La medida DAX real (_Calculos.EscalaEjeY / EscalaEjeY_CentroAcumulado)
-// no es extraíble desde Layout.json -- esto es una aproximación por
-// "número redondo" (1/2/5×10^n), no la fórmula real. Si el usuario
-// puede pasar el DAX desde Power BI Desktop, se reemplaza por la lógica
-// exacta.
+// Medida DAX real extraída con pbixray de _Calculos.EscalaEjeY_CentroAcumulado:
+//   MAX ( [TotalEjecutado_Acumulado], [TotalPresupuesto_Acumulado] ) * 1.3
+// (reemplaza la aproximación de la ronda anterior -- redondear el máximo
+// crudo hacia arriba al siguiente 1/2/5×10^n -- que quedó documentada
+// como PENDIENTE en la bitácora sección 10).
+//
+// La fórmula solo define el TOPE del eje (el "1.3" es el aire que deja
+// Power BI arriba de la barra más alta); las 2 marcas intermedias (los
+// "tramos" del eje) se redondean al 1/2/5×10^n MÁS CERCANO -- no siempre
+// hacia arriba -- porque Power BI no necesariamente dibuja una marca
+// justo en el tope de ese 30% de aire. Validado contra Agosto 2026 real
+// (Consolidado: Ejecutado Q6,575,984 / Presupuesto Q8,440,050 -> tope
+// real 8,440,050×1.3=10,972,065 -> tramo más cercano 5,000,000 -> eje
+// 0/5,000,000/10,000,000, igual que el reporte real).
 function calcularEscalaEjeY(valores: number[]): { max: number; ticks: number[] } {
-  const maxValor = Math.max(0, ...valores);
-  if (maxValor <= 0) return { max: 1, ticks: [0, 0.5, 1] };
-  const magnitud = Math.pow(10, Math.floor(Math.log10(maxValor)));
-  const normalizado = maxValor / magnitud;
-  const base = normalizado <= 1 ? 1 : normalizado <= 2 ? 2 : normalizado <= 5 ? 5 : 10;
-  const max = base * magnitud;
-  return { max, ticks: [0, max / 2, max] };
+  const maxDax = Math.max(0, ...valores) * 1.3;
+  if (maxDax <= 0) return { max: 1, ticks: [0, 0.5, 1] };
+  const pasoBruto = maxDax / 2;
+  const magnitud = Math.pow(10, Math.floor(Math.log10(pasoBruto)));
+  const normalizado = pasoBruto / magnitud;
+  const candidatos = [1, 2, 5, 10];
+  const pasoNormalizado = candidatos.reduce((mejor, c) => (Math.abs(c - normalizado) < Math.abs(mejor - normalizado) ? c : mejor));
+  const paso = pasoNormalizado * magnitud;
+  const max = paso * 2;
+  return { max, ticks: [0, paso, max] };
 }
 
 // Último día real del mes (28/29 de febrero según año bisiesto, 30 o 31

@@ -4,6 +4,7 @@ import { Bar, BarChart, CartesianGrid, Cell, LabelList, ResponsiveContainer, Too
 import { obtenerOtroIngreso } from "../../api/dashboardOtroIngreso";
 import { mensajeError } from "../../api/client";
 import { FilterYear } from "../../components/filters/PowerBiFilter";
+import { useFinancieroFilterOtrosIngresos } from "../../financiero/FinancieroFilterContext";
 import { FINANCIERO_SURFACE } from "../../components/TablaGrupoExpandible";
 import { formatPercentEntero, formatQ } from "../../utils/format";
 import type { FilaOtroIngreso, OtroIngresoResponse } from "../../types/dashboardOtroIngreso";
@@ -69,11 +70,13 @@ function GraficoBarrasOtrosIngresos({
   filas,
   anioAnterior,
   anio,
+  anioAnteriorSinDatos = false,
 }: {
   titulo: string;
   filas: FilaOtroIngreso[];
   anioAnterior: number;
   anio: number;
+  anioAnteriorSinDatos?: boolean;
 }) {
   // Conceptos ordenados por su valor MÁXIMO entre las 3 series, descendente.
   const ordenadas = [...filas].sort(
@@ -92,7 +95,7 @@ function GraficoBarrasOtrosIngresos({
     >
       <p className="text-center text-base font-bold text-ink">{titulo}</p>
       <ResponsiveContainer width="100%" aspect={aspecto}>
-        <BarChart data={ordenadas} layout="vertical" margin={{ top: 8, right: 24, bottom: 4, left: 8 }} barGap={0}>
+        <BarChart data={ordenadas} layout="vertical" margin={{ top: 8, right: 56, bottom: 4, left: 8 }} barGap={0}>
           <CartesianGrid horizontal={false} vertical stroke="#666666" strokeOpacity={0.3} />
           <XAxis
             type="number"
@@ -114,8 +117,12 @@ function GraficoBarrasOtrosIngresos({
             contentStyle={{ background: FINANCIERO_SURFACE, border: "1px solid rgb(var(--color-line))", borderRadius: 8 }}
             labelStyle={{ color: "rgb(var(--color-ink))" }}
           />
-          {/* Sin etiquetas de valor (como en Power BI). */}
-          <Bar dataKey="ejecutado_anio_anterior" fill={COLOR_EJECUTADO_ANTERIOR} barSize={13} isAnimationActive={false} />
+          {/* Sin etiquetas de valor (como en Power BI). Si el año anterior
+              no tiene datos (ver anioAnteriorSinDatos), esa serie no se
+              dibuja -- mismo tratamiento ya usado en Importaciones. */}
+          {!anioAnteriorSinDatos && (
+            <Bar dataKey="ejecutado_anio_anterior" fill={COLOR_EJECUTADO_ANTERIOR} barSize={13} isAnimationActive={false} />
+          )}
           <Bar dataKey="presupuesto_anio" fill={COLOR_PRESUPUESTO_ANIO} barSize={13} isAnimationActive={false} />
           <Bar dataKey="ejecutado_anio" fill={COLOR_EJECUTADO_ANIO} barSize={13} isAnimationActive={false} />
         </BarChart>
@@ -126,7 +133,7 @@ function GraficoBarrasOtrosIngresos({
           correcto según el color). */}
       <div className="flex items-center justify-center gap-6 pb-2 pt-1 text-sm font-bold text-ink">
         {[
-          { color: COLOR_EJECUTADO_ANTERIOR, etiqueta: `Ejecutado ${anioAnterior}` },
+          { color: COLOR_EJECUTADO_ANTERIOR, etiqueta: `Ejecutado ${anioAnterior}${anioAnteriorSinDatos ? " (sin datos)" : ""}` },
           { color: COLOR_PRESUPUESTO_ANIO, etiqueta: `Presupuesto ${anio}` },
           { color: COLOR_EJECUTADO_ANIO, etiqueta: `Ejecutado ${anio}` },
         ].map((it) => (
@@ -142,13 +149,16 @@ function GraficoBarrasOtrosIngresos({
 
 // --- 2. Gráfica de totales (3 barras horizontales, valor dentro) -----
 
-function GraficoTotalesOtrosIngresos({ total }: { total: FilaOtroIngreso }) {
+function GraficoTotalesOtrosIngresos({ total, anioAnteriorSinDatos = false }: { total: FilaOtroIngreso; anioAnteriorSinDatos?: boolean }) {
   const [refTarjeta, anchoTarjeta] = useAnchoElemento<HTMLDivElement>();
   // Sin título ni leyenda (como en Power BI) -- nada de alto extra que
   // despejar, el <svg> ocupa toda la tarjeta.
   const aspecto = calcularAspectoSvg(anchoTarjeta, PROPORCION_TOTALES, 0);
   const datos = [
-    { serie: "ejecutado_anterior", valor: total.ejecutado_anio_anterior, color: COLOR_EJECUTADO_ANTERIOR },
+    // Si el año anterior no tiene datos, la barra queda en 0 (invisible)
+    // y su etiqueta dice "(sin datos)" en vez de "Q0" -- mismo criterio
+    // que la gráfica de barras agrupadas de arriba.
+    { serie: "ejecutado_anterior", valor: anioAnteriorSinDatos ? 0 : total.ejecutado_anio_anterior, color: COLOR_EJECUTADO_ANTERIOR },
     { serie: "presupuesto", valor: total.presupuesto_anio, color: COLOR_PRESUPUESTO_ANIO },
     { serie: "ejecutado_actual", valor: total.ejecutado_anio, color: COLOR_EJECUTADO_ANIO },
   ];
@@ -165,7 +175,7 @@ function GraficoTotalesOtrosIngresos({ total }: { total: FilaOtroIngreso }) {
   return (
     <div ref={refTarjeta} className="overflow-hidden rounded-tremor-default ring-1 ring-line" style={{ backgroundColor: FINANCIERO_SURFACE }}>
       <ResponsiveContainer width="100%" aspect={aspecto}>
-        <BarChart data={datos} layout="vertical" margin={{ top: 8, right: 24, bottom: 4, left: 8 }}>
+        <BarChart data={datos} layout="vertical" margin={{ top: 8, right: 56, bottom: 4, left: 8 }}>
           <CartesianGrid horizontal={false} vertical stroke="#666666" strokeOpacity={0.3} />
           <XAxis
             type="number"
@@ -185,7 +195,31 @@ function GraficoTotalesOtrosIngresos({ total }: { total: FilaOtroIngreso }) {
             {datos.map((d) => (
               <Cell key={d.serie} fill={d.color} />
             ))}
-            <LabelList dataKey="valor" position="center" formatter={(v: number) => formatQ(v)} fill="#FFFFFF" fontSize={13} fontWeight={700} />
+            <LabelList
+              dataKey="valor"
+              position="center"
+              content={(props: {
+                x?: string | number;
+                y?: string | number;
+                width?: string | number;
+                height?: string | number;
+                value?: string | number;
+                index?: number;
+              }) => {
+                const x = Number(props.x ?? 0);
+                const y = Number(props.y ?? 0);
+                const width = Number(props.width ?? 0);
+                const height = Number(props.height ?? 0);
+                const value = Number(props.value ?? 0);
+                const index = props.index ?? 0;
+                const sinDatos = anioAnteriorSinDatos && datos[index]?.serie === "ejecutado_anterior";
+                return (
+                  <text x={x + width / 2} y={y + height / 2} textAnchor="middle" dominantBaseline="central" fill="#FFFFFF" fontSize={13} fontWeight={700}>
+                    {sinDatos ? "(sin datos)" : formatQ(value)}
+                  </text>
+                );
+              }}
+            />
           </Bar>
         </BarChart>
       </ResponsiveContainer>
@@ -200,24 +234,25 @@ function GraficoTotalesOtrosIngresos({ total }: { total: FilaOtroIngreso }) {
 // individuales en vez de una tabla/Deneb con un spec de texto limpio
 // para extraer -- se preserva el texto COMPLETO de cada concepto, solo
 // partido en líneas más cortas para que la columna no se ensanche).
+// Textos cortos reales del spec Vega del .pbix (Titulo1/Titulo2/Titulo3),
+// confirmados por el usuario -- reemplaza el partido-a-mano por ancho de
+// la ronda anterior (quedó documentado como PENDIENTE en la sección 15
+// de la bitácora). Los conceptos que no están acá usan su nombre
+// completo (ver fallback de encabezadoConcepto, abajo).
 const ENCABEZADOS_TABLA: Record<string, string[]> = {
-  "CropLife - Proyecto SPMF": ["CropLife -", "Proyecto SPMF"],
+  "CropLife - Proyecto SPMF": ["CropLife - Proyecto", "SPMF"],
   Gremiagro: ["Gremiagro"],
-  "Venta de Material Reciclable(Chatarra, cartón, metal, plástico)": [
-    "Venta de Material",
-    "Reciclable",
-    "(Chatarra, cartón, metal, plástico)",
-  ],
+  "Venta de Material Reciclable(Chatarra, cartón, metal, plástico)": ["Venta de Material", "Reciclable"],
   "Aporte Industria Fertilizantes": ["Aporte Industria", "Fertilizantes"],
   "Aporte Fundación Hanns R. Neumann Stiftung": ["Aporte Fundación", "Hanns R. Neumann", "Stiftung"],
-  "Intereses Bancarios e Inversión": ["Intereses Bancarios", "e Inversión"],
+  "Intereses Bancarios e Inversión": ["Intereses Bancarios e", "Inversión"],
   "Carnet Aplicadores y Certificados, Cursos, Capacitaciones y Talleres y otras donaciones": [
     "Carnet Aplicadores y",
-    "Certificados, Cursos,",
-    "Capacitaciones y Talleres y otras donaciones",
+    "Certificados y Cursos",
+    "Capacitaciones",
   ],
   "Venta de Sellos": ["Venta de", "Sellos"],
-  "Venta Minicentros de Plástico Reciclado": ["Venta Minicentros", "de Plástico", "Reciclado"],
+  "Venta Minicentros de Plástico Reciclado": ["Venta Minicentros de", "Plástico Reciclado"],
   "Proyecto ATRACSI": ["Proyecto", "ATRACSI"],
   "Localg.a.p. Guatemala": ["Localg.a.p.", "Guatemala"],
   "Venta de Vehículos": ["Venta de", "Vehículos"],
@@ -246,77 +281,97 @@ function ChipFila({ color, etiqueta }: { color: string; etiqueta: string }) {
   );
 }
 
-function TablaOtrosIngresos({ filas, total, anioAnterior, anio }: { filas: FilaOtroIngreso[]; total: FilaOtroIngreso; anioAnterior: number; anio: number }) {
+function TablaOtrosIngresos({
+  filas,
+  total,
+  anioAnterior,
+  anio,
+  anioAnteriorSinDatos = false,
+}: {
+  filas: FilaOtroIngreso[];
+  total: FilaOtroIngreso;
+  anioAnterior: number;
+  anio: number;
+  anioAnteriorSinDatos?: boolean;
+}) {
   const claseCelda = "px-2 py-2 text-center text-sm text-ink";
-  const claseBorde = { border: `1px solid ${BORDE_CELDA}` };
+  // Tabla TRANSPUESTA (columnas = concepto, no meses/categorías) --
+  // exceptuada de la regla de orden por encabezado (PARTE A, punto 2) y
+  // tratada distinto en la regla de líneas (punto 1): acá SÍ importan
+  // las líneas VERTICALES (separan cada concepto, se leen en columna),
+  // solo se quitan las HORIZONTALES entre las 4 filas de datos -- el
+  // encabezado conserva su línea inferior como separador (no es una
+  // línea "entre filas de datos").
+  const claseBordeVertical = { borderLeft: `1px solid ${BORDE_CELDA}`, borderRight: `1px solid ${BORDE_CELDA}` };
+  const claseBordeHeader = { ...claseBordeVertical, borderBottom: `1px solid ${BORDE_CELDA}` };
   return (
     <div className="overflow-x-auto rounded-tremor-default" style={{ backgroundColor: FINANCIERO_SURFACE, border: `1px solid ${BORDE_CELDA}` }}>
       <table className="w-full text-sm" style={{ borderCollapse: "collapse" }}>
         <thead>
           <tr>
-            <th className="px-2 py-2" style={claseBorde} />
+            <th className="px-2 py-2" style={claseBordeHeader} />
             {filas.map((f) => (
-              <th key={f.concepto} className="px-1 py-2 text-center text-xs font-bold leading-tight text-ink" style={claseBorde} title={f.concepto}>
+              <th key={f.concepto} className="px-1 py-2 text-center text-xs font-bold leading-tight text-ink" style={claseBordeHeader} title={f.concepto}>
                 {encabezadoConcepto(f.concepto).map((linea, i) => (
                   <div key={i}>{linea}</div>
                 ))}
               </th>
             ))}
-            <th className="px-2 py-2 text-center text-xs font-bold text-ink" style={claseBorde}>
+            <th className="px-2 py-2 text-center text-xs font-bold text-ink" style={claseBordeHeader}>
               Total
             </th>
           </tr>
         </thead>
         <tbody>
           <tr>
-            <td className={claseCelda} style={claseBorde}>
-              <ChipFila color={COLOR_EJECUTADO_ANTERIOR} etiqueta={`Ejecutado ${anioAnterior}`} />
+            <td className={claseCelda} style={claseBordeVertical}>
+              <ChipFila color={COLOR_EJECUTADO_ANTERIOR} etiqueta={`Ejecutado ${anioAnterior}${anioAnteriorSinDatos ? " (sin datos)" : ""}`} />
             </td>
             {filas.map((f) => (
-              <td key={f.concepto} className={claseCelda} style={claseBorde}>
-                {formatQ(f.ejecutado_anio_anterior)}
+              <td key={f.concepto} className={claseCelda} style={claseBordeVertical}>
+                {anioAnteriorSinDatos ? "—" : formatQ(f.ejecutado_anio_anterior)}
               </td>
             ))}
-            <td className={`${claseCelda} font-bold`} style={claseBorde}>
-              {formatQ(total.ejecutado_anio_anterior)}
+            <td className={`${claseCelda} font-bold`} style={claseBordeVertical}>
+              {anioAnteriorSinDatos ? "—" : formatQ(total.ejecutado_anio_anterior)}
             </td>
           </tr>
           <tr>
-            <td className={claseCelda} style={claseBorde}>
+            <td className={claseCelda} style={claseBordeVertical}>
               <ChipFila color={COLOR_PRESUPUESTO_ANIO} etiqueta={`Presupuesto ${anio}`} />
             </td>
             {filas.map((f) => (
-              <td key={f.concepto} className={claseCelda} style={claseBorde}>
+              <td key={f.concepto} className={claseCelda} style={claseBordeVertical}>
                 {formatQ(f.presupuesto_anio)}
               </td>
             ))}
-            <td className={`${claseCelda} font-bold`} style={claseBorde}>
+            <td className={`${claseCelda} font-bold`} style={claseBordeVertical}>
               {formatQ(total.presupuesto_anio)}
             </td>
           </tr>
           <tr>
-            <td className={claseCelda} style={claseBorde}>
+            <td className={claseCelda} style={claseBordeVertical}>
               <ChipFila color={COLOR_EJECUTADO_ANIO} etiqueta={`Ejecutado ${anio}`} />
             </td>
             {filas.map((f) => (
-              <td key={f.concepto} className={claseCelda} style={claseBorde}>
+              <td key={f.concepto} className={claseCelda} style={claseBordeVertical}>
                 {formatQ(f.ejecutado_anio)}
               </td>
             ))}
-            <td className={`${claseCelda} font-bold`} style={claseBorde}>
+            <td className={`${claseCelda} font-bold`} style={claseBordeVertical}>
               {formatQ(total.ejecutado_anio)}
             </td>
           </tr>
           <tr>
-            <td className={claseCelda} style={claseBorde}>
+            <td className={claseCelda} style={claseBordeVertical}>
               <ChipFila color={COLOR_CHIP_PORCENTAJE} etiqueta="% ejecutado" />
             </td>
             {filas.map((f) => (
-              <td key={f.concepto} className={claseCelda} style={claseBorde}>
+              <td key={f.concepto} className={claseCelda} style={claseBordeVertical}>
                 {formatPercentEntero(f.porcentaje_ejecucion)}
               </td>
             ))}
-            <td className={`${claseCelda} font-bold`} style={claseBorde}>
+            <td className={`${claseCelda} font-bold`} style={claseBordeVertical}>
               {formatPercentEntero(total.porcentaje_ejecucion)}
             </td>
           </tr>
@@ -329,7 +384,10 @@ function TablaOtrosIngresos({ filas, total, anioAnterior, anio }: { filas: FilaO
 // --- Página -----------------------------------------------------------
 
 export function DashboardOtroIngresoPage() {
-  const [anio, setAnio] = useState("");
+  // Independiente, sin sincronizar -- con memoria propia dentro de la
+  // sesión (ver FinancieroFilterContext): antes era un useState local,
+  // que se perdía al navegar a otra pantalla y volver.
+  const { anio, setAnio } = useFinancieroFilterOtrosIngresos();
   const [data, setData] = useState<OtroIngresoResponse | null>(null);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -382,13 +440,20 @@ export function DashboardOtroIngresoPage() {
               filas={data.filas}
               anioAnterior={data.anio_anterior}
               anio={data.anio}
+              anioAnteriorSinDatos={data.anio_anterior_sin_datos}
             />
           </div>
           <div className="mx-auto" style={{ width: ANCHO_GRAFICA, marginTop: GAP_ENTRE_GRAFICAS }}>
-            <GraficoTotalesOtrosIngresos total={data.total} />
+            <GraficoTotalesOtrosIngresos total={data.total} anioAnteriorSinDatos={data.anio_anterior_sin_datos} />
           </div>
           <div className="mx-auto" style={{ width: ANCHO_TABLA, marginTop: GAP_ENTRE_GRAFICAS }}>
-            <TablaOtrosIngresos filas={data.filas} total={data.total} anioAnterior={data.anio_anterior} anio={data.anio} />
+            <TablaOtrosIngresos
+              filas={data.filas}
+              total={data.total}
+              anioAnterior={data.anio_anterior}
+              anio={data.anio}
+              anioAnteriorSinDatos={data.anio_anterior_sin_datos}
+            />
           </div>
         </>
       )}

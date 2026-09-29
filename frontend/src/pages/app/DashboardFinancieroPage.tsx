@@ -62,7 +62,7 @@ function TablaCategorias({ filas }: { filas: { etiqueta: string; valores: string
     <table className="w-full text-sm">
       <tbody>
         {filas.map((f) => (
-          <tr key={f.etiqueta} className="border-b border-line/50">
+          <tr key={f.etiqueta}>
             <td className="px-2 py-1.5 text-ink">{f.etiqueta}</td>
             {f.valores.map((v, i) => (
               <td key={i} className="px-2 py-1.5 text-right text-ink">
@@ -165,20 +165,18 @@ export function DashboardFinancieroPage() {
     // (excluyendo el sidebar, que es hermano flex de `main`). Todos los
     // porcentajes de las 4 páginas de abajo (56%, 57%, 55%, 52%, 47%,
     // etc.) son relativos a ESTE ancho.
-    <div className="space-y-5">
-      <div className="relative flex min-h-[64px] items-center justify-center">
-        {/* Subido de text-xl (20px) a text-3xl (30px) -- se veía como
-            miniatura comparado con el título real de Power BI. Sigue
-            centrado dentro de este mismo contenedor `justify-center`;
-            el filtro de abajo usa `top-full` (ver más abajo), que se
-            recalcula solo con el alto real de esta fila, sea el que sea. */}
-        <Title className="px-4 text-center text-3xl text-ink">{tituloPagina}</Title>
-        {/* Arriba a la derecha, alineado con la fila de KPIs (que empieza
-            justo debajo, separada por el gap-5/mt-5 de este `space-y-5`)
-            -- no centrado en la barra chica del título, que lo dejaba
-            flotando muy arriba, desalineado de las tarjetas (calcado del
-            reporte original de Power BI). */}
-        <div className="absolute right-0 top-full mt-5">
+    <div className="space-y-3">
+      <div className="relative flex min-h-[40px] items-center justify-center">
+        {/* Título unificado al mismo estilo que el resto del módulo
+            (text-2xl font-bold) -- antes text-3xl sin negrita, un nivel
+            visualmente distinto del resto de las 14 pantallas del
+            Financiero (revisión de consistencia visual, ronda de
+            estandarización). */}
+        <Title className="px-4 text-center text-2xl font-bold text-ink">{tituloPagina}</Title>
+        {/* Arriba a la derecha, en la MISMA fila que el título (top-0,
+            no debajo) -- mismo patrón que las otras 13 pantallas del
+            módulo (ver PaginaEjecucionGastos, Presupuestos, etc.). */}
+        <div className="absolute right-0 top-0">
           <FilterYearMonth
             theme="gris"
             anio={anio}

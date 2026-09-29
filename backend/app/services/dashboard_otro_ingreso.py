@@ -160,6 +160,7 @@ def obtener_otro_ingreso(db: Session, anio: int | None) -> OtroIngresoResponse:
     return OtroIngresoResponse(
         anio=anio_resuelto,
         anio_anterior=anio_anterior,
+        anio_anterior_sin_datos=anio_anterior not in anios_disponibles,
         anios_disponibles=anios_disponibles,
         filas=filas,
         total=total,
