@@ -83,3 +83,73 @@ export function useTablaOrdenable<T>(filasOriginales: T[], columnas: ColumnaOrde
 
   return { filas, alClickEncabezado, columnaActiva, direccion, flechaColumna };
 }
+
+/** Variante JERÁRQUICA de useTablaOrdenable, para las tablas agrupadas de
+ * Estados financieros (TablaGrupoExpandible: Ingresos/Egresos,
+ * Activo/Pasivo/Patrimonio): al ordenar por una columna, los GRUPOS se
+ * ordenan por su propio valor en esa columna, y DENTRO de cada grupo su
+ * desglose (cuentas) se ordena igual -- ninguna cuenta sale de su grupo.
+ * La fila de Total nunca se pasa acá: el llamador la agrega aparte,
+ * siempre al final, igual que en la variante plana. Mismo ciclo
+ * asc/desc/original de 3 clics. */
+export interface ColumnaOrdenableJerarquica<G, C> {
+  clave: string;
+  tipo: TipoColumnaOrdenable;
+  valorGrupo: (grupo: G) => number | string | null;
+  valorCuenta: (cuenta: C) => number | string | null;
+}
+
+export function useTablaOrdenableJerarquica<C, G extends { cuentas: C[] }>(
+  gruposOriginales: G[],
+  columnas: ColumnaOrdenableJerarquica<G, C>[]
+) {
+  const [columnaActiva, setColumnaActiva] = useState<string | null>(null);
+  const [direccion, setDireccion] = useState<DireccionOrden>("original");
+
+  function alClickEncabezado(clave: string) {
+    if (columnaActiva !== clave) {
+      setColumnaActiva(clave);
+      setDireccion("asc");
+      return;
+    }
+    if (direccion === "asc") setDireccion("desc");
+    else {
+      setDireccion("original");
+      setColumnaActiva(null);
+    }
+  }
+
+  function ordenarPorValor<F>(items: F[], obtenerValor: (f: F) => number | string | null, tipo: TipoColumnaOrdenable): F[] {
+    const conIndice = items.map((item, indice) => ({ item, indice, valor: obtenerValor(item) }));
+    conIndice.sort((a, b) => {
+      const aVacio = esVacio(a.valor);
+      const bVacio = esVacio(b.valor);
+      if (aVacio && bVacio) return a.indice - b.indice;
+      if (aVacio) return 1;
+      if (bVacio) return -1;
+      let cmp = comparar(a.valor as number | string, b.valor as number | string, tipo);
+      if (cmp === 0) cmp = a.indice - b.indice;
+      return direccion === "asc" ? cmp : -cmp;
+    });
+    return conIndice.map((c) => c.item);
+  }
+
+  const grupos = useMemo(() => {
+    if (!columnaActiva || direccion === "original") return gruposOriginales;
+    const columna = columnas.find((c) => c.clave === columnaActiva);
+    if (!columna) return gruposOriginales;
+    const gruposOrdenados = ordenarPorValor(gruposOriginales, columna.valorGrupo, columna.tipo);
+    return gruposOrdenados.map((g) => ({
+      ...g,
+      cuentas: ordenarPorValor(g.cuentas, columna.valorCuenta, columna.tipo),
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gruposOriginales, columnaActiva, direccion, columnas]);
+
+  function flechaColumna(clave: string): "▲" | "▼" | null {
+    if (columnaActiva !== clave || direccion === "original") return null;
+    return direccion === "asc" ? "▲" : "▼";
+  }
+
+  return { grupos, alClickEncabezado, columnaActiva, direccion, flechaColumna };
+}

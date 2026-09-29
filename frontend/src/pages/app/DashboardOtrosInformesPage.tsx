@@ -864,12 +864,17 @@ function TablaEjecucionGastos({ data, variante }: { data: EjecucionGastosRespons
   // versión anterior, nunca actualizado al dato real ya extraído del
   // Layout.json).
   const claseTabla = "w-full text-sm";
-  // columnHeaders real: alignment='Center' en las 2 páginas. bold: la
-  // página mensual lo desactiva explícitamente (bold=false); la página
-  // acumulado NO trae esa propiedad, así que queda con el bold por
-  // default del widget pivotTable de Power BI -- son 2 configs
-  // distintas, confirmado comparando ambos pivotTable.config.
-  const claseHeader = `px-2 py-1.5 text-center text-white ${esAcumulado ? "font-semibold" : "font-normal"}`;
+  // columnHeaders real: alignment='Center' en las 2 páginas -- decisión
+  // propia de esta ronda (no del .pbix): encabezado alineado con su
+  // columna (texto a la izquierda, números a la derecha), como en el
+  // resto del módulo, en vez del centrado real. bold: la página mensual
+  // lo desactiva explícitamente (bold=false); la página acumulado NO
+  // trae esa propiedad, así que queda con el bold por default del widget
+  // pivotTable de Power BI -- son 2 configs distintas, confirmado
+  // comparando ambos pivotTable.config (esto sí se conserva).
+  const negritaHeader = esAcumulado ? "font-semibold" : "font-normal";
+  const claseHeaderTexto = `px-2 py-1.5 text-left text-white ${negritaHeader}`;
+  const claseHeaderNumero = `px-2 py-1.5 text-right text-white ${negritaHeader}`;
   return (
     <div className="overflow-hidden rounded-tremor-default ring-1 ring-line">
       <table className={claseTabla}>
@@ -883,26 +888,26 @@ function TablaEjecucionGastos({ data, variante }: { data: EjecucionGastosRespons
               ejecutado" queda fijo al final, fuera del <FilaTabla> ya
               ordenado. */}
           <tr style={{ backgroundColor: VERDE_ENCABEZADO }}>
-            <EncabezadoOrdenable className={claseHeader} flecha={flechaColumna("categoria")} onClick={() => alClickEncabezado("categoria")}>
+            <EncabezadoOrdenable className={claseHeaderTexto} flecha={flechaColumna("categoria")} onClick={() => alClickEncabezado("categoria")}>
               Gastos
             </EncabezadoOrdenable>
-            <EncabezadoOrdenable className={claseHeader} flecha={flechaColumna("administracion")} onClick={() => alClickEncabezado("administracion")}>
+            <EncabezadoOrdenable className={claseHeaderNumero} flecha={flechaColumna("administracion")} onClick={() => alClickEncabezado("administracion")}>
               Administración
             </EncabezadoOrdenable>
             <EncabezadoOrdenable
-              className={claseHeader}
+              className={claseHeaderNumero}
               flecha={flechaColumna("peso_administracion")}
               onClick={() => alClickEncabezado("peso_administracion")}
             >
               Peso en %
             </EncabezadoOrdenable>
-            <EncabezadoOrdenable className={claseHeader} flecha={flechaColumna("operacion")} onClick={() => alClickEncabezado("operacion")}>
+            <EncabezadoOrdenable className={claseHeaderNumero} flecha={flechaColumna("operacion")} onClick={() => alClickEncabezado("operacion")}>
               Operación
             </EncabezadoOrdenable>
-            <EncabezadoOrdenable className={claseHeader} flecha={flechaColumna("peso_operacion")} onClick={() => alClickEncabezado("peso_operacion")}>
+            <EncabezadoOrdenable className={claseHeaderNumero} flecha={flechaColumna("peso_operacion")} onClick={() => alClickEncabezado("peso_operacion")}>
               Peso en %
             </EncabezadoOrdenable>
-            <EncabezadoOrdenable className={claseHeader} flecha={flechaColumna("consolidado")} onClick={() => alClickEncabezado("consolidado")}>
+            <EncabezadoOrdenable className={claseHeaderNumero} flecha={flechaColumna("consolidado")} onClick={() => alClickEncabezado("consolidado")}>
               Consolidado
             </EncabezadoOrdenable>
           </tr>

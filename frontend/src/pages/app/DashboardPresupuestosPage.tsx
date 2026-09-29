@@ -212,26 +212,30 @@ function TablaPresupuesto({
   coloreVerdeNegativo: boolean;
 }) {
   const { filas: filasOrdenadas, alClickEncabezado, flechaColumna } = useTablaOrdenable(filas, COLUMNAS_ORDENABLES_PRESUPUESTO);
-  const claseHeader = "px-2 py-1.5 text-center text-white font-normal";
+  // Encabezado alineado con su columna (texto a la izquierda, números a
+  // la derecha, mismo padding que las celdas) -- antes todos centrados,
+  // desalineados de los valores reales debajo.
+  const claseHeaderTexto = "px-2 py-1.5 text-left text-white font-normal";
+  const claseHeaderNumero = "px-2 py-1.5 text-right text-white font-normal";
   return (
     <div className="overflow-hidden rounded-tremor-default ring-1 ring-line">
       <table className="w-full text-sm">
         <ColgroupPresupuesto />
         <thead>
           <tr style={{ backgroundColor: VERDE_ENCABEZADO }}>
-            <EncabezadoOrdenable className={claseHeader} flecha={flechaColumna("categoria")} onClick={() => alClickEncabezado("categoria")}>
+            <EncabezadoOrdenable className={claseHeaderTexto} flecha={flechaColumna("categoria")} onClick={() => alClickEncabezado("categoria")}>
               Gastos
             </EncabezadoOrdenable>
-            <EncabezadoOrdenable className={claseHeader} flecha={flechaColumna("presupuesto")} onClick={() => alClickEncabezado("presupuesto")}>
+            <EncabezadoOrdenable className={claseHeaderNumero} flecha={flechaColumna("presupuesto")} onClick={() => alClickEncabezado("presupuesto")}>
               Presupuesto
             </EncabezadoOrdenable>
-            <EncabezadoOrdenable className={claseHeader} flecha={flechaColumna("ejecutado")} onClick={() => alClickEncabezado("ejecutado")}>
+            <EncabezadoOrdenable className={claseHeaderNumero} flecha={flechaColumna("ejecutado")} onClick={() => alClickEncabezado("ejecutado")}>
               Ejecutado
             </EncabezadoOrdenable>
-            <EncabezadoOrdenable className={claseHeader} flecha={flechaColumna("diferencia")} onClick={() => alClickEncabezado("diferencia")}>
+            <EncabezadoOrdenable className={claseHeaderNumero} flecha={flechaColumna("diferencia")} onClick={() => alClickEncabezado("diferencia")}>
               Diferencia Q.
             </EncabezadoOrdenable>
-            <EncabezadoOrdenable className={claseHeader} flecha={flechaColumna("diferencia_pct")} onClick={() => alClickEncabezado("diferencia_pct")}>
+            <EncabezadoOrdenable className={claseHeaderNumero} flecha={flechaColumna("diferencia_pct")} onClick={() => alClickEncabezado("diferencia_pct")}>
               Diferencia %
             </EncabezadoOrdenable>
           </tr>
@@ -523,26 +527,27 @@ const COLUMNAS_ORDENABLES_COMPARATIVO: ColumnaOrdenable<FilaComparativoEjecutado
 
 function TablaComparativo({ data }: { data: ComparativoEjecutadoResponse }) {
   const { filas, alClickEncabezado, flechaColumna } = useTablaOrdenable(data.filas, COLUMNAS_ORDENABLES_COMPARATIVO);
-  const claseHeader = "px-2 py-1.5 text-center text-white font-normal";
+  const claseHeaderTexto = "px-2 py-1.5 text-left text-white font-normal";
+  const claseHeaderNumero = "px-2 py-1.5 text-right text-white font-normal";
   return (
     <div className="overflow-hidden rounded-tremor-default ring-1 ring-line">
       <table className="w-full text-sm">
         <ColgroupComparativo />
         <thead>
           <tr style={{ backgroundColor: VERDE_ENCABEZADO }}>
-            <EncabezadoOrdenable className={claseHeader} flecha={flechaColumna("categoria")} onClick={() => alClickEncabezado("categoria")}>
+            <EncabezadoOrdenable className={claseHeaderTexto} flecha={flechaColumna("categoria")} onClick={() => alClickEncabezado("categoria")}>
               Gastos
             </EncabezadoOrdenable>
-            <EncabezadoOrdenable className={claseHeader} flecha={flechaColumna("anio_anterior")} onClick={() => alClickEncabezado("anio_anterior")}>
+            <EncabezadoOrdenable className={claseHeaderNumero} flecha={flechaColumna("anio_anterior")} onClick={() => alClickEncabezado("anio_anterior")}>
               {data.anio_anterior}
             </EncabezadoOrdenable>
-            <EncabezadoOrdenable className={claseHeader} flecha={flechaColumna("anio_actual")} onClick={() => alClickEncabezado("anio_actual")}>
+            <EncabezadoOrdenable className={claseHeaderNumero} flecha={flechaColumna("anio_actual")} onClick={() => alClickEncabezado("anio_actual")}>
               {data.anio}
             </EncabezadoOrdenable>
-            <EncabezadoOrdenable className={claseHeader} flecha={flechaColumna("variacion")} onClick={() => alClickEncabezado("variacion")}>
+            <EncabezadoOrdenable className={claseHeaderNumero} flecha={flechaColumna("variacion")} onClick={() => alClickEncabezado("variacion")}>
               Variación Q.
             </EncabezadoOrdenable>
-            <EncabezadoOrdenable className={claseHeader} flecha={flechaColumna("variacion_pct")} onClick={() => alClickEncabezado("variacion_pct")}>
+            <EncabezadoOrdenable className={claseHeaderNumero} flecha={flechaColumna("variacion_pct")} onClick={() => alClickEncabezado("variacion_pct")}>
               Variación %
             </EncabezadoOrdenable>
           </tr>

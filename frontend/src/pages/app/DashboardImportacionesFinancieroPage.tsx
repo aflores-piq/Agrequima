@@ -401,7 +401,8 @@ function TablaCIFMes({
   alturaCompleta?: boolean;
 }) {
   const { filas: filasOrdenadas, alClickEncabezado, flechaColumna } = useTablaOrdenable(filas, COLUMNAS_ORDENABLES_CIF);
-  const claseHeader = "px-2 py-1.5 text-center text-white font-normal whitespace-nowrap";
+  const claseHeaderTexto = "px-2 py-1.5 text-left text-white font-normal whitespace-nowrap";
+  const claseHeaderNumero = "px-2 py-1.5 text-right text-white font-normal whitespace-nowrap";
   return (
     <div
       className={`overflow-hidden rounded-tremor-default ${alturaCompleta ? "h-full" : "ring-1 ring-line"}`}
@@ -411,29 +412,29 @@ function TablaCIFMes({
         <ColgroupCIF />
         <thead>
           <tr style={{ backgroundColor: VERDE_ENCABEZADO }}>
-            <EncabezadoOrdenable className={claseHeader} flecha={flechaColumna("mes")} onClick={() => alClickEncabezado("mes")}>
+            <EncabezadoOrdenable className={claseHeaderTexto} flecha={flechaColumna("mes")} onClick={() => alClickEncabezado("mes")}>
               Meses
             </EncabezadoOrdenable>
             <EncabezadoOrdenable
-              className={claseHeader}
+              className={claseHeaderNumero}
               flecha={flechaColumna("cif_anio_anterior")}
               onClick={() => alClickEncabezado("cif_anio_anterior")}
             >
               CIF US$ {anioAnterior}
             </EncabezadoOrdenable>
-            <EncabezadoOrdenable className={claseHeader} flecha={flechaColumna("pct_anio_anterior")} onClick={() => alClickEncabezado("pct_anio_anterior")}>
+            <EncabezadoOrdenable className={claseHeaderNumero} flecha={flechaColumna("pct_anio_anterior")} onClick={() => alClickEncabezado("pct_anio_anterior")}>
               %
             </EncabezadoOrdenable>
-            <EncabezadoOrdenable className={claseHeader} flecha={flechaColumna("cif_anio_actual")} onClick={() => alClickEncabezado("cif_anio_actual")}>
+            <EncabezadoOrdenable className={claseHeaderNumero} flecha={flechaColumna("cif_anio_actual")} onClick={() => alClickEncabezado("cif_anio_actual")}>
               CIF US$ {anioActual}
             </EncabezadoOrdenable>
-            <EncabezadoOrdenable className={claseHeader} flecha={flechaColumna("pct_anio_actual")} onClick={() => alClickEncabezado("pct_anio_actual")}>
+            <EncabezadoOrdenable className={claseHeaderNumero} flecha={flechaColumna("pct_anio_actual")} onClick={() => alClickEncabezado("pct_anio_actual")}>
               %
             </EncabezadoOrdenable>
-            <EncabezadoOrdenable className={claseHeader} flecha={flechaColumna("variacion")} onClick={() => alClickEncabezado("variacion")}>
+            <EncabezadoOrdenable className={claseHeaderNumero} flecha={flechaColumna("variacion")} onClick={() => alClickEncabezado("variacion")}>
               VAR
             </EncabezadoOrdenable>
-            <EncabezadoOrdenable className={claseHeader} flecha={flechaColumna("variacion_pct")} onClick={() => alClickEncabezado("variacion_pct")}>
+            <EncabezadoOrdenable className={claseHeaderNumero} flecha={flechaColumna("variacion_pct")} onClick={() => alClickEncabezado("variacion_pct")}>
               %
             </EncabezadoOrdenable>
           </tr>
@@ -1163,13 +1164,17 @@ function PaginaKilolitros() {
               <thead>
                 <tr>
                   <th className="px-3 py-3" />
-                  <th className="rounded-sm px-3 py-3 text-center text-xs font-normal leading-tight text-white" style={{ backgroundColor: VERDE_ENCABEZADO }}>
+                  {/* Alineado a la derecha (antes centrado) -- misma
+                      columna que las celdas de datos (claseValor,
+                      text-right en FilaTablaKilolitro), regla de
+                      encabezados de esta ronda. */}
+                  <th className="rounded-sm px-3 py-3 text-right text-xs font-normal leading-tight text-white" style={{ backgroundColor: VERDE_ENCABEZADO }}>
                     Año {data.anio_anterior} al mes de {MESES_LARGOS[data.mes - 1]}
                   </th>
-                  <th className="rounded-sm px-3 py-3 text-center text-xs font-normal leading-tight text-white" style={{ backgroundColor: VERDE_ENCABEZADO }}>
+                  <th className="rounded-sm px-3 py-3 text-right text-xs font-normal leading-tight text-white" style={{ backgroundColor: VERDE_ENCABEZADO }}>
                     Año {data.anio} al mes de {MESES_LARGOS[data.mes - 1]}
                   </th>
-                  <th className="rounded-sm px-3 py-3 text-center text-xs font-normal leading-tight text-white" style={{ backgroundColor: VERDE_ENCABEZADO }}>
+                  <th className="rounded-sm px-3 py-3 text-right text-xs font-normal leading-tight text-white" style={{ backgroundColor: VERDE_ENCABEZADO }}>
                     Variación porcentual
                   </th>
                 </tr>

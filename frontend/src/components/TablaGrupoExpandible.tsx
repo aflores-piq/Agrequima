@@ -1,5 +1,7 @@
 import { Fragment, useState } from "react";
 import { formatQ } from "../utils/format";
+import { EncabezadoOrdenable } from "./EncabezadoOrdenable";
+import { useTablaOrdenableJerarquica, type ColumnaOrdenableJerarquica } from "../hooks/useTablaOrdenable";
 
 // Verde exacto leído pixel a pixel del header de tabla / banda de
 // resumen en las capturas reales del reporte viejo (ver
@@ -89,6 +91,22 @@ export function TablaGrupoExpandible({
     });
   }
 
+  // Orden JERÁRQUICO: al ordenar por una columna, los GRUPOS se ordenan
+  // por su propio valor en esa columna y, dentro de cada uno, sus
+  // cuentas se ordenan igual -- ninguna cuenta sale de su grupo. La fila
+  // "Total" (etiquetaTotal/totalValores) nunca se pasa acá, se renderiza
+  // aparte más abajo, siempre fija al final (ver useTablaOrdenableJerarquica).
+  const columnasOrdenables: ColumnaOrdenableJerarquica<FilaGrupo, FilaCuenta>[] = [
+    { clave: "__nombre", tipo: "texto", valorGrupo: (g) => g.grupo, valorCuenta: (c) => c.nombre },
+    ...columnas.map((_, i) => ({
+      clave: `__col${i}`,
+      tipo: "numero" as const,
+      valorGrupo: (g: FilaGrupo) => g.valores[i] ?? null,
+      valorCuenta: (c: FilaCuenta) => c.valores[i] ?? null,
+    })),
+  ];
+  const { grupos, alClickEncabezado, flechaColumna } = useTablaOrdenableJerarquica(filas, columnasOrdenables);
+
   const fmt = (v: number, i: number) => (formatters?.[i] ?? formatQ)(v);
 
   if (filas.length === 0) {
@@ -112,16 +130,27 @@ export function TablaGrupoExpandible({
           </colgroup>
           <thead>
             <tr style={{ backgroundColor: VERDE_ENCABEZADO }}>
-              <th className="break-words px-3 py-2 text-left font-semibold text-white">{titulo}</th>
-              {columnas.map((c) => (
-                <th key={c} className="px-3 py-2 text-right font-semibold text-white">
+              <EncabezadoOrdenable
+                className="break-words px-3 py-2 text-left font-semibold text-white"
+                flecha={flechaColumna("__nombre")}
+                onClick={() => alClickEncabezado("__nombre")}
+              >
+                {titulo}
+              </EncabezadoOrdenable>
+              {columnas.map((c, i) => (
+                <EncabezadoOrdenable
+                  key={c}
+                  className="px-3 py-2 text-right font-semibold text-white"
+                  flecha={flechaColumna(`__col${i}`)}
+                  onClick={() => alClickEncabezado(`__col${i}`)}
+                >
                   {c}
-                </th>
+                </EncabezadoOrdenable>
               ))}
             </tr>
           </thead>
           <tbody style={{ backgroundColor: colorFondo }}>
-            {filas.map((f) => {
+            {grupos.map((f) => {
               const abierto = expandidos.has(f.grupo);
               return (
                 <Fragment key={f.grupo}>
