@@ -14,9 +14,10 @@ import {
   KpiCardIcono,
   KpiCardIconoComparativo,
   FINANCIERO_SURFACE,
+  GAP_TITULO_PRIMER_ELEMENTO,
   type FilaGrupo,
 } from "../../components/TablaGrupoExpandible";
-import { formatPercent, formatQ, MESES_LARGOS } from "../../utils/format";
+import { formatPercent, formatQ, MESES_LARGOS, pctSeguro } from "../../utils/format";
 import type { DashboardFinancieroResponse } from "../../types/dashboardFinanciero";
 import { useFinancieroFilterGrupo1 } from "../../financiero/FinancieroFilterContext";
 
@@ -210,7 +211,7 @@ export function DashboardFinancieroPage() {
               const anchoEtiquetaP1 = "42%";
               const anchosDatosP1 = ["17%", "17%", "24%"];
               return (
-                <div className="space-y-5">
+                <div className="space-y-5" style={{ marginTop: GAP_TITULO_PRIMER_ELEMENTO }}>
                   {/* Tabla y fila de KPIs comparten el mismo wrapper y el
                       mismo ancho único (ANCHO_TABLA_FINANCIERO, ver
                       arriba) -- así miden exactamente lo mismo. */}
@@ -300,7 +301,7 @@ export function DashboardFinancieroPage() {
                   cat === "Ingresos" ? p2.grafico[1].ingresos : cat === "Egresos" ? p2.grafico[1].egresos : p2.grafico[1].resultado,
               }));
               return (
-                <div className="space-y-5">
+                <div className="space-y-5" style={{ marginTop: GAP_TITULO_PRIMER_ELEMENTO }}>
                   {/* Mismo ancho único que las otras 3 páginas
                       (ANCHO_TABLA_FINANCIERO), mismo wrapper para tabla
                       y KPIs. */}
@@ -365,9 +366,10 @@ export function DashboardFinancieroPage() {
           {pagina === 2 &&
             (() => {
               const p3 = data.balance_general_mensual;
-              const columnas = [p3.etiqueta_mes_anterior, p3.etiqueta_mes_actual, "Diferencia"];
+              const columnas = [p3.etiqueta_mes_anterior, p3.etiqueta_mes_actual, "Diferencia", "% Variación"];
+              const formattersP3 = [formatQ, formatQ, formatQ, formatPercent];
               return (
-                <div className="space-y-5">
+                <div className="space-y-5" style={{ marginTop: GAP_TITULO_PRIMER_ELEMENTO }}>
                   {/* Tabla y fila de KPIs comparten el mismo wrapper y el
                       mismo ancho único (ANCHO_TABLA_FINANCIERO) -- antes
                       la fila de KPIs tenía su propio wrapper 2.85% más
@@ -383,28 +385,70 @@ export function DashboardFinancieroPage() {
                       <TablaGrupoExpandible
                         titulo="Activo"
                         columnas={columnas}
-                        filas={p3.detalle_activo.map((f) => filaGrupo(f, [f.mes_anterior, f.mes_actual, f.diferencia], (c) => [c.mes_anterior, c.mes_actual, c.diferencia]))}
+                        formatters={formattersP3}
+                        filas={p3.detalle_activo.map((f) =>
+                          filaGrupo(
+                            f,
+                            [f.mes_anterior, f.mes_actual, f.diferencia, pctSeguro(f.diferencia, f.mes_anterior)],
+                            (c) => [c.mes_anterior, c.mes_actual, c.diferencia, pctSeguro(c.diferencia, c.mes_anterior)]
+                          )
+                        )}
                         etiquetaTotal="Total"
-                        totalValores={[p3.total_activo.mes_anterior, p3.total_activo.mes_actual, p3.total_activo.diferencia]}
+                        totalValores={[
+                          p3.total_activo.mes_anterior,
+                          p3.total_activo.mes_actual,
+                          p3.total_activo.diferencia,
+                          pctSeguro(p3.total_activo.diferencia, p3.total_activo.mes_anterior),
+                        ]}
                       />
                       <TablaGrupoExpandible
                         titulo="Pasivo"
                         columnas={columnas}
-                        filas={p3.detalle_pasivo.map((f) => filaGrupo(f, [f.mes_anterior, f.mes_actual, f.diferencia], (c) => [c.mes_anterior, c.mes_actual, c.diferencia]))}
+                        formatters={formattersP3}
+                        filas={p3.detalle_pasivo.map((f) =>
+                          filaGrupo(
+                            f,
+                            [f.mes_anterior, f.mes_actual, f.diferencia, pctSeguro(f.diferencia, f.mes_anterior)],
+                            (c) => [c.mes_anterior, c.mes_actual, c.diferencia, pctSeguro(c.diferencia, c.mes_anterior)]
+                          )
+                        )}
                         etiquetaTotal="Total"
-                        totalValores={[p3.total_pasivo.mes_anterior, p3.total_pasivo.mes_actual, p3.total_pasivo.diferencia]}
+                        totalValores={[
+                          p3.total_pasivo.mes_anterior,
+                          p3.total_pasivo.mes_actual,
+                          p3.total_pasivo.diferencia,
+                          pctSeguro(p3.total_pasivo.diferencia, p3.total_pasivo.mes_anterior),
+                        ]}
                       />
                       <TablaGrupoExpandible
                         titulo="Patrimonio"
                         columnas={columnas}
-                        filas={p3.detalle_patrimonio.map((f) => filaGrupo(f, [f.mes_anterior, f.mes_actual, f.diferencia], (c) => [c.mes_anterior, c.mes_actual, c.diferencia]))}
+                        formatters={formattersP3}
+                        filas={p3.detalle_patrimonio.map((f) =>
+                          filaGrupo(
+                            f,
+                            [f.mes_anterior, f.mes_actual, f.diferencia, pctSeguro(f.diferencia, f.mes_anterior)],
+                            (c) => [c.mes_anterior, c.mes_actual, c.diferencia, pctSeguro(c.diferencia, c.mes_anterior)]
+                          )
+                        )}
                         etiquetaTotal="Total"
-                        totalValores={[p3.total_patrimonio.mes_anterior, p3.total_patrimonio.mes_actual, p3.total_patrimonio.diferencia]}
+                        totalValores={[
+                          p3.total_patrimonio.mes_anterior,
+                          p3.total_patrimonio.mes_actual,
+                          p3.total_patrimonio.diferencia,
+                          pctSeguro(p3.total_patrimonio.diferencia, p3.total_patrimonio.mes_anterior),
+                        ]}
                       />
                       <BandaResumenVerde
                         etiqueta="Total pasivo y patrimonio"
                         columnas={columnas}
-                        valores={[p3.total_pasivo_y_patrimonio.mes_anterior, p3.total_pasivo_y_patrimonio.mes_actual, p3.total_pasivo_y_patrimonio.diferencia]}
+                        formatters={formattersP3}
+                        valores={[
+                          p3.total_pasivo_y_patrimonio.mes_anterior,
+                          p3.total_pasivo_y_patrimonio.mes_actual,
+                          p3.total_pasivo_y_patrimonio.diferencia,
+                          pctSeguro(p3.total_pasivo_y_patrimonio.diferencia, p3.total_pasivo_y_patrimonio.mes_anterior),
+                        ]}
                       />
                     </div>
                   </div>
@@ -432,7 +476,11 @@ export function DashboardFinancieroPage() {
           {pagina === 3 &&
             (() => {
               const p4 = data.balance_general_comparativo;
-              const columnas = [p4.etiqueta_anio_anterior, p4.etiqueta_anio_actual, "Variación"];
+              const columnas = [p4.etiqueta_anio_anterior, p4.etiqueta_anio_actual, "Variación", "% Variación"];
+              // % Variación con 1 decimal (formatPercent, no formatPercent2) --
+              // unificado con Balance general mensual: todo % NUEVO de esta
+              // ronda va con 1 decimal, sin excepción por pantalla.
+              const formattersP4 = [formatQ, formatQ, formatQ, formatPercent];
               const datosGrafico = ["Activo", "Pasivo", "Patrimonio"].map((cat) => ({
                 categoria: cat,
                 [p4.etiqueta_anio_anterior]: cat === "Activo" ? p4.grafico[0].activo : cat === "Pasivo" ? p4.grafico[0].pasivo : p4.grafico[0].patrimonio,
@@ -440,7 +488,7 @@ export function DashboardFinancieroPage() {
               }));
               const etiquetaPeriodo = `${MESES_LARGOS[data.mes - 1]} ${data.anio} vs ${data.anio - 1}`;
               return (
-                <div className="space-y-5">
+                <div className="space-y-5" style={{ marginTop: GAP_TITULO_PRIMER_ELEMENTO }}>
                   {/* Fila de KPIs de esta página: más ancha que la tabla
                       (57% vs 55%) porque cada tarjeta tiene más contenido
                       (título de 2 líneas + porcentaje + monto) que las
@@ -487,28 +535,70 @@ export function DashboardFinancieroPage() {
                     <TablaGrupoExpandible
                       titulo="Activo"
                       columnas={columnas}
-                      filas={p4.detalle_activo.map((f) => filaGrupo(f, [f.anio_anterior, f.anio_actual, f.variacion], (c) => [c.anio_anterior, c.anio_actual, c.variacion]))}
+                      formatters={formattersP4}
+                      filas={p4.detalle_activo.map((f) =>
+                        filaGrupo(
+                          f,
+                          [f.anio_anterior, f.anio_actual, f.variacion, pctSeguro(f.variacion, f.anio_anterior)],
+                          (c) => [c.anio_anterior, c.anio_actual, c.variacion, pctSeguro(c.variacion, c.anio_anterior)]
+                        )
+                      )}
                       etiquetaTotal="Total"
-                      totalValores={[p4.total_activo.anio_anterior, p4.total_activo.anio_actual, p4.total_activo.variacion]}
+                      totalValores={[
+                        p4.total_activo.anio_anterior,
+                        p4.total_activo.anio_actual,
+                        p4.total_activo.variacion,
+                        pctSeguro(p4.total_activo.variacion, p4.total_activo.anio_anterior),
+                      ]}
                     />
                     <TablaGrupoExpandible
                       titulo="Pasivo"
                       columnas={columnas}
-                      filas={p4.detalle_pasivo.map((f) => filaGrupo(f, [f.anio_anterior, f.anio_actual, f.variacion], (c) => [c.anio_anterior, c.anio_actual, c.variacion]))}
+                      formatters={formattersP4}
+                      filas={p4.detalle_pasivo.map((f) =>
+                        filaGrupo(
+                          f,
+                          [f.anio_anterior, f.anio_actual, f.variacion, pctSeguro(f.variacion, f.anio_anterior)],
+                          (c) => [c.anio_anterior, c.anio_actual, c.variacion, pctSeguro(c.variacion, c.anio_anterior)]
+                        )
+                      )}
                       etiquetaTotal="Total"
-                      totalValores={[p4.total_pasivo.anio_anterior, p4.total_pasivo.anio_actual, p4.total_pasivo.variacion]}
+                      totalValores={[
+                        p4.total_pasivo.anio_anterior,
+                        p4.total_pasivo.anio_actual,
+                        p4.total_pasivo.variacion,
+                        pctSeguro(p4.total_pasivo.variacion, p4.total_pasivo.anio_anterior),
+                      ]}
                     />
                     <TablaGrupoExpandible
                       titulo="Patrimonio"
                       columnas={columnas}
-                      filas={p4.detalle_patrimonio.map((f) => filaGrupo(f, [f.anio_anterior, f.anio_actual, f.variacion], (c) => [c.anio_anterior, c.anio_actual, c.variacion]))}
+                      formatters={formattersP4}
+                      filas={p4.detalle_patrimonio.map((f) =>
+                        filaGrupo(
+                          f,
+                          [f.anio_anterior, f.anio_actual, f.variacion, pctSeguro(f.variacion, f.anio_anterior)],
+                          (c) => [c.anio_anterior, c.anio_actual, c.variacion, pctSeguro(c.variacion, c.anio_anterior)]
+                        )
+                      )}
                       etiquetaTotal="Total"
-                      totalValores={[p4.total_patrimonio.anio_anterior, p4.total_patrimonio.anio_actual, p4.total_patrimonio.variacion]}
+                      totalValores={[
+                        p4.total_patrimonio.anio_anterior,
+                        p4.total_patrimonio.anio_actual,
+                        p4.total_patrimonio.variacion,
+                        pctSeguro(p4.total_patrimonio.variacion, p4.total_patrimonio.anio_anterior),
+                      ]}
                     />
                     <BandaResumenVerde
                       etiqueta="Total pasivo y patrimonio"
                       columnas={columnas}
-                      valores={[p4.total_pasivo_y_patrimonio.anio_anterior, p4.total_pasivo_y_patrimonio.anio_actual, p4.total_pasivo_y_patrimonio.variacion]}
+                      formatters={formattersP4}
+                      valores={[
+                        p4.total_pasivo_y_patrimonio.anio_anterior,
+                        p4.total_pasivo_y_patrimonio.anio_actual,
+                        p4.total_pasivo_y_patrimonio.variacion,
+                        pctSeguro(p4.total_pasivo_y_patrimonio.variacion, p4.total_pasivo_y_patrimonio.anio_anterior),
+                      ]}
                     />
                   </div>
 

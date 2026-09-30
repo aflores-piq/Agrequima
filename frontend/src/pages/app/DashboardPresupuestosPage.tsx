@@ -12,9 +12,14 @@ import { useFinancieroFilterGrupo1 } from "../../financiero/FinancieroFilterCont
 import { FilterYearMonth } from "../../components/filters/PowerBiFilter";
 import { EncabezadoOrdenable } from "../../components/EncabezadoOrdenable";
 import { useTablaOrdenable, type ColumnaOrdenable } from "../../hooks/useTablaOrdenable";
-import { FINANCIERO_SURFACE, VERDE_ENCABEZADO } from "../../components/TablaGrupoExpandible";
-import { COLOR_EJECUTADO, COLOR_PRESUPUESTO, ultimoDiaDelMes } from "./DashboardOtrosInformesPage";
-import { formatPercent, formatPercent2, formatQ, MESES_LARGOS } from "../../utils/format";
+import {
+  FINANCIERO_SURFACE,
+  GAP_TITULO_PRIMER_ELEMENTO,
+  KpiCardIconoComparativo,
+  VERDE_ENCABEZADO,
+} from "../../components/TablaGrupoExpandible";
+import { COLOR_EJECUTADO, COLOR_PORCENTAJE, COLOR_PRESUPUESTO, ultimoDiaDelMes } from "./DashboardOtrosInformesPage";
+import { formatPercent, formatPercent2, formatQ, MESES_LARGOS, pctSeguro } from "../../utils/format";
 import type {
   ComparativoEjecutadoResponse,
   EjecucionVsPresupuestoResponse,
@@ -458,6 +463,54 @@ function PaginaEjecucionVsPresupuesto({ acumulado }: { acumulado: boolean }) {
 
       {data && (
         <>
+          {/* Tarjetas de Presupuesto/Ejecutado/Diferencia -- agregadas a
+              pedido del cliente, no vienen del .pbix real. Mismo
+              componente que las tarjetas de "Balance general
+              comparativo" (KpiCardIconoComparativo) y mismos valores que
+              la fila Total de la tabla de abajo (fila_total) -- Ejecutado
+              muestra su propio % de ejecución y Diferencia su propio %
+              de diferencia (diferencia_pct, ya provisto por el backend),
+              cada uno en su propia tarjeta -- no el par "% ejecutado y
+              por ejecutar" (pendiente de consulta con el cliente).
+              Ancho FIJO de 279px por tarjeta (medido contra la
+              referencia real, "Balance general comparativo" en
+              cbf317b) -- NO atado a `anchoTabla`, que las hacía enormes
+              (311x86 medido, vs 279x78 de la referencia) y además
+              cambiaba con el ancho de la tabla (mensual/acumulado usan
+              anchos ligeramente distintos). */}
+          <div className="mx-auto flex justify-center gap-3" style={{ marginTop: GAP_TITULO_PRIMER_ELEMENTO }}>
+            <div style={{ width: 279 }}>
+              <KpiCardIconoComparativo
+                letra="P"
+                color={COLOR_PRESUPUESTO}
+                tituloLinea1="Presupuesto"
+                tituloLinea2={tituloPagina.includes("Detalle") ? `Acumulado a ${MESES_LARGOS[data.mes - 1]} ${data.anio}` : `${MESES_LARGOS[data.mes - 1]} ${data.anio}`}
+                porcentaje="100.0%"
+                monto={formatQ(data.fila_total.presupuesto)}
+              />
+            </div>
+            <div style={{ width: 279 }}>
+              <KpiCardIconoComparativo
+                letra="E"
+                color={COLOR_EJECUTADO}
+                tituloLinea1="Ejecutado"
+                tituloLinea2={tituloPagina.includes("Detalle") ? `Acumulado a ${MESES_LARGOS[data.mes - 1]} ${data.anio}` : `${MESES_LARGOS[data.mes - 1]} ${data.anio}`}
+                porcentaje={formatPercent(pctSeguro(data.fila_total.ejecutado, data.fila_total.presupuesto))}
+                monto={formatQ(data.fila_total.ejecutado)}
+              />
+            </div>
+            <div style={{ width: 279 }}>
+              <KpiCardIconoComparativo
+                letra="D"
+                color={COLOR_PORCENTAJE}
+                tituloLinea1="Diferencia"
+                tituloLinea2={tituloPagina.includes("Detalle") ? `Acumulado a ${MESES_LARGOS[data.mes - 1]} ${data.anio}` : `${MESES_LARGOS[data.mes - 1]} ${data.anio}`}
+                porcentaje={formatPercent(data.fila_total.diferencia_pct)}
+                monto={formatQ(data.fila_total.diferencia)}
+              />
+            </div>
+          </div>
+
           <div className="mx-auto" style={{ width: anchoTabla }}>
             <TablaPresupuesto filas={data.filas} filaTotal={data.fila_total} coloreVerdeNegativo={!acumulado} />
           </div>
@@ -736,6 +789,64 @@ function PaginaComparativoEjecutado() {
 
       {data && (
         <>
+          {/* Tarjetas Año anterior / % de Variación / Año actual --
+              agregadas a pedido del cliente, no vienen del .pbix real.
+              Mismos valores que la fila Total de la tabla de abajo
+              (fila_total: anio_anterior/variacion_pct/anio_actual, sin
+              recalcular nada) y mismo criterio de componentes ya usados
+              en el módulo: KpiCardIcono simple para los 2 montos por año
+              (mismo estilo que las tarjetas T/C/P de Cuotas Asociados) y
+              KpiCardIconoComparativo (título+%+monto, igual que Balance
+              general comparativo). Las 3 usan el MISMO componente
+              (KpiCardIconoComparativo) para medir EXACTAMENTE lo mismo
+              (279x78) -- antes "Año anterior"/"Año actual" usaban
+              KpiCardIcono (aspecto 4:1 propio, 279x70), una tarjeta
+              distinta a "% de Variación" (aspecto 3.6:1, 279x78); Año
+              anterior/actual no tienen un % propio (son montos, no una
+              razón), así que van con `porcentaje=""` (línea vacía, sin
+              inventar un dato). Ancho FIJO de 279px por tarjeta (medido
+              contra la referencia real, "Balance general comparativo" en
+              cbf317b) -- NO atado a ANCHO_TABLA_COMPARATIVO. % de
+              "% de Variación" con el MISMO formato que su propio valor
+              en la tabla de abajo (columna "Variación %" de la fila
+              Total, formatPercent2/2 decimales) -- regla corregida: la
+              tarjeta usa el formato de SU MISMO valor en la tabla de su
+              pantalla, no un decimal fijo por default; 1 decimal queda
+              solo para tarjetas cuyo valor no aparece en ninguna tabla
+              (ver sección 17 de la bitácora). */}
+          <div className="mx-auto flex justify-center gap-3" style={{ marginTop: GAP_TITULO_PRIMER_ELEMENTO }}>
+            <div style={{ width: 279 }}>
+              <KpiCardIconoComparativo
+                letra="AA"
+                color={COLOR_ANIO_ANTERIOR}
+                tituloLinea1="Año anterior"
+                tituloLinea2={String(data.anio_anterior)}
+                porcentaje=""
+                monto={formatQ(data.fila_total.anio_anterior)}
+              />
+            </div>
+            <div style={{ width: 279 }}>
+              <KpiCardIconoComparativo
+                letra="%"
+                color={COLOR_PORCENTAJE}
+                tituloLinea1="% de Variación"
+                tituloLinea2={`${data.anio_anterior} vs ${data.anio}`}
+                porcentaje={formatPercent2(data.fila_total.variacion_pct)}
+                monto={formatQ(data.fila_total.variacion)}
+              />
+            </div>
+            <div style={{ width: 279 }}>
+              <KpiCardIconoComparativo
+                letra="AC"
+                color={COLOR_ANIO_ACTUAL}
+                tituloLinea1="Año actual"
+                tituloLinea2={String(data.anio)}
+                porcentaje=""
+                monto={formatQ(data.fila_total.anio_actual)}
+              />
+            </div>
+          </div>
+
           <div className="mx-auto" style={{ width: ANCHO_TABLA_COMPARATIVO }}>
             <TablaComparativo data={data} />
           </div>

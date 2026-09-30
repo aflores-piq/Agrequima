@@ -15,8 +15,14 @@ import { ChartCard } from "../../components/ChartCard";
 import { FilterYearMonth } from "../../components/filters/PowerBiFilter";
 import { EncabezadoOrdenable } from "../../components/EncabezadoOrdenable";
 import { useTablaOrdenable, type ColumnaOrdenable } from "../../hooks/useTablaOrdenable";
-import { FINANCIERO_SURFACE, KpiCardIcono, VERDE_ENCABEZADO } from "../../components/TablaGrupoExpandible";
-import { formatPercent, formatQ, formatQ2, MESES_LARGOS } from "../../utils/format";
+import {
+  FINANCIERO_SURFACE,
+  GAP_TITULO_PRIMER_ELEMENTO,
+  KpiCardIcono,
+  KpiCardIconoComparativo,
+  VERDE_ENCABEZADO,
+} from "../../components/TablaGrupoExpandible";
+import { formatPercent, formatQ, formatQ2, MESES_LARGOS, pctSeguro } from "../../utils/format";
 import type {
   BancoConciliacion,
   ConciliacionBancariaResponse,
@@ -63,6 +69,10 @@ const FILL_OPACITY_BARRA_BASE = 0.4;
 // muestreo de pantalla).
 const COLOR_TURQUESA = "#4DB6AC";
 const COLOR_GRIS_AZULADO = "#90A4AE";
+// Azul ya usado en el módulo para chips/tarjetas de %, no viene del
+// .pbix (COLOR_CHIP_PORCENTAJE en DashboardOtroIngresoPage.tsx) --
+// reusado acá para la tarjeta de % cobrado agregada a pedido del cliente.
+export const COLOR_PORCENTAJE = "#147CC1";
 
 // Colores REALES de OBJETO del visual (Layout.json a nivel de visual, no
 // del tema general del reporte) para las gráficas de Presupuesto vs
@@ -156,8 +166,13 @@ function TablaCuotasTipo({ tipo }: { tipo: TipoCuotaAsociados }) {
           sin fondo de color (solo texto blanco en negrita, centrado) --
           calcado del .pbix real: son 2 filas distintas, no una sola
           fila coloreada por tipo. */}
-      <div className="flex shrink-0 items-center justify-center text-sm font-bold text-ink" style={{ height: ALTO_TITULO_TABLA }}>
-        {`Tipo ${tipo.tipo}`}
+      {/* % cobrado del tipo (Cancelado/Total) agregado junto al título --
+          pedido del cliente, no viene del .pbix real. Mismo formato de %
+          ya usado en el módulo (formatPercent, 1 decimal, igual que
+          "Diferencia %" en Presupuestos). */}
+      <div className="flex shrink-0 items-center justify-center gap-1.5 text-sm font-bold text-ink" style={{ height: ALTO_TITULO_TABLA }}>
+        <span>{`Tipo ${tipo.tipo}`}</span>
+        <span className="text-ink-muted">({formatPercent(pctSeguro(tipo.total_cancelado, tipo.total_cuota))} cobrado)</span>
       </div>
       <div className="flex-1 overflow-y-auto overflow-x-hidden">
         {/* table-fixed + colgroup: sin esto, un <table> en table-layout
@@ -644,7 +659,7 @@ function PaginaCuotasAsociados() {
         // centrado, no de borde a borde) -- acá algo más ancho que el
         // 55% de una tabla sola porque son 3 tablas de 4 columnas cada
         // una lado a lado, pero con el mismo espíritu de margen visible.
-        <div className="mx-auto" style={{ width: "72%" }}>
+        <div className="mx-auto" style={{ width: "72%", marginTop: GAP_TITULO_PRIMER_ELEMENTO }}>
           {/* Reducido de 80.6% a 58% de ESTE contenedor (72% del área de
               contenido) = 72%×58% ≈ 42% del área de contenido total.
               Rondas anteriores habían llegado a ~56.7% (verificado
@@ -659,15 +674,37 @@ function PaginaCuotasAsociados() {
               en el % de la fila en sí. Bajado agresivamente a ~42%
               (dentro del rango 40-45% pedido) para que la tarjeta sea
               angosta de verdad y el hueco deje de ser visible. */}
-          <div className="mx-auto flex justify-center gap-2" style={{ width: "58%" }}>
-            <div className="flex-1">
+          {/* Ancho FIJO por tarjeta (no flex-1 repartiendo un % de fila) --
+              269px, EXACTO el mismo tamaño que A/PA/PT de "Balance
+              general mensual" (mismo componente KpiCardIcono, misma
+              tipografía/ícono ya vienen dados por reusar el mismo
+              componente) -- en Power BI las tarjetas de Cuotas (290x95)
+              y las del Balance (306x95) son del mismo tamaño, así que en
+              la web también lo son. Antes 205px (un tamaño propio,
+              inventado para esta pantalla) -- corregido. Mismo gap-3
+              (12px) que la fila de KPIs del Balance mensual, no gap-2.
+              `shrink-0` en cada tarjeta -- las 4 (4×269 + 3×12 = 1112px)
+              no caben en el 72% de este contenedor a resoluciones normales
+              (~1078px), y sin `shrink-0` el flex por defecto (flex-shrink:1)
+              las comprimía por debajo de 269px (260px medido), rompiendo
+              la igualdad exacta pedida con A/PA/PT del Balance mensual. */}
+          <div className="mx-auto flex justify-center gap-3">
+            <div className="shrink-0" style={{ width: 269 }}>
               <KpiCardIcono letra="T" color={COLOR_TEAL} label="Total" valor={formatQ(data.kpis.total)} />
             </div>
-            <div className="flex-1">
+            <div className="shrink-0" style={{ width: 269 }}>
               <KpiCardIcono letra="C" color={COLOR_TURQUESA} label="Cancelado" valor={formatQ(data.kpis.cancelado)} />
             </div>
-            <div className="flex-1">
+            <div className="shrink-0" style={{ width: 269 }}>
               <KpiCardIcono letra="P" color={COLOR_GRIS_AZULADO} label="Por cobrar" valor={formatQ(data.kpis.por_cobrar)} />
+            </div>
+            {/* % total cobrado (Cancelado/Total) -- agregado a pedido del
+                cliente, no viene del .pbix real. Mismo componente/tamaño
+                que las otras 3 (KpiCardIcono, 269px de ancho, igual que
+                A/PA/PT del Balance mensual), mismo formato de % del
+                resto del módulo (formatPercent, 1 decimal). */}
+            <div className="shrink-0" style={{ width: 269 }}>
+              <KpiCardIcono letra="%" color={COLOR_PORCENTAJE} label="% cobrado" valor={formatPercent(pctSeguro(data.kpis.cancelado, data.kpis.total))} />
             </div>
           </div>
 
@@ -1265,6 +1302,67 @@ function PaginaEjecucionGastos({ acumulado }: { acumulado: boolean }) {
 
       {data && (
         <>
+          {/* Tarjetas de Presupuesto/Ejecutado/Diferencia (Consolidado) --
+              agregadas a pedido del cliente, no vienen del .pbix real.
+              Mismo componente que las tarjetas de "Balance general
+              comparativo" (KpiCardIconoComparativo: título + % + monto) y
+              mismos valores que el resumen de abajo (fila_presupuesto/
+              fila_ejecucion, tarjeta "Consolidado") -- no se recalcula
+              nada nuevo, solo se muestra más arriba y más grande. NO
+              incluye "% ejecutado y por ejecutar" (pendiente de consulta
+              con el cliente): Ejecutado muestra su propio % de ejecución
+              (ejecutado/presupuesto) y Diferencia su propio % (diferencia/
+              presupuesto, mismo criterio que "Diferencia %" en
+              Presupuestos) -- son 2 porcentajes distintos, cada uno en su
+              propia tarjeta, no el par "ejecutado/por ejecutar" excluido.
+              Ancho FIJO de 279px por tarjeta (medido contra la referencia
+              real, "Balance general comparativo" en cbf317b) -- NO atado
+              al ancho de la tabla (`anchoTabla`, 67.2%), que las hacía
+              enormes (331x92 medido, vs 279x78 de la referencia) y
+              además corría el riesgo de estirarse con el ancho de la
+              tabla si esta cambiara. */}
+          {(() => {
+            const consolidado = data.tarjetas.find((t) => t.grupo === "Consolidado");
+            if (!consolidado) return null;
+            const etiquetaPeriodo = acumulado
+              ? `Acumulado a ${MESES_LARGOS[data.mes - 1]} ${data.anio}`
+              : `${MESES_LARGOS[data.mes - 1]} ${data.anio}`;
+            return (
+              <div className="mx-auto flex justify-center gap-3" style={{ marginTop: GAP_TITULO_PRIMER_ELEMENTO }}>
+                <div style={{ width: 279 }}>
+                  <KpiCardIconoComparativo
+                    letra="P"
+                    color={COLOR_PRESUPUESTO}
+                    tituloLinea1="Presupuesto"
+                    tituloLinea2={etiquetaPeriodo}
+                    porcentaje="100.0%"
+                    monto={formatQ(consolidado.presupuesto)}
+                  />
+                </div>
+                <div style={{ width: 279 }}>
+                  <KpiCardIconoComparativo
+                    letra="E"
+                    color={COLOR_EJECUTADO}
+                    tituloLinea1="Ejecutado"
+                    tituloLinea2={etiquetaPeriodo}
+                    porcentaje={formatPercent(consolidado.porcentaje_ejecucion)}
+                    monto={formatQ(consolidado.ejecutado)}
+                  />
+                </div>
+                <div style={{ width: 279 }}>
+                  <KpiCardIconoComparativo
+                    letra="D"
+                    color={COLOR_PORCENTAJE}
+                    tituloLinea1="Diferencia"
+                    tituloLinea2={etiquetaPeriodo}
+                    porcentaje={formatPercent(pctSeguro(consolidado.diferencia, consolidado.presupuesto))}
+                    monto={formatQ(consolidado.diferencia)}
+                  />
+                </div>
+              </div>
+            );
+          })()}
+
           {/* Tabla + filas Presupuesto/Ejecución, MISMO ancho y MISMA
               posición que la tabla (67.2% del área de contenido --
               medido directo del .pbix real, "Centros de Costo":
@@ -1432,7 +1530,10 @@ function PaginaConciliacionBancaria() {
         // 54.3% del área de contenido -- medido directo del .pbix real
         // (pivotTable w=899.63 de un área de contenido de 1658px,
         // canvas 1920px menos los 262px del menú lateral).
-        <div className="mx-auto overflow-hidden rounded-tremor-default" style={{ width: "54.3%" }}>
+        <div
+          className="mx-auto overflow-hidden rounded-tremor-default"
+          style={{ width: "54.3%", marginTop: GAP_TITULO_PRIMER_ELEMENTO }}
+        >
           <div
             className="grid items-center px-3 py-1.5 text-sm font-semibold text-white"
             style={{ backgroundColor: VERDE_ENCABEZADO, gridTemplateColumns: ANCHOS_COLUMNA_CONCILIACION }}
@@ -1633,7 +1734,10 @@ function PaginaFlujoCaja() {
               .pbix real (tabla y gráfica de columnas miden EXACTAMENTE
               1025px cada una, mismo x, de un área de contenido de
               1658px), para que queden del mismo ancho y alineadas. */}
-          <div className="mx-auto overflow-hidden rounded-tremor-default" style={{ width: ANCHO_FLUJO_CAJA }}>
+          <div
+            className="mx-auto overflow-hidden rounded-tremor-default"
+            style={{ width: ANCHO_FLUJO_CAJA, marginTop: GAP_TITULO_PRIMER_ELEMENTO }}
+          >
             <div className="px-3 py-2 text-center" style={{ backgroundColor: VERDE_ENCABEZADO }}>
               <div className="text-lg font-bold text-white">Flujo de Caja</div>
               <div className="text-xs text-white">Cifras Expresadas en Quetzales al {fechaTitulo}</div>

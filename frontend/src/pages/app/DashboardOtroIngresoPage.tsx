@@ -5,7 +5,7 @@ import { obtenerOtroIngreso } from "../../api/dashboardOtroIngreso";
 import { mensajeError } from "../../api/client";
 import { FilterYear } from "../../components/filters/PowerBiFilter";
 import { useFinancieroFilterOtrosIngresos } from "../../financiero/FinancieroFilterContext";
-import { FINANCIERO_SURFACE } from "../../components/TablaGrupoExpandible";
+import { FINANCIERO_SURFACE, GAP_TITULO_PRIMER_ELEMENTO } from "../../components/TablaGrupoExpandible";
 import { formatPercentEntero, formatQ } from "../../utils/format";
 import type { FilaOtroIngreso, OtroIngresoResponse } from "../../types/dashboardOtroIngreso";
 
@@ -50,7 +50,8 @@ const ANCHO_TABLA = "93.4%";
 const PROPORCION_BARRAS = 0.4;
 const PROPORCION_TOTALES = 0.13;
 const ALTO_EXTRA_TITULO_LEYENDA = 60; // ~32 (título) + 28 (leyenda)
-const GAP_TITULO_CONTENIDO = "4.6%"; // 76px/1658 -- misma regla general que las demás pantallas
+// Título -> primer elemento: GAP_TITULO_PRIMER_ELEMENTO (40.2px,
+// TablaGrupoExpandible.tsx), igual en las 17 vistas del Financiero.
 // Separación entre la gráfica de barras y la de totales: el Layout real
 // de esta página trae 2 visuales superpuestos entre sí en esa zona (la
 // versión "Nueva" del .pbix parece tener un resabio de una edición
@@ -434,7 +435,7 @@ export function DashboardOtroIngresoPage() {
 
       {data && (
         <>
-          <div className="mx-auto" style={{ width: ANCHO_GRAFICA, marginTop: GAP_TITULO_CONTENIDO }}>
+          <div className="mx-auto" style={{ width: ANCHO_GRAFICA, marginTop: GAP_TITULO_PRIMER_ELEMENTO }}>
             <GraficoBarrasOtrosIngresos
               titulo="Otros ingresos generados por Agrequima"
               filas={data.filas}

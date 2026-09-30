@@ -63,6 +63,15 @@ export function formatPercent(v: number): string {
   return `${v.toFixed(1)}%`;
 }
 
+// % seguro = numerador/base * 100, protegido contra división por cero
+// (0 en vez de NaN/Infinity) -- mismo criterio DIVIDE(...,...,0) que ya
+// usa el backend para sus propios % (ver dashboard_otro_ingreso.py,
+// dashboard_importaciones_financiero.py). Para columnas/tarjetas nuevas
+// calculadas en el frontend a partir de valores que ya trae el backend.
+export function pctSeguro(numerador: number, base: number): number {
+  return base === 0 ? 0 : (numerador / base) * 100;
+}
+
 // Igual que formatPercent pero con 2 decimales fijos -- usado en
 // "Comparativo ejecutado" (Presupuestos), calcado del spec real
 // ("46.02%", a diferencia del resto del módulo que usa 1 decimal).

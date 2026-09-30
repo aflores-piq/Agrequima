@@ -26,6 +26,20 @@ export const COLOR_ETIQUETA_KPI = "#FFFFFF";
 // Nutrientes (antes era un hex fijo, se quedaba oscuro en modo claro).
 export const FINANCIERO_SURFACE = "rgb(var(--color-financiero-surface))";
 
+// Separación título -> primer elemento debajo (tarjetas, o tabla/filtro
+// si la pantalla no tiene tarjetas), IGUAL en las 17 vistas del
+// Financiero. Calculado del `.pbix` real (Report/Layout): el título
+// termina en y=100, las tarjetas del Balance general empiezan en
+// y=157 -- 57px en la escala de Power BI (alto real de tarjeta ahí:
+// 95px). Escalado a la web con el factor "alto real de la tarjeta A en
+// la web / 95": 57 * (67/95) = 40.2px (67px es el alto medido de
+// KpiCardIcono con ancho fijo 269px y aspect-[4/1], A/PA/PT de "Balance
+// general mensual"). Reemplaza los 2 valores previos usados en rondas
+// anteriores (12px vía `space-y-3` en la mayoría de las pantallas, 76px
+// vía un `GAP_TITULO_CONTENIDO` local en Importaciones/Otros ingresos)
+// -- ninguno de los dos era el valor real de Power BI.
+export const GAP_TITULO_PRIMER_ELEMENTO = 40.2;
+
 export interface FilaCuenta {
   nombre: string;
   valores: number[];

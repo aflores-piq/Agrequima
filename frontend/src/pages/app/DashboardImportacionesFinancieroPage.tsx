@@ -14,7 +14,7 @@ import { useFinancieroFilterGrupo1, useFinancieroFilterGrupo2, useFinancieroFilt
 import { FilterYear, FilterYearMonth } from "../../components/filters/PowerBiFilter";
 import { EncabezadoOrdenable } from "../../components/EncabezadoOrdenable";
 import { useTablaOrdenable, type ColumnaOrdenable } from "../../hooks/useTablaOrdenable";
-import { FINANCIERO_SURFACE, VERDE_ENCABEZADO } from "../../components/TablaGrupoExpandible";
+import { FINANCIERO_SURFACE, GAP_TITULO_PRIMER_ELEMENTO, VERDE_ENCABEZADO } from "../../components/TablaGrupoExpandible";
 import { COLOR_EJECUTADO, COLOR_PRESUPUESTO, ultimoDiaDelMes } from "./DashboardOtrosInformesPage";
 import { useTheme } from "../../theme/ThemeContext";
 import {
@@ -804,8 +804,10 @@ const ANCHO_TABLA_1 = "46.6%"; // 773/1658
 
 // Separaciones verticales reales del Layout, expresadas como % del
 // ancho de contenido (1658px @ canvas 1920px) -- el mismo truco de
-// margin-% ya usado en Presupuestos.
-const GAP_TITULO_CONTENIDO = "4.6%"; // 76px -- regla general, todas las pantallas
+// margin-% ya usado en Presupuestos. Título -> primer elemento usa
+// ahora GAP_TITULO_PRIMER_ELEMENTO (40.2px, TablaGrupoExpandible.tsx),
+// igual en las 17 vistas del Financiero -- reemplaza el "4.6% / 76px"
+// que se calculaba solo para esta pantalla.
 const GAP_GRAFICA1_GRAFICA2 = "1.3%"; // 21px
 const GAP_GRAFICA2_TABLA = "1.6%"; // 27px
 
@@ -871,7 +873,7 @@ function PaginaIngresosImportacion() {
 
       {data && (
         <>
-          <div className="mx-auto" style={{ width: ANCHO_GRAFICA_1, marginTop: GAP_TITULO_CONTENIDO }}>
+          <div className="mx-auto" style={{ width: ANCHO_GRAFICA_1, marginTop: GAP_TITULO_PRIMER_ELEMENTO }}>
             <GraficoCIFLineas
               titulo={tituloGrafico}
               datos={data.grafico_cif}
@@ -905,12 +907,6 @@ function PaginaIngresosImportacion() {
 // entre el final de un bloque y el título del siguiente.
 const GAP_TITULO_BLOQUE = "24px";
 const GAP_ENTRE_BLOQUES = "40px";
-// Encabezado/filtro -> primer título: esta pantalla NO tiene título de
-// página (se sacó por pedido explícito en una corrección anterior), así
-// que la regla general de 76px/4.6% (pensada para dejar aire bajo un
-// título grande que sí existe) se ve como un hueco vacío enorme acá --
-// mismo criterio de 24px fijos que el resto de esta pantalla.
-const GAP_HEADER_COMPARATIVO = "24px";
 
 // Sin dominio fijo: el usuario decidió que estas 2 gráficas se aparten
 // de Power BI (que arranca en $0) y ajusten el eje a los datos reales,
@@ -999,7 +995,12 @@ function PaginaIngresosImportacionComparativo() {
       {cargando && !data && <p className="text-sm text-ink-muted">Cargando…</p>}
 
       {data && (
-        <div style={{ marginTop: GAP_HEADER_COMPARATIVO }}>
+        <div style={{ marginTop: GAP_TITULO_PRIMER_ELEMENTO }}>
+          {/* Sin título visible en esta pantalla, pero el renglón de
+              cabecera arriba (min-h-[40px]) tiene la misma altura que el
+              de las demás -- se le aplica el mismo GAP_TITULO_PRIMER_ELEMENTO
+              (40.2px) para que las 17 vistas queden con la misma
+              separación, según lo pedido explícitamente en esta ronda. */}
           {data.bloques.map((b, i) => (
             <BloqueComparativo
               key={b.institucion}
@@ -1139,7 +1140,7 @@ function PaginaKilolitros() {
 
       {data && (
         <>
-          <div className="mx-auto space-y-3" style={{ width: ANCHO_KILOLITROS, marginTop: GAP_TITULO_CONTENIDO }}>
+          <div className="mx-auto space-y-3" style={{ width: ANCHO_KILOLITROS, marginTop: GAP_TITULO_PRIMER_ELEMENTO }}>
             {data.tarjetas.map((t) => (
               <TarjetaCambio key={t.etiqueta} mensaje={t.mensaje} />
             ))}
@@ -1543,7 +1544,7 @@ function PaginaContribucionMillar() {
 
       {data && (
         <>
-          <div className="mx-auto" style={{ width: ANCHO_GRAFICA_4, marginTop: GAP_TITULO_CONTENIDO }}>
+          <div className="mx-auto" style={{ width: ANCHO_GRAFICA_4, marginTop: GAP_TITULO_PRIMER_ELEMENTO }}>
             <GraficoContribucionLineas
               titulo="Contribución por importaciones (4.5 por millar) (Expresado en miles de quetzales)"
               datos={data.grafico}
