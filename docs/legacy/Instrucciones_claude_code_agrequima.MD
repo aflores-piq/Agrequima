@@ -498,3 +498,109 @@ Auditoría pedida antes de cambiar nada: ¿qué ve hoy cada rol en `/admin` y qu
 | Usuario | `/app/plaguicidas` (nunca llega a `/admin`) | Las 6 rebotan a `/app/plaguicidas` | Ninguna | 403 "No tiene acceso a este recurso." | (no aplica a este rol) |
 
 Tests (108 backend), `tsc` y `build` limpios.
+
+## 20. Cuadre exhaustivo del módulo Financiero contra SQL independiente, datos del servidor real (2026-10-02)
+
+Ronda de verificación pedida para dejar el módulo listo para publicar: datos actuales de las 10 tablas de Financiero (export real del servidor del cliente, reemplazando los CSV de `docs/legacy/financiero/` -- ver conteos abajo), consultas SQL independientes (sin reusar código del backend) para cada vista, comparadas contra la API en 2 períodos (Septiembre 2026 por defecto / Diciembre 2025), tolerancia Q0.01.
+
+**Datos recargados.** Los 10 CSV de `docs/legacy/financiero/` se reemplazaron con una exportación real del servidor del cliente (hecha por el usuario) y se cargaron con `cargar_datos_financiero_inicial.py` (TRUNCATE + INSERT, confirmado sin duplicar). Conteos cargados: BalanceSaldos 15,105; BalanceGeneral 3,292; CatalogoCuentas 294; CentrosDeCosto 30; Presupuestos 128,016; AsociadosCuota 161; ChequesCirculacion 1,393; SaldosBancos 120 (186 filas crudas en el CSV, BANRURAL trae 3 filas por período que se suman al cargar -- comportamiento ya documentado, no un error); SaldoBancario 210; OtroIngreso 480. **Hallazgo positivo:** a diferencia de rondas anteriores, `BalanceGeneral`/`BalanceSaldos` ahora traen **2023-2026 completos** (antes solo 2025-2026) -- los huecos de "año anterior sin datos" documentados en secciones 13/16 para Diciembre 2025 vs. 2024 ya NO aplican con estos datos.
+
+**BUG REAL ENCONTRADO Y CORREGIDO: "Ingresos"/"Egresos" de Estados Financieros sumaba cuentas del lado equivocado.** `_detalle_grupo_mensual`/`_detalle_grupo_comparativo` (`dashboard_financiero.py`) traían TODAS las cuentas de `BalanceSaldos` con movimiento en el período (sin filtrar por tipo de cuenta) y clasificaban por `CatalogoAgrupadorCuentas` solo para la ETIQUETA de grupo -- una cuenta que no matcheaba ningún `Codigo` del catálogo cae a "Sin clasificar" pero **igual se sumaba al total**. Encontrado comparando Diciembre 2025: la web mostraba Ingresos Q617,885.56, mi SQL independiente (filtrado por el catálogo real de Ingresos) daba Q607,094.58 -- diferencia de Q10,790.98, de 5 cuentas de EGRESOS (510xxxxxx: Alquileres, Mantenimiento de vehículos, etc.) con un crédito incidental (una devolución/corrección) que se colaban en el total de Ingresos. Confirmado contra la medida DAX real del `.pbix` (`PIQ_AGREQUIMA.pbix`, tabla `_Calculos`, medida `Acumulado Ingresos mes corriente`): el filtro real es `LEFT(Cta_Codigo,1) = "4"` para Ingresos y `"5"` para Egresos -- NO el catálogo de agrupación (ese solo decide la sub-categoría de MOSTRAR, dentro de las cuentas que ya pasan el filtro de primer dígito). Corregido: ambas funciones ahora reciben un `primer_digito` ("4"/"5") y lo agregan al `WHERE` de la consulta. Verificado exacto en Septiembre 2026 y Diciembre 2025, mensual y acumulado, contra la medida DAX real.
+
+**BUG REAL ENCONTRADO Y CORREGIDO: años inválidos de `dbo.Importacion` sin excluir.** El cliente reportó filas con `anio=20126` (+100 años, error de captura viejo) y copias duplicadas de 2024/2025 con signo invertido (`-2024`/`-2025`, mismo contenido, ID distinto) en el servidor real -- ninguna de las 8 consultas de `dashboard_importaciones_financiero.py` las excluía (ni el selector de año `_anios_disponibles_importacion`, ni los agregados por año específico). Corregido: constante `_FILTRO_ANIO_VALIDO = "anio BETWEEN 2023 AND 2026"` (rango real de datos válidos del cliente, bump manual del límite superior cuando se cargue el año siguiente) agregada a las 8 consultas. **No se pudo reproducir el escenario completo en esta base de desarrollo**: no existen filas con `anio=20126` ni negativo acá, así que no hay forma de confirmar con una consulta "no se pierde ningún registro válido" contra esos datos puntuales -- el fix es correcto por inspección de código y por el rango documentado, pero la confirmación empírica queda pendiente de correr contra el servidor real. En esta base, `dbo.Importacion` tiene 2025 completo (12 meses, CIF válido en los 12, ambas instituciones) y 2026 Enero-Julio (también CIF válido en los 7) -- **no falta ningún mes de Agosto a Diciembre 2025** (ya estaba completo, no hubo que corregir nada ahí). Selector de año: sigue mostrando solo `[2025, 2026]` en esta base (no hay 2023/2024 cargados acá) -- el fix evita que basura se sume a esa lista el día que el servidor real sincronice esos años, pero no puede "inventar" los 2 años que faltan localmente.
+
+**Verificado EXACTO (±Q0.01, la mayoría con diferencia 0.00) contra SQL independiente, Septiembre 2026 y Diciembre 2025:**
+
+| Vista | Métrica verificada | Resultado |
+|---|---|---|
+| Ingresos y desembolsos mensual | Ingresos/Egresos/Resultado del mes | Exacto en los 2 períodos (tras el fix) |
+| Ingresos y desembolsos acumulado | Ingresos/Egresos acumulados | Exacto en los 2 períodos (tras el fix) |
+| Balance general mensual | KPIs Activo/Pasivo/Patrimonio | Exacto en los 2 períodos |
+| Balance general comparativo | Variación Q y % de A/PA/PT | Exacto en los 2 períodos |
+| Cuotas asociados | Total/Cancelado/Por cobrar | Exacto en los 2 períodos |
+| Conciliación bancaria | Fila "Totales" por banco (Saldo Banco) | Exacto en Dic-2025 (los 4 bancos); Sep-2026 sin datos de `SaldoBancario` ese mes (gap de frescura ya conocido, no bug) |
+| Flujo de caja | Disponibilidad final | Exacto en los 2 períodos (confirmado que NO se restan 2 veces los cheques en circulación, regla ya documentada en sección 11) |
+| Ejecución gastos por mes/acumulado | Consolidado (presupuesto/ejecutado) | Exacto en los 2 períodos, ambas vistas |
+| Ejecución vs presupuesto mensual/acumulado | Fila Total | Exacto en los 2 períodos, ambas vistas (mismo origen que Ejecución de gastos) |
+| Comparativo ejecutado | Fila Total (año actual/anterior/variación) | Exacto en los 2 períodos -- confirma que 2024 ya tiene datos reales (antes "sin datos") |
+| Ingresos por importación | CIF por año, regla especial "Total año" (solo meses que también existen en el año actual) | Exacto en 2025 y 2026, incluida la regla especial |
+| Comparativo de importaciones | CIF por institución (Agrequima/Gremiagro) | Exacto en los 2 años |
+| Kilolitros | Precio por kilolitro del mes específico | Exacto en Jul-2026 y Dic-2025 |
+| Contribución 4.5 por millar | Tarjeta mes y acumulada (realizado/presupuesto/%) | Exacto en los 2 períodos -- confirma presupuesto 2026 ausente en origen (dato de origen, pendiente de consulta al cliente, ya documentado en sección 14) |
+| Otros ingresos generados | Total (ejecutado año/año-1, presupuesto, %) | Exacto en 2025 y 2026 |
+
+**Dato de origen, pendiente de consulta al cliente (NO modificado):** `dbo.Presupuestos`, cuenta `410104001` (Contribución 4.5 por millar), solo tiene 12 filas para 2025 (Q7,861,336.64 total) -- **2026 sigue sin existir en origen**, incluso con la exportación nueva de hoy. Confirmado con `SELECT par_ano, COUNT(*), SUM(pre_presupuesto) FROM dbo.Presupuestos WHERE cta_codigo='410104001' GROUP BY par_ano` -- una sola fila, año 2025.
+
+**Diferencias intencionales con Power BI (ya documentadas en rondas anteriores, re-confirmadas esta ronda sin cambios):** año anterior siempre `año_seleccionado - 1` (nunca `YEAR(TODAY())`); encabezados de "Comparativo ejecutado" correctos (no invertidos como el `.pbix` original); "Disponibilidad en depósitos monetarios y caja" de Flujo de Caja NO resta los cheques en circulación una segunda vez.
+
+**Verificación visual final (Playwright en primer plano, viewport 1614x900, las 17 vistas):** separación título→primer elemento 40.19px IDÉNTICA en las 17 (sin cambios tras los fixes de código); tamaños de tarjeta sin cambios (269x67.25 simples, 279x77.5-77.52 comparativas); capturas de las 17 vistas tomadas. `tsc -b`, `npm run build` y pytest (108) limpios después de los 2 fixes.
+
+**Archivos de código corregidos esta ronda:**
+- `backend/app/services/dashboard_financiero.py` -- filtro `LEFT(Cta_Codigo,1)` agregado a `_detalle_grupo_mensual`/`_detalle_grupo_comparativo` (bug de Ingresos/Egresos).
+- `backend/app/services/dashboard_importaciones_financiero.py` -- `_FILTRO_ANIO_VALIDO` agregado a las 8 consultas sobre `dbo.Importacion` (años corruptos del servidor real).
+
+## 21. Publicación Financiero -- plan exacto para mañana (2026-10-02)
+
+Rama `financiero`, 35 commits por delante de `main`, que no se movió (0 commits propios) -- **el merge sería un fast-forward limpio, confirmado con `git merge-tree`: 0 conflictos**. Pasos en orden para publicar:
+
+1. **Revisar y aprobar los cambios de código de esta ronda** (sección 20: `dashboard_financiero.py`, `dashboard_importaciones_financiero.py`) -- son los únicos archivos de código sin commitear a esta altura.
+2. **Commit en `financiero`** de los archivos de código aprobados (y de la bitácora). Decisión pendiente del usuario: si los 10 CSV actualizados de `docs/legacy/financiero/` también se commitean (ver recomendación en el reporte final de esta ronda).
+3. **Merge a `main`**: `git checkout main && git merge financiero` (fast-forward, sin `--no-ff` necesario dado que no hay divergencia -- confirmar con `git merge-tree` de nuevo justo antes, por si `main` se movió mientras tanto).
+4. **Scripts SQL en el servidor real (PIQ_IA)**, en este orden (ver `LEEME.txt` actualizado, Pasos 1 a 3L): `01` → `02` → `03` → `04` a `10` (fixes de collation/exclusión, si no corrieron antes) → `11_aviso_legal_usuarios.sql` → `11b_control_acceso_por_modulo.sql` (renombrado de `11_control_acceso_por_modulo.sql` -- ver sección 23, dos scripts no pueden compartir el número 11) → `12_agrupador_cuentas_financiero.sql` → `13_saldos_bancos_financiero.sql` → `14_otro_ingreso_financiero.sql` → `15_tablas_financiero.sql` → `16a_datos_financiero.sql` → `16b_datos_financiero.sql`. Todos idempotentes -- seguro re-correrlos si no se está seguro de cuáles ya se aplicaron (ver las consultas de verificación en el nuevo LEEME.txt).
+5. **Desplegar backend y frontend** (mismo mecanismo ya usado para Importaciones -- ver checklist del `LEEME.txt`).
+6. **Dar acceso a Financiero** a los usuarios reales que correspondan (pantalla Usuarios, checkbox "Acceso a Financiero" -- ver `LEEME.txt`).
+7. **Verificación final en el servidor real**: entrar con un usuario real, confirmar que las 17 vistas cargan sin error 500. Los NÚMEROS pueden diferir de los de esta ronda (los datos del servidor real evolucionan día a día) -- lo que hay que confirmar es que cargan, no que coincidan con los de hoy.
+8. **Pendiente, no bloqueante:** decidir si se deja `sync_piq_ia.py` configurado tal cual (con la brecha de nombres de tabla documentada en el `LEEME.txt` -- no actualiza Financiero todavía) o se pospone arreglarlo. Mientras tanto, el refresh de datos de Financiero sigue siendo manual (repetir el Paso 3L).
+
+## 22. Corrección del filtro de año fijo en Importaciones y cuadre fila por fila de las 17 vistas (2026-10-02)
+
+El cliente corrigió 2 puntos de la sección 20: (1) el filtro `_FILTRO_ANIO_VALIDO` agregado ahí usaba un rango de calendario fijo (`BETWEEN 2023 AND 2026`) -- "no deberían de existir años fijos"; (2) la verificación de esa ronda solo cuadró totales/tarjetas, no cada cuenta -- "¿a mí de qué me sirve que cuadre un total?".
+
+**Filtro sin años fijos.** `_FILTRO_ANIO_VALIDO` (`dashboard_importaciones_financiero.py`) pasa de un rango hardcodeado a una regla RELATIVA a hoy: `anio > 0 AND anio <= YEAR(GETDATE())` -- descarta cualquier año negativo (copias con signo invertido) y cualquier año mayor al actual (el "+100 años", ej. 20126, sin importar qué año sea "hoy"). No hace falta tocar el código cada año nuevo.
+
+**Por qué solo se desplegaban 2 años, con evidencia.** Confirmado con 3 consultas independientes contra esta base de desarrollo (AGREQUIMA, DESARROLLO-2): `dbo.Importacion` (misma tabla y fuente que usa Plaguicidas/Nutrientes vía el modelo `Importacion` -- confirmado leyendo ambos `services/*.py` y, por separado, el Power Query real del `.pbix`: `Sql.Database("10.10.0.6,65280","Agrequima"){[Schema="dbo",Item="Importacion"]}`, sin ningún filtro de año en la M) tiene SOLO `anio IN (2025, 2026)` -- `SELECT DISTINCT anio` sin ningún filtro, antes y después del fix, da el mismo resultado. El selector del frontend (`FilterYear`/`FilterYearMonth`, `PowerBiFilter.tsx`) no trunca ni limita la lista en ningún punto -- renderiza `aniosOpciones` completo. El propio selector de años de Plaguicidas (`dashboard_plaguicidas.py`, `Importacion.anio.distinct()`, mismo patrón sin filtro) mostraría también solo 2 años con estos mismos datos. **Conclusión:** no hay ningún límite de código, ni acá ni en Plaguicidas -- la causa de "solo 2 años" es que esta base de desarrollo específica no tiene 2023/2024 cargados en `dbo.Importacion`. Si el servidor real sí los tiene (como afirma el cliente), el fix ya aplicado los mostrará automáticamente en cuanto esos datos estén en la base que lea la aplicación -- no se puede confirmar el escenario completo (incluyendo la exclusión real de `anio=20126`/negativos) sin acceso a esos datos, que no existen en esta base.
+
+**Cuadre fila por fila, cuenta por cuenta, las 17 vistas (no solo totales):**
+
+| Vista | Filas/cuentas comparadas | Coinciden exacto (±Q0.01) | Diferencias reales |
+|---|---|---|---|
+| Ingresos y desembolsos mensual | Por categoría (Ingresos LEFT='4', Egresos LEFT='5') | Todas (tras el fix de anoche) | 0 |
+| Ingresos y desembolsos acumulado | Por categoría | Todas | 0 |
+| Balance general mensual | 85 cuentas (Activo+Pasivo+Patrimonio) | 85/85 | 0 |
+| Balance general comparativo | 91 cuentas | 91/91 | 0 |
+| Cuotas asociados | 39 filas (3 tipos × asociados) | 39/39 | 0 |
+| Conciliación bancaria | 20 filas (4 bancos × 5 líneas) | 20/20 | 0 |
+| Flujo de caja | 12 filas (Caja+4 bancos+Totales+Disponibilidad+2 inversiones+Total final+cheques) | 12/12 | 0 |
+| Ejecución gastos por mes | 20 categorías (catálogo completo, normalizando mayúscula/coma de etiqueta) | 20/20 | 0 |
+| Ejecución gastos acumulado | 20 categorías | 20/20 | 0 |
+| Ejecución vs presupuesto mensual | 20 categorías | 20/20 | 0 |
+| Ejecución vs presupuesto acumulado | 20 categorías | 20/20 | 0 |
+| Comparativo ejecutado | 17 categorías con movimiento (+3 correctamente excluidas, 0 en ambos años) | 17/17 | 0 |
+| Ingresos por importación | 7 filas (2026) + 12 filas (2025) | 19/19 | 0 |
+| Comparativo de importaciones | 7+7 (2026) + 12+12 (2025), por institución | 38/38 | 0 |
+| Kilolitros | 3+3 filas de precio + 3+3 tarjetas de cambio | 6/6 (+ 3 tarjetas con "sin datos 2024" correctamente mostrado) | 0 |
+| Contribución 4.5 por millar | 9 filas (2026) + 12 filas (2025) | 21/21 | 0 |
+| Otros ingresos generados | 13 filas (12 conceptos + Total) × 2 años | 26/26 | 0 |
+
+**Total: 471 filas/cuentas/categorías comparadas contra SQL independiente, 0 diferencias reales.** Hallazgo menor (no numérico): 3 categorías de Egresos tienen su nombre en `CatalogoAgrupadorCuentas` sin coma ("Sueldos Bonificaciones...") pero se muestran con coma en pantalla ("Sueldos, Bonificaciones...") -- mismo valor exacto en ambos lados, es una diferencia de rótulo, no de cálculo; no se tocó porque no fue parte de lo pedido.
+
+**Filas no verificadas:** ninguna de las que la pantalla realmente muestra. Las únicas "faltantes" en mis conteos iniciales eran filas con valor 0.00 en ambos períodos que el propio criterio documentado de cada pantalla excluye a propósito (grupo entero en 0, o año sin ninguna fila de origen) -- no son filas que el usuario vea y no se hayan revisado, son filas que ni la pantalla ni los datos muestran.
+
+Tests (108 backend), `tsc` y `build` limpios. Usuario temporal y los 7 scripts de verificación de esta ronda, borrados. No se regeneraron `16a_datos_financiero.sql`/`16b_datos_financiero.sql` ni se tocó el `LEEME.txt` de la sección 21: los datos de la base local no cambiaron esta ronda (solo 2 archivos de código), así que ambos siguen representando exactamente lo mismo que ya está cargado.
+
+## 23. Publicación en el servidor real (VMI1979377\SQLEXPRESS) -- preparación y merge a main (2026-10-02)
+
+El cliente confirmó el estado real del servidor de producción: base `PIQ_IA` en `VMI1979377\SQLEXPRESS`, con los scripts `01` a `10` y `11_aviso_legal_usuarios.sql` ya corridos -- **ninguna tabla de Financiero existe todavía ahí**. App instalada en `C:\Pronostiq\Agrequima-pronostiq` (`backend\`, `deploy\`, `frontend\`, `logs\`, `.env`, `nssm.exe` como servicio de Windows).
+
+**Dos scripts con el mismo número 11.** `11_control_acceso_por_modulo.sql` (nunca corrido en el servidor real) se renombró a **`11b_control_acceso_por_modulo.sql`** (`git mv`) para no chocar con `11_aviso_legal_usuarios.sql` (ya corrido ahí) -- se actualizaron las 2 referencias existentes (`LEEME.txt`, esta bitácora, sección 21). Ninguna línea de código Python referencia el nombre del archivo, solo documentación.
+
+**Revisión de `11b_control_acceso_por_modulo.sql`:**
+- **Idempotente**: confirmado por lectura -- cada `ALTER TABLE` está protegido con `IF NOT EXISTS (...INFORMATION_SCHEMA.COLUMNS...)`.
+- **`AccesoImportaciones=1` para cuentas existentes**: confirmado -- `ALTER TABLE ADD ... DEFAULT 1` sobre una tabla con filas backfillea el valor por defecto en las filas ya existentes (comportamiento estándar de T-SQL), no hizo falta corregir nada.
+- **`AccesoFinanciero` para el Administrador**: el script original dejaba `AccesoFinanciero=0` para TODAS las cuentas sin ninguna excepción -- se agregó un `UPDATE` (incondicional, idempotente) que deja `AccesoFinanciero=1` para toda cuenta cuyo rol sea "Administrador", vía `JOIN` contra `dbo.Roles` (no por nombre de usuario literal, que podría ser cualquier cosa) -- el resto de los roles quedan en 0 como ya estaba.
+
+**Paquetes y variables de entorno:** `backend/requirements.txt` es **idéntico** entre `main` y `financiero` (confirmado con `git diff`, sin salida) -- ningún paquete nuevo que instalar en el servidor. Ninguna variable de entorno nueva hace falta para que Financiero funcione: revisando `app/core/config.py` y los 6 archivos de servicios de Financiero, todos usan la MISMA conexión a `PIQ_IA` (`DB_SERVER`/`DB_NAME`/`DB_USER`/`DB_PASSWORD`) que ya usan Plaguicidas/Nutrientes, sin ninguna configuración propia (la sincronización nocturna contra CONTACC sí necesitaría variables nuevas, pero quedó fuera de esta ronda a pedido explícito).
+
+**Guía de publicación para este servidor específico**, agregada a `LEEME.txt` (sección nueva al final, "PUBLICACIÓN DE FINANCIERO EN ESTE SERVIDOR YA INSTALADO"): respaldo de la base + carpetas antes de empezar, los 7 scripts SQL en orden con su consulta de verificación cada uno (`11b`→`12`→`13`→`14`→`15`→`16a`→`16b`, dejando explícito que `11_aviso_legal_usuarios.sql` NO se vuelve a correr), qué copiar (`backend\app`, el build nuevo de `frontend\dist`), cómo reiniciar con `nssm.exe restart`, verificación final (usuario solo-Importaciones no ve Financiero; con el permiso sí; cómo dar el permiso), y cómo volver atrás (detener servicio, restaurar carpetas de respaldo, restaurar el `.bak` de la base si hiciera falta).
+
+**Merge a `main`:** `financiero` (36 commits propios) hacia `main` (0 commits propios desde la base común) -- fast-forward limpio, confirmado antes con `git merge-tree` (0 conflictos). Ver el hash y `git log` resultante en el reporte de esta ronda (no se repite acá para no duplicar).

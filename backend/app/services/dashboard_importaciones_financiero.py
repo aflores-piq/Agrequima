@@ -95,6 +95,22 @@ MESES_LARGOS = [
 
 _CTA_MILLAR = "410104001"
 
+# dbo.Importacion trae, en el servidor real, filas con `anio` corrupto:
+# +100 años por un error de captura viejo (ej. 20126 en vez de 2026) y
+# copias duplicadas con el signo invertido (ej. -2024, mismo contenido,
+# ID distinto) -- confirmado por el cliente, pendiente de limpieza en
+# origen. Ninguna pantalla de Importaciones del Financiero (selectores
+# de año, sumas, acumulados) debe contarlas.
+#
+# SIN años fijos (instrucción explícita del cliente: "no deberían de
+# existir años fijos") -- la regla es RELATIVA a hoy, no una lista ni
+# un rango de calendario hardcodeado: `anio` tiene que ser positivo (
+# descarta las copias con signo invertido) y no puede ser mayor al año
+# en curso (descarta el +100 años -- 20126 nunca es <= YEAR(GETDATE()),
+# sin importar qué año sea "hoy"). No hace falta tocar este código cada
+# año nuevo: la cota se recalcula sola en cada consulta.
+_FILTRO_ANIO_VALIDO = "anio > 0 AND anio <= YEAR(GETDATE())"
+
 
 def _num(valor) -> float:
     return float(valor) if valor is not None else 0.0
@@ -104,7 +120,9 @@ def _num(valor) -> float:
 
 
 def _anios_disponibles_importacion(db: Session) -> list[int]:
-    filas = db.execute(text("SELECT DISTINCT anio FROM dbo.Importacion ORDER BY anio")).all()
+    filas = db.execute(
+        text(f"SELECT DISTINCT anio FROM dbo.Importacion WHERE {_FILTRO_ANIO_VALIDO} ORDER BY anio")
+    ).all()
     return [int(a) for (a,) in filas if a is not None]
 
 
@@ -118,7 +136,7 @@ def _cif_por_mes(db: Session, anio: int, institucion: str | None) -> dict[int, f
             f"""
             SELECT CAST(SUBSTRING(fecha, 6, 2) AS INT) AS mes, SUM(cif_USD) AS cif
             FROM dbo.Importacion
-            WHERE anio = :anio {filtro}
+            WHERE anio = :anio AND {_FILTRO_ANIO_VALIDO} {filtro}
             GROUP BY CAST(SUBSTRING(fecha, 6, 2) AS INT)
             """
         ),
@@ -133,7 +151,7 @@ def _cif_total_anio(db: Session, anio: int, institucion: str | None) -> float:
     if institucion:
         params["institucion"] = institucion
     valor = db.execute(
-        text(f"SELECT SUM(cif_USD) FROM dbo.Importacion WHERE anio = :anio {filtro}"), params
+        text(f"SELECT SUM(cif_USD) FROM dbo.Importacion WHERE anio = :anio AND {_FILTRO_ANIO_VALIDO} {filtro}"), params
     ).scalar()
     return _num(valor)
 
@@ -208,7 +226,7 @@ def _precio_acumulado_por_mes(db: Session, anio: int, institucion: str | None) -
             f"""
             SELECT CAST(SUBSTRING(fecha, 6, 2) AS INT) AS mes, SUM(cif_USD) AS cif, SUM(cantidad) AS cantidad
             FROM dbo.Importacion
-            WHERE anio = :anio {filtro}
+            WHERE anio = :anio AND {_FILTRO_ANIO_VALIDO} {filtro}
             GROUP BY CAST(SUBSTRING(fecha, 6, 2) AS INT)
             """
         ),
@@ -298,7 +316,7 @@ def _cantidad_acumulada(db: Session, anio: int, mes_max: int, institucion: str |
         text(
             f"""
             SELECT SUM(cantidad) FROM dbo.Importacion
-            WHERE anio = :anio AND CAST(SUBSTRING(fecha, 6, 2) AS INT) <= :mes_max {filtro}
+            WHERE anio = :anio AND {_FILTRO_ANIO_VALIDO} AND CAST(SUBSTRING(fecha, 6, 2) AS INT) <= :mes_max {filtro}
             """
         ),
         params,
@@ -315,7 +333,7 @@ def _tiene_datos_mes(db: Session, anio: int, mes: int, institucion: str | None) 
         text(
             f"""
             SELECT COUNT(*) FROM dbo.Importacion
-            WHERE anio = :anio AND CAST(SUBSTRING(fecha, 6, 2) AS INT) = :mes {filtro}
+            WHERE anio = :anio AND {_FILTRO_ANIO_VALIDO} AND CAST(SUBSTRING(fecha, 6, 2) AS INT) = :mes {filtro}
             """
         ),
         params,
@@ -332,7 +350,9 @@ def _tiene_datos_anio(db: Session, anio: int, institucion: str | None) -> bool:
     params: dict = {"anio": anio}
     if institucion:
         params["institucion"] = institucion
-    valor = db.execute(text(f"SELECT COUNT(*) FROM dbo.Importacion WHERE anio = :anio {filtro}"), params).scalar()
+    valor = db.execute(
+        text(f"SELECT COUNT(*) FROM dbo.Importacion WHERE anio = :anio AND {_FILTRO_ANIO_VALIDO} {filtro}"), params
+    ).scalar()
     return bool(valor)
 
 
@@ -364,7 +384,7 @@ def _precio_mes_especifico(db: Session, anio: int, mes: int, institucion: str | 
         text(
             f"""
             SELECT SUM(cif_USD), SUM(cantidad) FROM dbo.Importacion
-            WHERE anio = :anio AND CAST(SUBSTRING(fecha, 6, 2) AS INT) = :mes {filtro}
+            WHERE anio = :anio AND {_FILTRO_ANIO_VALIDO} AND CAST(SUBSTRING(fecha, 6, 2) AS INT) = :mes {filtro}
             """
         ),
         params,

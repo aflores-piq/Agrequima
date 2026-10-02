@@ -13,6 +13,15 @@
    romper el acceso de las cuentas que ya existen hoy -- todas seguían
    viendo Plaguicidas/Nutrientes antes de que este control existiera.
 
+   AccesoFinanciero arranca en 0 para todos, EXCEPTO las cuentas con rol
+   "Administrador" -- quedan con AccesoFinanciero=1 (además del rol, que
+   ya les da acceso a /admin) para que, apenas corrido este script, al
+   menos un usuario pueda entrar a verificar el módulo recién publicado
+   sin depender de que alguien más active el checkbox a mano primero
+   desde la pantalla de Usuarios. El resto de las cuentas (rol "Usuario"
+   o "Administrador de Usuarios") queda en 0 -- se activa por cuenta,
+   como siempre, desde esa misma pantalla.
+
    AccesoIndicadores se agrega ahora aunque ese proyecto todavía no
    tiene pantallas propias -- mismo criterio "genérico desde el inicio"
    que ya se usó en sync_piq_ia.py (SYNC_VISTAS_CONTACC), para no tener
@@ -60,6 +69,18 @@ BEGIN
 END
 ELSE
     PRINT 'dbo.Usuarios.AccesoIndicadores ya existía -- no se tocó.';
+GO
+
+-- Excepción explícita: las cuentas con rol "Administrador" quedan con
+-- AccesoFinanciero=1 (ver comentario del encabezado). UPDATE
+-- incondicional -- es seguro volver a correrlo, siempre deja el mismo
+-- resultado sin importar el valor que tuviera antes.
+UPDATE u
+SET u.AccesoFinanciero = 1
+FROM dbo.Usuarios u
+INNER JOIN dbo.Roles r ON r.RolId = u.RolId
+WHERE r.NombreRol = 'Administrador';
+PRINT 'AccesoFinanciero=1 aplicado a las cuentas con rol Administrador.';
 GO
 
 SELECT

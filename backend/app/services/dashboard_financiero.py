@@ -158,8 +158,29 @@ def _anio_mes_default(db: Session, anio: int | None, mes: int | None, periodos: 
 
 
 def _detalle_grupo_mensual(
-    db: Session, anio: int, mes: int, anio_ant: int, mes_ant: int, columna: str, mapas: MapasAgrupador
+    db: Session,
+    anio: int,
+    mes: int,
+    anio_ant: int,
+    mes_ant: int,
+    columna: str,
+    mapas: MapasAgrupador,
+    primer_digito: str,
 ) -> tuple[list[FilaGrupoMensual], TotalMensual]:
+    # LEFT(Cta_Codigo,1) = '4'/'5' -- es el filtro REAL usado por las
+    # medidas DAX del .pbix ("Acumulado Ingresos/Egresos mes corriente",
+    # PIQ_AGREQUIMA.pbix, tabla _Calculos), confirmado contra números de
+    # control. Antes esta función sumaba TODAS las cuentas de
+    # BalanceSaldos con movimiento en el período, sin importar su primer
+    # dígito -- cualquier cuenta de Egresos (5xx) con un crédito
+    # incidental (ej. una devolución/corrección) se colaba en el total
+    # de Ingresos bajo "Sin clasificar" en vez de quedar excluida (bug
+    # real, encontrado en la ronda de cuadre contra SQL de 2026-10-02:
+    # Diciembre 2025 mostraba Q617,885.56 de Ingresos, Q10,790.98 de más
+    # que los Q607,094.58 reales -- 5 cuentas 510xxxxxx con crédito
+    # incidental). "Sin clasificar" sigue existiendo para cuentas del
+    # primer dígito correcto que todavía no están en
+    # CatalogoAgrupadorCuentas -- eso no cambia.
     filas = db.execute(
         text(
             f"""
@@ -170,13 +191,14 @@ def _detalle_grupo_mensual(
                 SUM(CASE WHEN Sal_Ano = :anio AND Sal_Mes = :mes THEN {columna} ELSE 0 END) AS mes_actual,
                 SUM(CASE WHEN Sal_Ano = :anio AND Sal_Mes <= :mes THEN {columna} ELSE 0 END) AS acumulado_anio
             FROM dbo.BalanceSaldos
-            WHERE (Sal_Ano = :anio_ant AND Sal_Mes = :mes_ant) OR (Sal_Ano = :anio AND Sal_Mes <= :mes)
+            WHERE ((Sal_Ano = :anio_ant AND Sal_Mes = :mes_ant) OR (Sal_Ano = :anio AND Sal_Mes <= :mes))
+                AND LEFT(Cta_Codigo, 1) = :primer_digito
             GROUP BY Cta_Codigo
             HAVING SUM(CASE WHEN Sal_Ano = :anio_ant AND Sal_Mes = :mes_ant THEN {columna} ELSE 0 END) <> 0
                 OR SUM(CASE WHEN Sal_Ano = :anio AND Sal_Mes <= :mes THEN {columna} ELSE 0 END) <> 0
             """
         ),
-        {"anio": anio, "mes": mes, "anio_ant": anio_ant, "mes_ant": mes_ant},
+        {"anio": anio, "mes": mes, "anio_ant": anio_ant, "mes_ant": mes_ant, "primer_digito": primer_digito},
     ).mappings().all()
 
     por_grupo: dict[str, dict] = {}
@@ -215,8 +237,8 @@ def _pagina_ingresos_desembolsos_mensual(db: Session, anio: int, mes: int) -> In
     mapas_ingresos, _ = cargar_mapas_agrupador(db, "Ingresos")
     mapas_egresos, _ = cargar_mapas_agrupador(db, "Egresos")
 
-    detalle_ingresos, total_ingresos = _detalle_grupo_mensual(db, anio, mes, anio_ant, mes_ant, "Creditos", mapas_ingresos)
-    detalle_egresos, total_egresos = _detalle_grupo_mensual(db, anio, mes, anio_ant, mes_ant, "Debitos", mapas_egresos)
+    detalle_ingresos, total_ingresos = _detalle_grupo_mensual(db, anio, mes, anio_ant, mes_ant, "Creditos", mapas_ingresos, "4")
+    detalle_egresos, total_egresos = _detalle_grupo_mensual(db, anio, mes, anio_ant, mes_ant, "Debitos", mapas_egresos, "5")
 
     kpis = KpisIngresosDesembolsosMensual(
         ingresos=total_ingresos.mes_actual,
@@ -259,8 +281,10 @@ def _pagina_ingresos_desembolsos_mensual(db: Session, anio: int, mes: int) -> In
 
 
 def _detalle_grupo_comparativo(
-    db: Session, anio: int, anio_ant: int, mes: int, columna: str, mapas: MapasAgrupador
+    db: Session, anio: int, anio_ant: int, mes: int, columna: str, mapas: MapasAgrupador, primer_digito: str
 ) -> tuple[list[FilaGrupoComparativa], TotalComparativo]:
+    # Mismo filtro LEFT(Cta_Codigo,1) que _detalle_grupo_mensual (ver su
+    # comentario) -- idéntico bug, misma causa, misma fuente real.
     filas = db.execute(
         text(
             f"""
@@ -271,12 +295,13 @@ def _detalle_grupo_comparativo(
                 SUM(CASE WHEN Sal_Ano = :anio AND Sal_Mes <= :mes THEN {columna} ELSE 0 END) AS anio_actual
             FROM dbo.BalanceSaldos
             WHERE (Sal_Ano = :anio_ant OR Sal_Ano = :anio) AND Sal_Mes <= :mes
+                AND LEFT(Cta_Codigo, 1) = :primer_digito
             GROUP BY Cta_Codigo
             HAVING SUM(CASE WHEN Sal_Ano = :anio_ant AND Sal_Mes <= :mes THEN {columna} ELSE 0 END) <> 0
                 OR SUM(CASE WHEN Sal_Ano = :anio AND Sal_Mes <= :mes THEN {columna} ELSE 0 END) <> 0
             """
         ),
-        {"anio": anio, "anio_ant": anio_ant, "mes": mes},
+        {"anio": anio, "anio_ant": anio_ant, "mes": mes, "primer_digito": primer_digito},
     ).mappings().all()
 
     por_grupo: dict[str, dict] = {}
@@ -314,8 +339,8 @@ def _pagina_ingresos_desembolsos_acumulado(db: Session, anio: int, mes: int) -> 
     mapas_ingresos, _ = cargar_mapas_agrupador(db, "Ingresos")
     mapas_egresos, _ = cargar_mapas_agrupador(db, "Egresos")
 
-    detalle_ingresos, total_ingresos = _detalle_grupo_comparativo(db, anio, anio_ant, mes, "Creditos", mapas_ingresos)
-    detalle_egresos, total_egresos = _detalle_grupo_comparativo(db, anio, anio_ant, mes, "Debitos", mapas_egresos)
+    detalle_ingresos, total_ingresos = _detalle_grupo_comparativo(db, anio, anio_ant, mes, "Creditos", mapas_ingresos, "4")
+    detalle_egresos, total_egresos = _detalle_grupo_comparativo(db, anio, anio_ant, mes, "Debitos", mapas_egresos, "5")
 
     kpis = KpisIngresosDesembolsosAcumulado(
         ingresos=total_ingresos.anio_actual,

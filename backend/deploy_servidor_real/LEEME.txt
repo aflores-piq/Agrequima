@@ -17,9 +17,17 @@ Archivos que vas a usar:
   07_vista_nutrientes_activos.sql -> lo abris tambien en SSMS, crea la vista que oculta productos excluidos en todo dashboard/reporte/export (ver Paso 3E)
   08_formulas_excluidas_nutrientes.sql -> lo abris tambien en SSMS, excluye por formula completa (Mancozeb, Propamocarbhydrocloride) en vez de por producto puntual (ver Paso 3F)
   10_simplificar_exclusion_formulas.sql -> lo abris tambien en SSMS, simplifica la exclusion por formula para que ya no dependa de una tabla (ver Paso 3G)
-  11_control_acceso_por_modulo.sql -> lo abris tambien en SSMS, agrega el control de acceso por modulo (Importaciones/Financiero/Indicadores) a Usuarios (ver Paso 3H)
-  12_agrupador_cuentas_financiero.sql -> lo abris tambien en SSMS, carga el agrupador real de cuentas contables que arma la columna "Grupo" en Estados Financieros (ver Paso 3I)
+  11_aviso_legal_usuarios.sql    -> lo abris tambien en SSMS, agrega las columnas de aceptacion del aviso legal a Usuarios (ver Paso 3H)
+  11b_control_acceso_por_modulo.sql -> lo abris tambien en SSMS, agrega el control de acceso por modulo (Importaciones/Financiero/Indicadores) a Usuarios (ver Paso 3I) -- "11b" porque "11_aviso_legal_usuarios.sql" ya usaba el numero 11
+  12_agrupador_cuentas_financiero.sql -> lo abris tambien en SSMS, carga el agrupador real de cuentas contables que arma la columna "Grupo" en Estados Financieros (ver Paso 3J)
+  13_saldos_bancos_financiero.sql -> lo abris tambien en SSMS, crea dbo.SaldosBancos y dbo.SaldoBancario (modulo Financiero, Conciliacion bancaria/Flujo de caja) (ver Paso 3K)
+  14_otro_ingreso_financiero.sql -> lo abris tambien en SSMS, crea dbo.OtroIngreso (modulo Financiero, Otros ingresos generados) (ver Paso 3K)
+  15_tablas_financiero.sql      -> lo abris tambien en SSMS, crea las 7 tablas de Financiero restantes (BalanceSaldos, BalanceGeneral, CatalogoCuentas, CentrosDeCosto, Presupuestos, AsociadosCuota, ChequesCirculacion) (ver Paso 3K)
+  16a_datos_financiero.sql,     -> los abris tambien en SSMS, cargan los datos REALES de las 10 tablas
+  16b_datos_financiero.sql         de Financiero (ver Paso 3L) -- partido en 2 archivos porque
+                                    Presupuestos solo tiene ~128,000 filas y pesa ~15MB
   generar_hash_password.py       -> genera el valor que necesita 02_seed_roles_y_admin.sql
+  generar_datos_financiero.py    -> herramienta para regenerar 16a/16b_datos_financiero.sql con datos mas nuevos (no hace falta correrlo para instalar, ver Paso 3L)
   sync_piq_ia.py                 -> el programa que trae los datos cada noche
   .env.ejemplo                   -> plantilla de configuracion (la vas a copiar y completar)
   requirements.txt                -> lista de librerias de Python que hace falta instalar
@@ -435,7 +443,33 @@ aplicarlo a datos ya cargados, el UPDATE de backfill correspondiente).
 
 
 ====================================================================
- PASO 3H -- Control de acceso por módulo (Importaciones/Financiero/
+ PASO 3H -- Aviso legal y condiciones de uso (columnas en Usuarios --
+ con SSMS)
+====================================================================
+
+Agrega 2 columnas a dbo.Usuarios para registrar la aceptación del
+aviso legal que ahora se muestra una sola vez por usuario, al primer
+login (AvisoLegalAceptado BIT, AvisoLegalFechaAceptacion DATETIME con
+la hora del SERVIDOR, no la del navegador -- queda como respaldo ante
+cualquier reclamo).
+
+1. Abrir "11_aviso_legal_usuarios.sql" (de esta carpeta) en SSMS,
+   igual que los pasos anteriores.
+
+2. Presionar F5 (o "¡ Ejecutar") con la conexión a PIQ_IA activa.
+
+3. En la pestaña "Mensajes", confirmar que no haya ninguna línea en
+   ROJO. Al final aparece una tabla con 2 métricas (usuarios con
+   AvisoLegalAceptado=1 -- debe dar 0, recién creada la columna -- y el
+   total de usuarios de referencia).
+
+Es seguro volver a correr este script las veces que haga falta: cada
+ALTER TABLE está protegido, solo agrega la columna si no existe
+todavía.
+
+
+====================================================================
+ PASO 3I -- Control de acceso por módulo (Importaciones/Financiero/
  Indicadores -- con SSMS)
 ====================================================================
 
@@ -446,7 +480,7 @@ para poder combinar el acceso por usuario, igual que ya funciona
 "Puede exportar a Excel" -- se activa/desactiva por cuenta, sin
 depender del rol.
 
-1. Abrir "11_control_acceso_por_modulo.sql" (de esta carpeta) en SSMS,
+1. Abrir "11b_control_acceso_por_modulo.sql" (de esta carpeta) en SSMS,
    igual que los pasos anteriores.
 
 2. Presionar F5 (o "¡ Ejecutar") con la conexión a PIQ_IA activa.
@@ -469,7 +503,7 @@ todavía.
 
 
 ====================================================================
- PASO 3I -- Agrupador de cuentas contables (columna "Grupo" en Estados
+ PASO 3J -- Agrupador de cuentas contables (columna "Grupo" en Estados
  Financieros -- con SSMS)
 ====================================================================
 
@@ -496,6 +530,83 @@ de nuevo cuando eso se agregue, se va a pedir un script nuevo.
 
 Es seguro volver a correr este script las veces que haga falta: el
 INSERT no duplica filas ya cargadas.
+
+
+====================================================================
+ PASO 3K -- Las 10 tablas de Financiero (Saldos Bancarios/Otros
+ Ingresos/BalanceSaldos/BalanceGeneral/CatalogoCuentas/CentrosDeCosto/
+ Presupuestos/AsociadosCuota/ChequesCirculacion -- con SSMS)
+====================================================================
+
+El módulo Financiero completo (17 vistas) lee de 10 tablas en total.
+3 de ellas (SaldosBancos, SaldoBancario, OtroIngreso) ya tenían su
+propio script de creación de una ronda anterior; las otras 7
+(BalanceSaldos, BalanceGeneral, CatalogoCuentas, CentrosDeCosto,
+Presupuestos, AsociadosCuota, ChequesCirculacion) no lo tenían -- solo
+existían en la base de desarrollo, nunca se habían empaquetado para
+este servidor. Este paso completa las 10.
+
+1. Abrir, en este orden, cada uno en SSMS (igual que los pasos
+   anteriores) y presionar F5 con la conexión a PIQ_IA activa:
+   a. "13_saldos_bancos_financiero.sql"
+   b. "14_otro_ingreso_financiero.sql"
+   c. "15_tablas_financiero.sql"
+
+2. En la pestaña "Mensajes" de cada uno, confirmar que no haya ninguna
+   línea en ROJO. Los 3 terminan con una tabla mostrando el conteo de
+   filas de sus tablas -- todas en 0 es lo esperado acá (este paso
+   SOLO crea las tablas vacías, la carga real es el Paso 3L).
+
+Es seguro volver a correr estos 3 scripts las veces que haga falta:
+los CREATE TABLE están guardados con IF OBJECT_ID(...) IS NULL, no
+tocan la estructura si la tabla ya existe.
+
+
+====================================================================
+ PASO 3L -- Datos reales de las 10 tablas de Financiero (con SSMS)
+====================================================================
+
+Carga los datos REALES (exportados de la base de desarrollo el día
+que se generó este paquete) en las 10 tablas del Paso 3K. Partido en 2
+archivos porque Presupuestos por sí sola tiene ~128,000 filas (~15MB) --
+SSMS abre archivos grandes más lento, así que el resto de las tablas
+(mucho más chicas) va aparte para no esperar de más.
+
+1. Abrir "16a_datos_financiero.sql" (de esta carpeta) en SSMS -- es un
+   archivo grande (~15MB), puede tardar unos segundos en abrir, igual
+   que "03_cargar_datos_iniciales.sql" en el Paso 3.
+
+2. Presionar F5 (o "¡ Ejecutar") con la conexión a PIQ_IA activa. Puede
+   tardar uno o dos minutos (son más de 140,000 filas entre las 6
+   tablas de este archivo).
+
+3. En la pestaña "Mensajes", confirmar 6 líneas "OK: <tabla> cargada
+   (### filas)" -- una por BalanceSaldos, BalanceGeneral,
+   CatalogoCuentas, CentrosDeCosto, Presupuestos y AsociadosCuota.
+
+4. Repetir los pasos 1-3 con "16b_datos_financiero.sql" (mucho más
+   chico, ~0.5MB) -- confirma 4 líneas más: ChequesCirculacion,
+   SaldosBancos, SaldoBancario, OtroIngreso. Al final de ESTE archivo
+   (el segundo) aparece la tabla de verificación final con las 10
+   tablas y su conteo de filas.
+
+   Si en cambio aparece "ERROR al cargar <tabla>: ...", anotar el
+   mensaje completo -- ese texto dice exactamente qué salió mal en esa
+   tabla puntual (cada tabla tiene su propia transacción, un error en
+   una no afecta a las demás).
+
+Es seguro volver a correr estos 2 archivos las veces que haga falta:
+cada tabla se vacía (TRUNCATE) antes de volver a insertar sus datos,
+así que nunca duplica filas.
+
+Para refrescar estos 2 archivos más adelante con datos más nuevos de
+la base de desarrollo (sin tener que pedir que se regeneren a mano):
+desde la raíz del repositorio,
+    python backend/deploy_servidor_real/generar_datos_financiero.py
+Regenera "16a_datos_financiero.sql"/"16b_datos_financiero.sql" (o más
+letras si hiciera falta partir en más de 2) con los datos actuales de
+la base de desarrollo -- no hace falta tocar el código de ese script,
+solo correrlo de nuevo cuando haga falta un refresh.
 
 
 ====================================================================
@@ -749,3 +860,351 @@ No me acuerdo la contraseña que puse en el Paso 2 / la quiero cambiar
      correr el script completo de nuevo -- cada tabla se vacía antes
      de reintentar, no duplica nada. Si el error persiste en la misma
      tabla, copiar el mensaje completo para poder diagnosticarlo.
+
+
+====================================================================
+ ¿CÓMO SE MANTIENEN ACTUALIZADOS LOS DATOS DE FINANCIERO DESPUÉS DE
+ PUBLICAR? (sync_piq_ia.py -- estado real, no implementado en esta ronda)
+====================================================================
+
+Pregunta corta: hoy, sync_piq_ia.py YA tiene la conexión a CONTACC
+configurada y lista (SYNC_CONTACC_DB_*/SYNC_VISTAS_CONTACC en el
+.env, Paso 5) y sincroniza 8 de las 10 tablas de Financiero cada noche
+-- PERO con un problema real que hay que resolver antes de confiar en
+esa sincronización: escribe el resultado en tablas con el MISMO NOMBRE
+que la vista de origen (dbo.vw_piq_balance_saldos, dbo.vw_piq_balance_general,
+dbo.vw_catalogo_cuentas, dbo.vw_piq_centrosdecosto, dbo.vw_piq_presupuestos,
+dbo.vw_piq_cheques_circulacion, dbo.vw_piq_asociados_cuota,
+dbo.vw_piq_saldos_bancos) -- NO en las tablas que el dashboard
+realmente lee (dbo.BalanceSaldos, dbo.BalanceGeneral, dbo.CatalogoCuentas,
+dbo.CentrosDeCosto, dbo.Presupuestos, dbo.ChequesCirculacion,
+dbo.AsociadosCuota, dbo.SaldosBancos).
+
+En otras palabras: con el .env de Financiero completado (Paso 5) y la
+tarea programada corriendo (Paso 7), cada noche SÍ se refrescarían 8
+tablas nuevas de nombre "vw_piq_*" -- pero las pantallas seguirían
+mostrando los datos de la última vez que alguien corrió
+"16a/16b_datos_financiero.sql" o "cargar_datos_financiero_inicial.py"
+a mano, porque esas tablas "vw_piq_*" no las lee nadie. Confirmado
+leyendo el código de sync_piq_ia.py (_copiar_tabla usa el mismo nombre
+de origen y destino) -- no es una suposición.
+
+Las otras 2 tablas (SaldoBancario, OtroIngreso) NO están ni siquiera
+en esa lista -- su origen no es una vista de CONTACC sino
+Agrequima.dbo.SaldoBancario/dbo.OtroIngreso del OTRO servidor
+(SYNC_ORIGEN_*), y hoy SYNC_TABLAS solo lista Importacion/Nutrientes/
+los 2 catálogos de Plaguicidas-Nutrientes -- ninguna tabla de
+Financiero. Esas 2 tampoco se sincronizarían solas.
+
+Qué falta para que el sync nocturno SÍ mantenga Financiero al día (NO
+implementado en esta ronda, a propósito -- solo se documenta la
+brecha):
+  1. Que sync_piq_ia.py copie cada vista de CONTACC a la tabla CORRECTA
+     (ej. vw_piq_balance_saldos -> dbo.BalanceSaldos), no a una tabla
+     con su mismo nombre -- un mapeo {vista_origen: tabla_destino} en
+     vez de una sola lista de nombres.
+  2. Agregar SaldoBancario y OtroIngreso a SYNC_TABLAS (su origen YA
+     es el mismo servidor/base que Importacion/Nutrientes, solo falta
+     sumarlos a esa variable) -- aunque esto probablemente necesite el
+     mismo tipo de mapeo del punto 1, porque esas 2 tablas también
+     podrían tener una estructura de columnas distinta entre origen y
+     destino.
+
+Hasta que eso se implemente, la forma de mantener Financiero
+actualizado en el servidor real sigue siendo MANUAL: repetir el Paso
+3L (correr generar_datos_financiero.py contra la base de desarrollo
+actualizada, y volver a correr 16a/16b en SSMS contra PIQ_IA) cada vez
+que haga falta un refresh, igual que se hizo para esta publicación.
+
+
+====================================================================
+ LISTA DE VERIFICACIÓN FINAL (antes de dar por publicado el módulo
+ Financiero)
+====================================================================
+
+[ ] Paso 1 corrido (base PIQ_IA existe).
+[ ] Paso 2 corrido (al menos 1 usuario Administrador puede iniciar sesión).
+[ ] Paso 3 corrido (Importacion/Nutrientes/catálogos cargados).
+[ ] Pasos 3H, 3I, 3J, 3K, 3L corridos, en ese orden (aviso legal,
+    control de acceso, agrupador de cuentas, las 10 tablas de
+    Financiero creadas, datos reales cargados).
+[ ] Verificar en SSMS, conectado a PIQ_IA:
+      SELECT name FROM sys.tables WHERE name IN
+        ('BalanceSaldos','BalanceGeneral','CatalogoCuentas','CentrosDeCosto',
+         'Presupuestos','AsociadosCuota','ChequesCirculacion','SaldosBancos',
+         'SaldoBancario','OtroIngreso');
+    -> deben aparecer las 10.
+      SELECT COUNT(*) FROM dbo.BalanceSaldos; -- (y así con cada una)
+    -> ninguna debe dar 0 (confirma que el Paso 3L sí cargó datos).
+      SELECT name FROM sys.columns WHERE object_id =
+        OBJECT_ID('dbo.Usuarios') AND name IN
+        ('AccesoFinanciero','AvisoLegalAceptado');
+    -> deben aparecer las 2.
+[ ] Backend desplegado (mismo mecanismo que para Importaciones: copiar
+    el código, instalar dependencias de requirements.txt, configurar
+    el .env del backend -- no el de esta carpeta, que es solo para
+    sync_piq_ia.py -- con la conexión a PIQ_IA, y correrlo como
+    servicio/tarea de Windows).
+[ ] Frontend desplegado (mismo mecanismo que Importaciones: "npm run
+    build" del lado donde se desarrolla, copiar la carpeta "dist/" al
+    servidor, servida por el mismo backend vía FRONTEND_DIST_PATH -- ver
+    app/core/config.py -- o por IIS/nginx si ya existe esa
+    configuración para Importaciones).
+[ ] Al menos 1 usuario real de Agrequima tiene "Acceso a Financiero"
+    activado (ver abajo, "Cómo dar el permiso de Financiero").
+[ ] Entrar con ese usuario y confirmar que las 17 vistas cargan sin
+    error 500 y con números que tengan sentido (no necesariamente
+    iguales a los de esta ronda -- los datos del servidor real pueden
+    diferir de los de la base de desarrollo).
+[ ] sync_piq_ia.py: decidido (no bloqueante) si se deja configurado
+    tal cual (sabiendo que NO actualiza Financiero por la brecha de
+    nombres de tabla explicada arriba) o se pospone hasta resolver esa
+    brecha -- de cualquier manera, el refresh manual (Paso 3L) sigue
+    funcionando mientras tanto.
+
+Cómo dar el permiso de Financiero a un usuario:
+  1. Iniciar sesión como Administrador (o Administrador de Usuarios).
+  2. Ir a Administración -> Usuarios.
+  3. Si el usuario no existe todavía: crearlo desde el formulario
+     "Nuevo usuario" arriba, tildando el checkbox "Acceso a Financiero"
+     antes de darle a "Crear usuario".
+  4. Si el usuario ya existe: en su fila de la tabla, tildar el
+     checkbox de la columna "Financiero" -- se aplica al instante, sin
+     que el usuario tenga que volver a iniciar sesión (el backend lo
+     valida fresco en cada pedido, no queda embebido en el token).
+
+
+====================================================================
+ PUBLICACIÓN DE FINANCIERO EN ESTE SERVIDOR YA INSTALADO
+ (VMI1979377\SQLEXPRESS, C:\Pronostiq\Agrequima-pronostiq)
+====================================================================
+
+Esta sección es DISTINTA de los Pasos 1-8 de arriba (esos son para una
+instalación nueva, desde cero). Este servidor YA tiene Importaciones
+publicado y funcionando -- ya se corrieron los scripts 01 al 10 y
+"11_aviso_legal_usuarios.sql". Esta sección agrega SOLO lo que falta
+para Financiero: "11b_control_acceso_por_modulo.sql" (todavía no
+corrido acá) y del 12 al 16 (no existen todavía -- Financiero nunca se
+publicó en este servidor).
+
+Carpeta real de la app en este servidor: "C:\Pronostiq\Agrequima-pronostiq"
+  backend\        -> .venv, app\ (el código Python), deploy_servidor_real\,
+                      requirements.txt
+  deploy\         -> los scripts SQL que SÍ se usan para correr contra
+                      este servidor, LEEME.txt, sync_piq_ia.py
+  frontend\       -> assets\, index.html (el build ya compilado que
+                      sirve el backend)
+  logs\
+  .env            -> configuración del backend (conexión a PIQ_IA, JWT, etc.)
+  nssm.exe        -> administra el backend como servicio de Windows
+
+
+--------------------------------------------------------------------
+ PASO F0 -- Respaldo antes de empezar
+--------------------------------------------------------------------
+
+1. Backup de la base PIQ_IA (en SSMS, conectado a VMI1979377\SQLEXPRESS):
+   click derecho sobre la base "PIQ_IA" -> Tareas -> Hacer copia de
+   seguridad... -> Tipo de copia "Completa" -> Aceptar. Anotar la
+   ruta del archivo .bak que genera (por si hace falta restaurar).
+
+   Alternativa por T-SQL, si se prefiere:
+       BACKUP DATABASE PIQ_IA
+       TO DISK = 'C:\Pronostiq\Backups\PIQ_IA_antes_de_financiero.bak'
+       WITH FORMAT, INIT, NAME = 'PIQ_IA - antes de publicar Financiero';
+
+2. Copia de las carpetas de código ANTES de pisarlas (para poder volver
+   atrás sin git ni conexión a internet si algo sale mal):
+       xcopy "C:\Pronostiq\Agrequima-pronostiq\backend\app" "C:\Pronostiq\Backups\backend_app_antes_financiero\" /E /I /H
+       xcopy "C:\Pronostiq\Agrequima-pronostiq\frontend" "C:\Pronostiq\Backups\frontend_antes_financiero\" /E /I /H
+
+No seguir hasta tener los 2 respaldos (base + carpetas) confirmados.
+
+
+--------------------------------------------------------------------
+ PASO F1 -- Scripts SQL en SSMS (VMI1979377\SQLEXPRESS, base PIQ_IA)
+--------------------------------------------------------------------
+
+IMPORTANTE: "11_aviso_legal_usuarios.sql" YA ESTÁ CORRIDO en este
+servidor -- NO se vuelve a correr (es idempotente, no rompería nada si
+se corriera de nuevo, pero no hace falta).
+
+Copiar a "C:\Pronostiq\Agrequima-pronostiq\deploy\" (o la carpeta de
+scripts que se use en este servidor) estos 7 archivos, desde
+"backend\deploy_servidor_real\" del repositorio en la rama main
+(después del merge del punto 5 de este pedido):
+  11b_control_acceso_por_modulo.sql
+  12_agrupador_cuentas_financiero.sql
+  13_saldos_bancos_financiero.sql
+  14_otro_ingreso_financiero.sql
+  15_tablas_financiero.sql
+  16a_datos_financiero.sql
+  16b_datos_financiero.sql
+
+Correrlos en SSMS, EN ESTE ORDEN, conectado a VMI1979377\SQLEXPRESS,
+base PIQ_IA activa (F5 en cada uno, revisar que no haya ninguna línea
+en ROJO en "Mensajes" antes de pasar al siguiente):
+
+  1. 11b_control_acceso_por_modulo.sql
+     Verificar: SELECT name FROM sys.columns WHERE object_id =
+       OBJECT_ID('dbo.Usuarios') AND name IN
+       ('AccesoImportaciones','AccesoFinanciero','AccesoIndicadores');
+     -> deben aparecer las 3. También correr:
+       SELECT NombreUsuario, AccesoImportaciones, AccesoFinanciero
+       FROM dbo.Usuarios u JOIN dbo.Roles r ON r.RolId=u.RolId
+       WHERE r.NombreRol='Administrador';
+     -> todas las cuentas de rol Administrador deben tener
+        AccesoImportaciones=1 Y AccesoFinanciero=1.
+
+  2. 12_agrupador_cuentas_financiero.sql
+     Verificar: SELECT COUNT(*) FROM dbo.CatalogoAgrupadorCuentas;
+     -> debe dar 42.
+
+  3. 13_saldos_bancos_financiero.sql
+     Verificar: SELECT name FROM sys.tables WHERE name IN
+       ('SaldosBancos','SaldoBancario'); -> deben aparecer las 2
+       (todavía vacías, es esperado -- las llena el Paso 16b).
+
+  4. 14_otro_ingreso_financiero.sql
+     Verificar: SELECT name FROM sys.tables WHERE name='OtroIngreso';
+     -> debe aparecer (vacía todavía, la llena el Paso 16b).
+
+  5. 15_tablas_financiero.sql
+     Verificar: SELECT name FROM sys.tables WHERE name IN
+       ('BalanceSaldos','BalanceGeneral','CatalogoCuentas','CentrosDeCosto',
+        'Presupuestos','AsociadosCuota','ChequesCirculacion');
+     -> deben aparecer las 7 (vacías todavía, las llena el Paso 16a).
+
+  6. 16a_datos_financiero.sql (archivo grande, ~15MB -- puede tardar
+     uno o dos minutos en abrir y correr)
+     Verificar: confirmar en "Mensajes" las 6 líneas "OK: <tabla>
+       cargada (### filas)" (BalanceSaldos, BalanceGeneral,
+       CatalogoCuentas, CentrosDeCosto, Presupuestos, AsociadosCuota).
+
+  7. 16b_datos_financiero.sql
+     Verificar: confirmar las 4 líneas "OK: <tabla> cargada"
+       (ChequesCirculacion, SaldosBancos, SaldoBancario, OtroIngreso)
+       y la tabla final con las 10 tablas y su conteo de filas (ninguna
+       en 0).
+
+Si alguno de estos 7 scripts falla a mitad de camino: son todos
+idempotentes (correrlos de nuevo no duplica ni rompe nada), así que
+alcanza con corregir lo que haya fallado y volver a correr ESE script
+puntual -- no hace falta repetir los anteriores.
+
+
+--------------------------------------------------------------------
+ PASO F2 -- Copiar el código nuevo (backend + frontend)
+--------------------------------------------------------------------
+
+1. Detener el servicio de Windows ANTES de copiar archivos nuevos (ver
+   Paso F3 para el comando exacto con nssm) -- copiar con el servicio
+   corriendo puede fallar si algún archivo .pyc/.dll está en uso.
+
+2. Backend: copiar la carpeta "app\" completa desde el repositorio
+   (rama main, después del merge) hacia
+   "C:\Pronostiq\Agrequima-pronostiq\backend\app\", reemplazando la
+   existente (ya quedó respaldada en el Paso F0). El "requirements.txt"
+   NO cambió esta ronda (ver punto 3 del reporte) -- no hace falta
+   reinstalar nada, pero no está de más confirmar con
+   "pip freeze" dentro del .venv del servidor si hay dudas.
+
+3. Frontend: generar el build nuevo DESDE la máquina de desarrollo
+   (no en el servidor -- no hace falta Node.js instalado ahí):
+       cd frontend
+       npm run build
+   Esto genera "frontend\dist\" (index.html + assets\). Copiar el
+   CONTENIDO de esa carpeta "dist\" (no la carpeta en sí) hacia
+   "C:\Pronostiq\Agrequima-pronostiq\frontend\", reemplazando
+   "index.html" y la carpeta "assets\" existentes.
+
+
+--------------------------------------------------------------------
+ PASO F3 -- Paquetes y .env
+--------------------------------------------------------------------
+
+Paquetes de Python: NINGUNO nuevo -- "backend/requirements.txt" es
+IDÉNTICO entre "main" y "financiero" (confirmado con "git diff", sin
+diferencias). No hace falta tocar el .venv del servidor para nada
+relacionado con paquetes.
+
+Variables de entorno (.env del backend, NO el de esta carpeta
+deploy\, que es solo para sync_piq_ia.py): NINGUNA variable nueva
+hace falta para que Financiero funcione -- usa exactamente la misma
+conexión a PIQ_IA (DB_SERVER/DB_NAME/DB_USER/DB_PASSWORD) que ya usan
+Plaguicidas/Nutrientes, sin ninguna configuración propia. Confirmado
+revisando "backend/app/core/config.py" y los 6 archivos de servicios
+de Financiero: ninguno lee una variable de entorno que no sea una de
+las ya existentes.
+
+(La sincronización nocturna contra CONTACC -- SYNC_CONTACC_DB_*/
+SYNC_VISTAS_CONTACC en el .env de deploy\ -- es aparte, no hace falta
+para publicar Financiero hoy, y tiene una brecha conocida sin resolver
+-- ver la sección de arriba "¿CÓMO SE MANTIENEN ACTUALIZADOS...".)
+
+
+--------------------------------------------------------------------
+ PASO F4 -- Reiniciar el servicio con nssm
+--------------------------------------------------------------------
+
+Desde el Símbolo del sistema, como Administrador, en
+"C:\Pronostiq\Agrequima-pronostiq":
+
+    nssm.exe restart <NombreDelServicio>
+
+(Si no se recuerda el nombre exacto del servicio: "nssm.exe status
+<nombre>" para probar, o revisar en "services.msc" cuál corresponde a
+esta app -- suele llamarse algo como "AgrequimaBackend" o similar,
+confirmarlo antes si no se tiene a mano.)
+
+Confirmar que levantó bien:
+  - "services.msc" -> el servicio en estado "En ejecución".
+  - Revisar el log más reciente en "C:\Pronostiq\Agrequima-pronostiq\logs\"
+    -- no debe haber un traceback de arranque.
+  - Abrir la URL real de la app en un navegador y confirmar que carga
+    la pantalla de login (confirma que el backend sirve el frontend
+    nuevo, no solo que el proceso está vivo).
+
+
+--------------------------------------------------------------------
+ PASO F5 -- Verificación final
+--------------------------------------------------------------------
+
+1. Entrar con un usuario que tenga SOLO AccesoImportaciones=1 (sin
+   Financiero): el Sidebar debe mostrar únicamente "Dashboard
+   Importaciones" -- nada de "Dashboard Financiero". Probar además
+   escribir a mano la URL de una pantalla de Financiero (ej.
+   "/app/financiero?vista=mensual") -- debe rebotar a "/app" sin
+   mostrar ningún dato ni nombrar el módulo (ver bitácora, secciones
+   18/19 -- esa protección ya está en el código, no hace falta nada
+   nuevo acá, solo confirmarla en este servidor).
+
+2. Darle acceso a ese mismo usuario (o a otro) desde Administración ->
+   Usuarios -> tildar el checkbox "Financiero" en su fila. Volver a
+   entrar (o recargar la página, no hace falta cerrar sesión) -- ahora
+   sí debe aparecer "Dashboard Financiero" en el Sidebar, con las 17
+   vistas cargando datos reales.
+
+3. Confirmar que Importaciones/Plaguicidas/Nutrientes siguen
+   funcionando exactamente igual que antes de esta publicación (no se
+   tocó ese módulo en ningún paso).
+
+
+--------------------------------------------------------------------
+ CÓMO VOLVER ATRÁS SI ALGO FALLA
+--------------------------------------------------------------------
+
+1. Detener el servicio: "nssm.exe stop <NombreDelServicio>".
+2. Restaurar el código: borrar "backend\app\" y "frontend\" actuales,
+   copiar de vuelta el contenido de
+   "C:\Pronostiq\Backups\backend_app_antes_financiero\" y
+   "C:\Pronostiq\Backups\frontend_antes_financiero\" (Paso F0).
+3. Restaurar la base (SOLO si los scripts SQL del Paso F1 dejaron algo
+   roto -- los 7 scripts son aditivos, no tocan ninguna tabla de
+   Importaciones/Nutrientes, así que normalmente NO hace falta este
+   paso): en SSMS, click derecho sobre PIQ_IA -> Tareas -> Restaurar ->
+   Base de datos... -> elegir el .bak del Paso F0. Esto exige cerrar
+   todas las conexiones activas a PIQ_IA primero (parar el servicio del
+   Paso 1 ya ayuda a eso).
+4. Reiniciar el servicio: "nssm.exe start <NombreDelServicio>".
+5. Confirmar que Importaciones vuelve a funcionar igual que antes.
