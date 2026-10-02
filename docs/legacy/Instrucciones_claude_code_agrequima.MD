@@ -458,3 +458,43 @@ Ronda de agregados pedidos directamente por el cliente, NINGUNO viene del `.pbix
 - Tests (108 backend), `tsc` y `build` limpios.
 
 **Nota técnica de entorno:** el binario de Chromium embebido de Playwright en esta máquina falla al lanzar (`spawn UNKNOWN` / error de side-by-side de Windows) -- la verificación de esta ronda se corrió apuntando `executablePath` al Chrome del sistema (`C:\Program Files\Google\Chrome\Application\chrome.exe`). Además, el frontend de desarrollo solo acepta CORS desde `http://localhost:5173` (no `127.0.0.1:5173`, un origen distinto para el navegador) -- el script de verificación debe navegar a `localhost`, no a `127.0.0.1`.
+
+## 18. Permisos por módulo: un usuario sin acceso no ve ni se entera de que el módulo existe (2026-10-01)
+
+Hasta esta ronda, el control de acceso por módulo (`AccesoImportaciones`/`AccesoFinanciero`/`AccesoIndicadores`, sección 12) solo ocultaba el bloque del Sidebar y protegía los endpoints del backend -- pero la RUTA del frontend (`RequireRole` en `App.tsx`) solo validaba el ROL, no el módulo. Un usuario logueado que escribiera a mano la URL de un módulo sin permiso (ej. `/app/financiero` sin `AccesoFinanciero`) SÍ montaba la página (el `useEffect` de carga de datos llegaba a ejecutarse, aunque el fetch fallara con 403 después). Además, el `detail` del 403 nombraba el módulo exacto ("No tiene acceso al módulo Financiero."), confirmándole a quien no tiene acceso que ese módulo existe.
+
+**Regla de permisos (a partir de ahora, aplica a todo módulo nuevo):** un usuario sin acceso a un módulo no debe poder enterarse de que existe por NINGÚN medio -- ni Sidebar, ni URL directa, ni mensaje de error, ni ninguna petición de red al backend de ese módulo.
+
+**Implementado:**
+1. **`RequireModulo`** (`frontend/src/auth/RequireRole.tsx`), mismo patrón que `RequireRole` pero por flag de módulo en vez de por rol -- se anida DENTRO de cada `<Route>` de un sistema (`App.tsx`), sin reemplazar a `RequireRole` (que sigue validando rol + aviso legal para todo `/app`). Si el usuario no tiene el flag, devuelve `<Navigate to="/app" replace />` en vez de los `children` -- la página del módulo NUNCA se monta (su `useEffect` de fetch nunca corre) y no se renderiza ningún texto (un `<Navigate>` no pinta nada).
+2. **`AppIndexRedirect`** (`App.tsx`) reemplaza el `<Navigate to="plaguicidas">` fijo del índice de `/app`: calcula el primer módulo al que el usuario SÍ tiene acceso (Importaciones primero, después Financiero) en vez de un destino fijo -- el fijo rompía en loop infinito para un usuario con SOLO Financiero (rebotaba de `/app/plaguicidas` a `/app`, que lo volvía a mandar a `/app/plaguicidas`...). Si no tiene acceso a ningún módulo, muestra un texto neutro ("No tiene acceso a ningún módulo.") que no nombra ninguno.
+3. **Backend** (`app/core/deps.py`, `_verificar_acceso_modulo`): el `detail` del 403 pasa a ser genérico ("No tiene acceso a este recurso.") en los 3 `require_acceso_*`, sin mencionar qué módulo. No se tocaron las pantallas de administración (`/admin/cargas/*`, protegidas por ROL "Administrador", no por módulo) -- fuera del alcance pedido.
+
+**Verificación (Playwright en primer plano, 3 usuarios temporales -- Solo Importaciones, Solo Financiero, Ambos):**
+
+| Usuario | Sidebar muestra | URL directa a módulo no permitido | Petición al backend del módulo denegado | Texto del módulo en pantalla | Llamada directa al endpoint |
+|---|---|---|---|---|---|
+| Solo Importaciones | Solo "Dashboard Importaciones" | `/app/financiero?vista=mensual` → redirige a `/app/plaguicidas` | Ninguna a `/dashboard/financiero/*` | No aparece "Financiero" en ningún lado | 403 "No tiene acceso a este recurso." |
+| Solo Financiero | Solo "Dashboard Financiero" | `/app/plaguicidas` y `/app/nutrientes` → redirige a `/app/financiero` | Ninguna a `/dashboard/plaguicidas` ni `/dashboard/nutrientes` | No aparece "Plaguicidas" ni "Nutrientes" en ningún lado | 403 "No tiene acceso a este recurso." |
+| Ambos | Los 2 bloques | (no aplica, tiene los 2 accesos) | (no aplica) | (no aplica) | (no aplica, control positivo) |
+
+Tests (108 backend), `tsc` y `build` limpios. Nota de entorno: el backend de desarrollo estaba corriendo sin `--reload` (proceso persistente desde una sesión anterior) -- el primer intento de verificación trajo el `detail` VIEJO del 403 ("...módulo Financiero.") pese a que el código ya estaba corregido; se reinició el proceso (`uvicorn app.main:app --host 127.0.0.1 --port 8001`, mismo comando) para que tomara el cambio, y se confirmó el `detail` nuevo después.
+
+## 19. Permisos de /admin: cargas exclusivas de "Administrador" (2026-10-02)
+
+Auditoría pedida antes de cambiar nada: ¿qué ve hoy cada rol en `/admin` y qué rutas/endpoints de carga puede usar? Resultado -- **la protección de cargas por rol YA EXISTÍA, completa, en las 2 capas que importan:**
+- **Frontend:** cada ruta de carga/nomenclatura (`cargas/plaguicidas`, `cargas/nutrientes`, `nomenclatura/plaguicidas`, `nomenclatura/nutrientes`, `cargas/saldos-bancarios`, `cargas/otros-ingresos`) ya estaba envuelta individualmente en `<RequireRole roles={["Administrador"]}>` dentro de `App.tsx` -- un link directo de "Administrador de Usuarios" o "Usuario" ya rebotaba sin montar la página. El menú de `AdminLayout.tsx` ya filtraba por `esAdministradorDeUsuarios` (ese rol solo ve "Usuarios" en el menú).
+- **Backend:** los 5 endpoints de `admin_cargas.py` y el router completo de `admin_nomenclatura.py` ya exigían `Depends(require_role("Administrador"))`.
+- El rol "Usuario" nunca llega ni siquiera a `AdminLayout`: el `RequireRole` que envuelve TODO `/admin` en `App.tsx` solo permite `["Administrador", "Administrador de Usuarios"]` -- un "Usuario" que escriba cualquier URL de `/admin/*` rebota a `/app` antes de que exista ninguna ruta hija que evaluar.
+
+**El único cambio real de esta ronda:** unificar el texto del 403 por rol. `require_role()` (`app/core/deps.py`) devolvía `"No tiene permisos para esta acción"` -- genérico (no nombraba el rol ni la pantalla), pero con una redacción distinta del `"No tiene acceso a este recurso."` ya establecido para los permisos por módulo (sección 18). Cambiado a ese mismo texto exacto, para que los 2 tipos de 403 (por rol y por módulo) sean indistinguibles entre sí. No afecta ningún otro comportamiento: `require_role` solo se usa en `admin_cargas.py`, `admin_nomenclatura.py` y `admin_usuarios.py` (este último permite explícitamente "Administrador" Y "Administrador de Usuarios" -- sin cambios ahí, Administrador de Usuarios sigue pudiendo crear/editar usuarios).
+
+**Verificación (Playwright en primer plano, 3 usuarios temporales -- uno por rol):**
+
+| Rol | Aterriza en | URL directa a las 6 rutas de carga/nomenclatura | Petición al backend de carga/nomenclatura | Llamada directa a `/admin/cargas/historial` | Crear/editar usuarios |
+|---|---|---|---|---|---|
+| Administrador | `/admin/cargas/plaguicidas` (todo el menú de cargas + Usuarios) | Entra a las 6, cada una pide sus propios datos normalmente | Sí (esperado, tiene permiso) | (no aplica, sí tiene acceso) | (no aplica a este rol) |
+| Administrador de Usuarios | `/admin/usuarios` (solo "Usuarios" en el menú) | Las 6 rebotan a `/admin/usuarios` | Ninguna (solo la navegación del propio React Router, 0 llamadas a `/api/admin/cargas/*` ni `/api/admin/nomenclatura/*`) | 403 "No tiene acceso a este recurso." | Crear: 201. Editar: 200 -- sigue funcionando |
+| Usuario | `/app/plaguicidas` (nunca llega a `/admin`) | Las 6 rebotan a `/app/plaguicidas` | Ninguna | 403 "No tiene acceso a este recurso." | (no aplica a este rol) |
+
+Tests (108 backend), `tsc` y `build` limpios.

@@ -41,7 +41,7 @@ def require_role(*roles_permitidos: str):
         if usuario.rol not in roles_permitidos:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="No tiene permisos para esta acción",
+                detail="No tiene acceso a este recurso.",
             )
         return usuario
 
@@ -68,17 +68,21 @@ def require_export_permission(
     return usuario
 
 
-def _verificar_acceso_modulo(db: Session, usuario: UsuarioToken, columna, nombre_modulo: str) -> None:
+def _verificar_acceso_modulo(db: Session, usuario: UsuarioToken, columna) -> None:
     """Compartido por require_acceso_importaciones/financiero/indicadores
     -- mismo criterio que require_export_permission: permiso individual
     por usuario, consultado fresco en cada request (no embebido de forma
     estática), así que un cambio de acceso aplica de inmediato sin
-    esperar a que el usuario vuelva a loguearse."""
+    esperar a que el usuario vuelva a loguearse.
+
+    El detail NUNCA nombra el módulo -- un usuario sin acceso a
+    Financiero no tiene que poder deducir, ni por el mensaje de error,
+    que ese módulo existe (ver bitácora, regla de permisos)."""
     tiene_acceso = db.query(columna).filter(Usuario.UsuarioId == usuario.usuario_id).scalar()
     if not tiene_acceso:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"No tiene acceso al módulo {nombre_modulo}.",
+            detail="No tiene acceso a este recurso.",
         )
 
 
@@ -86,7 +90,7 @@ def require_acceso_importaciones(
     usuario: UsuarioToken = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> UsuarioToken:
-    _verificar_acceso_modulo(db, usuario, Usuario.AccesoImportaciones, "Importaciones")
+    _verificar_acceso_modulo(db, usuario, Usuario.AccesoImportaciones)
     return usuario
 
 
@@ -94,7 +98,7 @@ def require_acceso_financiero(
     usuario: UsuarioToken = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> UsuarioToken:
-    _verificar_acceso_modulo(db, usuario, Usuario.AccesoFinanciero, "Financiero")
+    _verificar_acceso_modulo(db, usuario, Usuario.AccesoFinanciero)
     return usuario
 
 
@@ -104,5 +108,5 @@ def require_acceso_indicadores(
 ) -> UsuarioToken:
     """Todavía sin endpoints propios (Indicadores no tiene pantallas) --
     lista para usarse en cuanto ese proyecto arranque."""
-    _verificar_acceso_modulo(db, usuario, Usuario.AccesoIndicadores, "Indicadores")
+    _verificar_acceso_modulo(db, usuario, Usuario.AccesoIndicadores)
     return usuario

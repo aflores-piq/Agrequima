@@ -1,6 +1,6 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider, useAuth } from "./auth/AuthContext";
-import { RequireRole, destinoPorRol } from "./auth/RequireRole";
+import { RequireRole, RequireModulo, destinoPorRol } from "./auth/RequireRole";
 import { ThemeProvider } from "./theme/ThemeContext";
 import { LoginPage } from "./pages/LoginPage";
 import { AppLayout } from "./pages/app/AppLayout";
@@ -32,6 +32,20 @@ function AdminIndexRedirect() {
   return <Navigate to={destino} replace />;
 }
 
+/** Destino de /app (index): el primer módulo al que el usuario SÍ tiene
+ * acceso -- antes era un <Navigate to="plaguicidas"> fijo, que para un
+ * usuario sin Importaciones entraba en loop con RequireModulo (rebota a
+ * /app, que vuelve a mandarlo a plaguicidas, que vuelve a rebotar...).
+ * Si no tiene acceso a NINGÚN módulo, se queda en una pantalla neutra
+ * (no nombra ningún módulo, no es un rebote hacia una ruta que lo
+ * volvería a mandar aquí). */
+function AppIndexRedirect() {
+  const { sesion } = useAuth();
+  if (sesion?.accesoImportaciones) return <Navigate to="plaguicidas" replace />;
+  if (sesion?.accesoFinanciero) return <Navigate to="financiero" replace />;
+  return <p className="p-6 text-sm text-ink-muted">No tiene acceso a ningún módulo.</p>;
+}
+
 export default function App() {
   return (
     <ThemeProvider>
@@ -48,14 +62,63 @@ export default function App() {
               </RequireRole>
             }
           >
-            <Route index element={<Navigate to="plaguicidas" replace />} />
-            <Route path="plaguicidas" element={<DashboardPlaguicidasPage />} />
-            <Route path="nutrientes" element={<DashboardNutrientesPage />} />
-            <Route path="financiero" element={<DashboardFinancieroPage />} />
-            <Route path="financiero/otros-informes" element={<DashboardOtrosInformesPage />} />
-            <Route path="financiero/presupuestos" element={<DashboardPresupuestosPage />} />
-            <Route path="financiero/importaciones" element={<DashboardImportacionesFinancieroPage />} />
-            <Route path="financiero/otros-ingresos" element={<DashboardOtroIngresoPage />} />
+            <Route index element={<AppIndexRedirect />} />
+            <Route
+              path="plaguicidas"
+              element={
+                <RequireModulo modulo="importaciones">
+                  <DashboardPlaguicidasPage />
+                </RequireModulo>
+              }
+            />
+            <Route
+              path="nutrientes"
+              element={
+                <RequireModulo modulo="importaciones">
+                  <DashboardNutrientesPage />
+                </RequireModulo>
+              }
+            />
+            <Route
+              path="financiero"
+              element={
+                <RequireModulo modulo="financiero">
+                  <DashboardFinancieroPage />
+                </RequireModulo>
+              }
+            />
+            <Route
+              path="financiero/otros-informes"
+              element={
+                <RequireModulo modulo="financiero">
+                  <DashboardOtrosInformesPage />
+                </RequireModulo>
+              }
+            />
+            <Route
+              path="financiero/presupuestos"
+              element={
+                <RequireModulo modulo="financiero">
+                  <DashboardPresupuestosPage />
+                </RequireModulo>
+              }
+            />
+            <Route
+              path="financiero/importaciones"
+              element={
+                <RequireModulo modulo="financiero">
+                  <DashboardImportacionesFinancieroPage />
+                </RequireModulo>
+              }
+            />
+            <Route
+              path="financiero/otros-ingresos"
+              element={
+                <RequireModulo modulo="financiero">
+                  <DashboardOtroIngresoPage />
+                </RequireModulo>
+              }
+            />
           </Route>
 
           <Route
