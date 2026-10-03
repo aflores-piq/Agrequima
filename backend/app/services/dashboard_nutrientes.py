@@ -38,6 +38,7 @@ from app.services.df_utils import series_multianual_desde_df, sin_nan
 _TOP_N_FORMULAS = 20
 _TOP_N_ADUANAS = 12
 _TOP_N_PAISES = 20
+_TOP_N_EMPRESAS = 20
 _TABLA_RESUMEN_MAX = 50
 
 # "PLAGUICIDA" es un registro que no pertenece a esta tabla (1 fila) —
@@ -346,6 +347,24 @@ def df_top_formulas(ctx: ContextoNutrientes) -> pd.DataFrame:
     )
 
 
+def df_top_empresas_importadoras(ctx: ContextoNutrientes) -> pd.DataFrame:
+    """Top empresas importadoras por CIF -- mismo patrón que
+    df_top_formulas, agrupando por EmpresaImportadora en vez de
+    ProductoAgrupado (equivalente de Importacion.importador en
+    Plaguicidas, ver df_top_importadores en dashboard_plaguicidas.py)."""
+    filas = (
+        ctx.base_actual.with_entities(NutrienteActivo.EmpresaImportadora, func.sum(NutrienteActivo.CIF_dolares))
+        .filter(NutrienteActivo.EmpresaImportadora.isnot(None))
+        .group_by(NutrienteActivo.EmpresaImportadora)
+        .order_by(func.sum(NutrienteActivo.CIF_dolares).desc())
+        .limit(_TOP_N_EMPRESAS)
+        .all()
+    )
+    return pd.DataFrame(
+        [(f[0], float(f[1] or 0)) for f in filas], columns=["etiqueta", "cif_usd"]
+    )
+
+
 def df_top_aduanas(ctx: ContextoNutrientes) -> pd.DataFrame:
     """Gráfico 4: top aduanas de ingreso.
 
@@ -500,6 +519,9 @@ def obtener_dashboard_nutrientes(
     ]
     comparativo_acumulado_multianual = series_multianual_desde_df(df_acumulado_multianual(ctx))
     top_formulas = [RankingItem(**fila) for fila in df_top_formulas(ctx).to_dict("records")]
+    top_empresas_importadoras = [
+        RankingItem(**fila) for fila in df_top_empresas_importadoras(ctx).to_dict("records")
+    ]
     top_aduanas = [RankingItem(**fila) for fila in df_top_aduanas(ctx).to_dict("records")]
     top_paises_origen = [ResumenItem(**fila) for fila in df_top_paises_origen(ctx).to_dict("records")]
     tabla_formulas_componentes = [
@@ -543,6 +565,7 @@ def obtener_dashboard_nutrientes(
         comparacion_mensual=comparacion_mensual,
         comparativo_acumulado_multianual=comparativo_acumulado_multianual,
         top_formulas=top_formulas,
+        top_empresas_importadoras=top_empresas_importadoras,
         top_paises_origen=top_paises_origen,
         top_aduanas=top_aduanas,
         tabla_formulas_componentes=tabla_formulas_componentes,

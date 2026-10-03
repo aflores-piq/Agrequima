@@ -162,6 +162,7 @@ export interface DashboardNutrientesResponse {
   comparacion_mensual: ComparacionMensual[];
   comparativo_acumulado_multianual: SerieAcumuladoAnual[];
   top_formulas: RankingItem[];
+  top_empresas_importadoras: RankingItem[];
   top_paises_origen: ResumenItem[];
   top_aduanas: RankingItem[];
   tabla_formulas_componentes: FormulaComponenteItem[];

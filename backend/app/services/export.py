@@ -152,6 +152,11 @@ NUTRIENTES_ELEMENTOS: dict[str, dict] = {
         "df": dn.df_top_formulas,
         "encabezados": lambda ctx: {"etiqueta": "Fórmula", "cif_usd": "CIF USD"},
     },
+    "top-empresas-importadoras": {
+        "titulo": "Top empresas importadoras",
+        "df": dn.df_top_empresas_importadoras,
+        "encabezados": lambda ctx: {"etiqueta": "Empresa importadora", "cif_usd": "CIF USD"},
+    },
     "top-aduanas": {
         "titulo": "Top aduanas de ingreso",
         "df": dn.df_top_aduanas,

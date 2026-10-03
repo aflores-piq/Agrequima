@@ -349,6 +349,7 @@ export function DashboardNutrientesPage() {
                 sinLimiteAltura
                 compacto="px-1 py-1 text-xs"
                 columnas={[
+                  { header: "#", accessor: (_r, i = 0) => i + 1, align: "right" },
                   { header: "Fórmula", accessor: (r) => r.etiqueta },
                   { header: "CIF USD", accessor: (r) => formatUSDAbrev(r.cif_usd), align: "right" },
                 ]}
@@ -359,38 +360,67 @@ export function DashboardNutrientesPage() {
           />
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <div className="rounded-tremor-default bg-surface p-4 ring-1 ring-line">
-              <Title className="mb-3 text-ink">{`Top ${data.top_paises_origen.length} países de origen`}</Title>
-              <RankingTable filas={data.top_paises_origen} etiquetaColumna="País" etiquetaConteo="Licencias" />
-            </div>
-
             <ChartCard
               theme="nutrientes"
-              title={`Top ${data.top_aduanas.length} aduanas de ingreso`}
+              title={`Top ${data.top_empresas_importadoras.length} empresas importadoras`}
               subtitle="Por CIF USD"
               exportar={
                 <BotonExportarExcel
                   theme="nutrientes"
-                  endpoint="/dashboard/nutrientes/export/top-aduanas"
+                  endpoint="/dashboard/nutrientes/export/top-empresas-importadoras"
                   filtros={filtrosExport}
-                  nombreArchivoPorDefecto={`nutrientes_top_aduanas_${sufijoArchivo}.xlsx`}
+                  nombreArchivoPorDefecto={`nutrientes_top_empresas_importadoras_${sufijoArchivo}.xlsx`}
                 />
               }
-              chart={<RankingBarChart theme="nutrientes" data={data.top_aduanas} />}
+              chart={<RankingBarChart theme="nutrientes" data={data.top_empresas_importadoras} />}
               table={
                 <SimpleDataTable
                   sinLimiteAltura
                   compacto="px-1 py-1 text-xs"
                   columnas={[
-                    { header: "Aduana", accessor: (r) => r.etiqueta },
+                    { header: "#", accessor: (_r, i = 0) => i + 1, align: "right" },
+                    { header: "Empresa importadora", accessor: (r) => r.etiqueta },
                     { header: "CIF USD", accessor: (r) => formatUSDAbrev(r.cif_usd), align: "right" },
                   ]}
-                  filas={data.top_aduanas}
+                  filas={data.top_empresas_importadoras}
                   getKey={(r) => r.etiqueta}
                 />
               }
             />
+
+            <div className="rounded-tremor-default bg-surface p-4 ring-1 ring-line">
+              <Title className="mb-3 text-ink">{`Top ${data.top_paises_origen.length} países de origen`}</Title>
+              <RankingTable filas={data.top_paises_origen} etiquetaColumna="País" etiquetaConteo="Licencias" />
+            </div>
           </div>
+
+          <ChartCard
+            theme="nutrientes"
+            title={`Top ${data.top_aduanas.length} aduanas de ingreso`}
+            subtitle="Por CIF USD"
+            exportar={
+              <BotonExportarExcel
+                theme="nutrientes"
+                endpoint="/dashboard/nutrientes/export/top-aduanas"
+                filtros={filtrosExport}
+                nombreArchivoPorDefecto={`nutrientes_top_aduanas_${sufijoArchivo}.xlsx`}
+              />
+            }
+            chart={<RankingBarChart theme="nutrientes" data={data.top_aduanas} />}
+            table={
+              <SimpleDataTable
+                sinLimiteAltura
+                compacto="px-1 py-1 text-xs"
+                columnas={[
+                  { header: "#", accessor: (_r, i = 0) => i + 1, align: "right" },
+                  { header: "Aduana", accessor: (r) => r.etiqueta },
+                  { header: "CIF USD", accessor: (r) => formatUSDAbrev(r.cif_usd), align: "right" },
+                ]}
+                filas={data.top_aduanas}
+                getKey={(r) => r.etiqueta}
+              />
+            }
+          />
 
           <div className="rounded-tremor-default bg-surface p-4 ring-1 ring-line">
             <div className="mb-3 flex items-center justify-between gap-3">

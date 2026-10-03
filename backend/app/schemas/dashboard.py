@@ -176,6 +176,7 @@ class DashboardNutrientesResponse(BaseModel):
     comparacion_mensual: list[ComparacionMensual]
     comparativo_acumulado_multianual: list[SerieAcumuladoAnual]
     top_formulas: list[RankingItem]
+    top_empresas_importadoras: list[RankingItem]
     top_paises_origen: list[ResumenItem]
     top_aduanas: list[RankingItem]
     tabla_formulas_componentes: list[FormulaComponenteItem]

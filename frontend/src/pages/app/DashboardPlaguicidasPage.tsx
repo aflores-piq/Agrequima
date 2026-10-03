@@ -375,6 +375,7 @@ export function DashboardPlaguicidasPage() {
                   sinLimiteAltura
                   compacto="px-1 py-1 text-xs"
                   columnas={[
+                    { header: "#", accessor: (_r, i = 0) => i + 1, align: "right" },
                     { header: "Tipo de aplicación", accessor: (r) => r.etiqueta },
                     { header: "CIF USD", accessor: (r) => formatUSDAbrev(r.cif_usd), align: "right" },
                   ]}
@@ -447,6 +448,7 @@ export function DashboardPlaguicidasPage() {
                     sinLimiteAltura
                     compacto="px-1 py-1 text-xs"
                     columnas={[
+                      { header: "#", accessor: (_r, i = 0) => i + 1, align: "right" },
                       { header: "Ingrediente activo", accessor: (r) => r.etiqueta },
                       { header: "CIF USD", accessor: (r) => formatUSDAbrev(r.cif_usd), align: "right" },
                     ]}
@@ -458,6 +460,7 @@ export function DashboardPlaguicidasPage() {
                     sinLimiteAltura
                     compacto="px-1 py-1 text-xs"
                     columnas={[
+                      { header: "#", accessor: (_r, i = 0) => i + 1, align: "right" },
                       { header: "Ingrediente activo", accessor: (r) => r.etiqueta },
                       { header: "Kilolitros", accessor: (r) => formatNumeroAbrev(r.kilolitros), align: "right" },
                     ]}
@@ -489,6 +492,7 @@ export function DashboardPlaguicidasPage() {
                   sinLimiteAltura
                   compacto="px-1 py-1 text-xs"
                   columnas={[
+                    { header: "#", accessor: (_r, i = 0) => i + 1, align: "right" },
                     { header: "Importador", accessor: (r) => r.etiqueta },
                     { header: "CIF USD", accessor: (r) => formatUSDAbrev(r.cif_usd), align: "right" },
                   ]}
