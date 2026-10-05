@@ -11,14 +11,9 @@ existe, y hace un refresh completo (TRUNCATE + INSERT de todas las
 filas actuales) — así el espejo queda idéntico a la fuente en cada
 corrida, sin arrastrar filas que ya se borraron del lado origen.
 
-Módulo Financiero: además de SYNC_TABLAS/SYNC_ORIGEN_* (Importacion,
-Nutrientes, catálogos), este script espeja un SEGUNDO origen
-independiente -- las vistas de solo lectura de CONTACC (contabilidad
-del cliente), listadas en SYNC_VISTAS_CONTACC y conectadas vía
-SYNC_CONTACC_DB_* (server/name/user/password propios, un servidor
-distinto del de SYNC_ORIGEN_*). Mismo mecanismo genérico: agregar o
-sacar una vista es editar esa variable, no el código. El destino sigue
-siendo el mismo PIQ_IA de siempre.
+Las vistas de CONTACC del módulo Financiero YA NO se sincronizan desde este
+script: las copia sync_financiero.py (copias fieles con el nombre original,
+log diario y reemplazo transaccional). Ver deploy_servidor_real/LEEME_SYNC.txt.
 
 Mismo estilo de conexión que el resto del backend (SQLAlchemy + pyodbc,
 config por variables de entorno vía .env en la raíz del repo, sin nada
@@ -47,14 +42,6 @@ load_dotenv(ROOT_DIR / ".env")
 ODBC_DRIVER = os.getenv("ODBC_DRIVER", "ODBC Driver 17 for SQL Server")
 
 TABLAS_A_ESPEJAR = [t.strip() for t in os.getenv("SYNC_TABLAS", "").split(",") if t.strip()]
-
-# Segundo origen, independiente del de arriba: las vistas de solo lectura
-# de CONTACC (contabilidad del cliente, para el módulo Financiero) viven
-# en un servidor/base distintos de SYNC_ORIGEN_*. Mismo mecanismo
-# genérico (lista separada por comas en .env) para no tocar código si
-# se agrega/saca una vista. El destino es el mismo PIQ_IA de siempre --
-# las vistas quedan ahí como tablas espejadas, con su mismo nombre.
-VISTAS_CONTACC = [v.strip() for v in os.getenv("SYNC_VISTAS_CONTACC", "").split(",") if v.strip()]
 
 LOG_DIR = ROOT_DIR / "logs"
 LOG_DIR.mkdir(exist_ok=True)
@@ -205,8 +192,8 @@ def _copiar_grupo_tablas(origen_engine, destino_engine, tablas_en_orden_de_fk: l
 
 
 def main() -> int:
-    if not TABLAS_A_ESPEJAR and not VISTAS_CONTACC:
-        logger.error("SYNC_TABLAS y SYNC_VISTAS_CONTACC están vacíos en .env — no hay nada que espejar.")
+    if not TABLAS_A_ESPEJAR:
+        logger.error("SYNC_TABLAS está vacío en .env — no hay nada que espejar.")
         return 1
 
     destino_engine = create_engine(_conn_str("DESTINO"))
@@ -226,19 +213,6 @@ def main() -> int:
                 hubo_error = True
                 logger.exception("ERROR al copiar %s", tabla)
                 _registrar_log(destino_engine, tabla, None, "Error", str(exc))
-
-    if VISTAS_CONTACC:
-        contacc_engine = create_engine(_conn_str("CONTACC"))
-        logger.info("=== Iniciando sincronización CONTACC -> PIQ_IA (%d vistas configuradas) ===", len(VISTAS_CONTACC))
-        for vista in VISTAS_CONTACC:
-            try:
-                filas = _copiar_tabla(contacc_engine, destino_engine, vista)
-                logger.info("OK   %-40s %d filas", vista, filas)
-                _registrar_log(destino_engine, vista, filas, "OK")
-            except Exception as exc:
-                hubo_error = True
-                logger.exception("ERROR al copiar %s", vista)
-                _registrar_log(destino_engine, vista, None, "Error", str(exc))
 
     logger.info("=== Sincronización PIQ_IA finalizada (%s) ===", "con errores" if hubo_error else "OK")
     return 1 if hubo_error else 0

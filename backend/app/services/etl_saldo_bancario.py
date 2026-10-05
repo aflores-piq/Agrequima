@@ -98,7 +98,7 @@ def procesar_carga_saldo_bancario(
             conn.execute(
                 text(
                     """
-                    INSERT INTO dbo.SaldoBancario (Concepto, Anio, Mes, Banco, Valor, UsuarioId, FechaMod)
+                    INSERT INTO dbo.SaldoBancario (Concepto, Anio, Mes, Banco, Valor, userid, FechaMod)
                     SELECT Concepto, CAST(Anio AS INT), CAST(Mes AS INT), Banco, Valor, :usuario_id, GETDATE()
                     FROM dbo.stg_SaldoBancario
                     WHERE Concepto IS NOT NULL OR Banco IS NOT NULL OR Valor IS NOT NULL

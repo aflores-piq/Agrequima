@@ -23,12 +23,20 @@ Archivos que vas a usar:
   13_saldos_bancos_financiero.sql -> lo abris tambien en SSMS, crea dbo.SaldosBancos y dbo.SaldoBancario (modulo Financiero, Conciliacion bancaria/Flujo de caja) (ver Paso 3K)
   14_otro_ingreso_financiero.sql -> lo abris tambien en SSMS, crea dbo.OtroIngreso (modulo Financiero, Otros ingresos generados) (ver Paso 3K)
   15_tablas_financiero.sql      -> lo abris tambien en SSMS, crea las 7 tablas de Financiero restantes (BalanceSaldos, BalanceGeneral, CatalogoCuentas, CentrosDeCosto, Presupuestos, AsociadosCuota, ChequesCirculacion) (ver Paso 3K)
+  17_copias_fieles_financiero.sql -> lo abris tambien en SSMS, crea en PIQ_IA una COPIA FIEL (mismo nombre, mismos campos) de cada una de las 10 vistas/tablas del cliente (ver LEEME_SYNC.txt)
+  18_vistas_financiero.sql      -> lo abris tambien en SSMS, convierte las 8 tablas resumidas que lee la web en VISTAS sobre esas copias fieles (ver LEEME_SYNC.txt)
   16a_datos_financiero.sql,     -> los abris tambien en SSMS, cargan los datos REALES de las 10 tablas
   16b_datos_financiero.sql         de Financiero (ver Paso 3L) -- partido en 2 archivos porque
-                                    Presupuestos solo tiene ~128,000 filas y pesa ~15MB
+                                    Presupuestos solo tiene ~128,000 filas y pesa ~15MB.
+                                    SOLO para la instalacion inicial: una vez instalada la
+                                    sincronizacion de LEEME_SYNC.txt (que reemplaza las tablas
+                                    resumidas por vistas) ya NO se vuelven a correr.
   generar_hash_password.py       -> genera el valor que necesita 02_seed_roles_y_admin.sql
   generar_datos_financiero.py    -> herramienta para regenerar 16a/16b_datos_financiero.sql con datos mas nuevos (no hace falta correrlo para instalar, ver Paso 3L)
-  sync_piq_ia.py                 -> el programa que trae los datos cada noche
+  sync_piq_ia.py                 -> el programa que trae los datos de Importaciones/Nutrientes cada noche (Financiero lo hace sync_financiero.py)
+  sync_financiero.py             -> el programa que trae cada noche las 10 vistas/tablas de Financiero del cliente (ver LEEME_SYNC.txt)
+  probar_conexion_origen.ps1, correr_sync_financiero.ps1, instalar_tarea_programada.ps1 -> PowerShell para probar la conexion, correr la sincronizacion de Financiero una vez a mano e instalar la tarea diaria (ver LEEME_SYNC.txt)
+  LEEME_SYNC.txt                 -> guia paso a paso de la sincronizacion nocturna de Financiero
   .env.ejemplo                   -> plantilla de configuracion (la vas a copiar y completar)
   requirements.txt                -> lista de librerias de Python que hace falta instalar
 
@@ -675,17 +683,11 @@ comando también lo instala, y si ya está no lo reinstala.)
                               futuro se agregan tablas de otros
                               proyectos (Indicadores).
 
-   SYNC_CONTACC_DB_*       -> conexion al servidor de CONTACC
-                              (contabilidad del cliente, modulo
-                              Financiero) -- servidor/base DISTINTOS de
-                              los de arriba. Completar SERVER, NAME
-                              (normalmente "CONTACC"), USER y PASSWORD
-                              con los datos reales que de el cliente.
-   SYNC_VISTAS_CONTACC     -> dejar tal cual viene (ya trae las 8
-                              vistas correctas). No agregar
-                              vw_piq_viaticos ni vw_piq_kilometraje,
-                              quedan fuera de alcance del modulo
-                              Financiero.
+   (Financiero)            -> las variables de conexion a CONTACC y a
+                              Agrequima del modulo Financiero (SYNC_CONTACC_DB_*,
+                              SYNC_AGREQUIMA_DB_*) YA NO van en este .env: las
+                              lee sync_financiero.py del .env de la RAIZ del
+                              servidor. Ver LEEME_SYNC.txt.
 
 3. Guardar el archivo (Ctrl+S) y cerrarlo.
 
@@ -864,57 +866,24 @@ No me acuerdo la contraseña que puse en el Paso 2 / la quiero cambiar
 
 ====================================================================
  ¿CÓMO SE MANTIENEN ACTUALIZADOS LOS DATOS DE FINANCIERO DESPUÉS DE
- PUBLICAR? (sync_piq_ia.py -- estado real, no implementado en esta ronda)
+ PUBLICAR?
 ====================================================================
 
-Pregunta corta: hoy, sync_piq_ia.py YA tiene la conexión a CONTACC
-configurada y lista (SYNC_CONTACC_DB_*/SYNC_VISTAS_CONTACC en el
-.env, Paso 5) y sincroniza 8 de las 10 tablas de Financiero cada noche
--- PERO con un problema real que hay que resolver antes de confiar en
-esa sincronización: escribe el resultado en tablas con el MISMO NOMBRE
-que la vista de origen (dbo.vw_piq_balance_saldos, dbo.vw_piq_balance_general,
-dbo.vw_catalogo_cuentas, dbo.vw_piq_centrosdecosto, dbo.vw_piq_presupuestos,
-dbo.vw_piq_cheques_circulacion, dbo.vw_piq_asociados_cuota,
-dbo.vw_piq_saldos_bancos) -- NO en las tablas que el dashboard
-realmente lee (dbo.BalanceSaldos, dbo.BalanceGeneral, dbo.CatalogoCuentas,
-dbo.CentrosDeCosto, dbo.Presupuestos, dbo.ChequesCirculacion,
-dbo.AsociadosCuota, dbo.SaldosBancos).
+Con sync_financiero.py (ver LEEME_SYNC.txt). Cada noche copia COMPLETAS
+las 10 vistas/tablas del cliente (8 de CONTACC y SaldoBancario/OtroIngreso
+de Agrequima, servidor 10.10.0.6,65280) a sus copias fieles en PIQ_IA
+(mismo nombre, mismos campos), y las pantallas las leen a través de las
+vistas de 18_vistas_financiero.sql. Si una tabla falla, conserva los
+datos del día anterior; hay un log diario en logs\sync_financiero_AAAAMMDD.log.
 
-En otras palabras: con el .env de Financiero completado (Paso 5) y la
-tarea programada corriendo (Paso 7), cada noche SÍ se refrescarían 8
-tablas nuevas de nombre "vw_piq_*" -- pero las pantallas seguirían
-mostrando los datos de la última vez que alguien corrió
-"16a/16b_datos_financiero.sql" o "cargar_datos_financiero_inicial.py"
-a mano, porque esas tablas "vw_piq_*" no las lee nadie. Confirmado
-leyendo el código de sync_piq_ia.py (_copiar_tabla usa el mismo nombre
-de origen y destino) -- no es una suposición.
+Lo que describía esta sección antes (sync_piq_ia.py escribía las vistas
+de CONTACC en tablas "vw_piq_*" que ninguna pantalla leía) ya NO aplica:
+sync_piq_ia.py ya no toca nada de Financiero.
 
-Las otras 2 tablas (SaldoBancario, OtroIngreso) NO están ni siquiera
-en esa lista -- su origen no es una vista de CONTACC sino
-Agrequima.dbo.SaldoBancario/dbo.OtroIngreso del OTRO servidor
-(SYNC_ORIGEN_*), y hoy SYNC_TABLAS solo lista Importacion/Nutrientes/
-los 2 catálogos de Plaguicidas-Nutrientes -- ninguna tabla de
-Financiero. Esas 2 tampoco se sincronizarían solas.
-
-Qué falta para que el sync nocturno SÍ mantenga Financiero al día (NO
-implementado en esta ronda, a propósito -- solo se documenta la
-brecha):
-  1. Que sync_piq_ia.py copie cada vista de CONTACC a la tabla CORRECTA
-     (ej. vw_piq_balance_saldos -> dbo.BalanceSaldos), no a una tabla
-     con su mismo nombre -- un mapeo {vista_origen: tabla_destino} en
-     vez de una sola lista de nombres.
-  2. Agregar SaldoBancario y OtroIngreso a SYNC_TABLAS (su origen YA
-     es el mismo servidor/base que Importacion/Nutrientes, solo falta
-     sumarlos a esa variable) -- aunque esto probablemente necesite el
-     mismo tipo de mapeo del punto 1, porque esas 2 tablas también
-     podrían tener una estructura de columnas distinta entre origen y
-     destino.
-
-Hasta que eso se implemente, la forma de mantener Financiero
-actualizado en el servidor real sigue siendo MANUAL: repetir el Paso
-3L (correr generar_datos_financiero.py contra la base de desarrollo
-actualizada, y volver a correr 16a/16b en SSMS contra PIQ_IA) cada vez
-que haga falta un refresh, igual que se hizo para esta publicación.
+Las cargas manuales (16a/16b_datos_financiero.sql y
+cargar_datos_financiero_inicial.py) quedan solo como herramientas de la
+instalación inicial / de desarrollo: una vez corrido 18_vistas_financiero.sql
+las tablas resumidas son vistas y esos scripts ya no pueden cargarlas.
 
 
 ====================================================================
@@ -1137,10 +1106,8 @@ revisando "backend/app/core/config.py" y los 6 archivos de servicios
 de Financiero: ninguno lee una variable de entorno que no sea una de
 las ya existentes.
 
-(La sincronización nocturna contra CONTACC -- SYNC_CONTACC_DB_*/
-SYNC_VISTAS_CONTACC en el .env de deploy\ -- es aparte, no hace falta
-para publicar Financiero hoy, y tiene una brecha conocida sin resolver
--- ver la sección de arriba "¿CÓMO SE MANTIENEN ACTUALIZADOS...".)
+(La sincronización nocturna del cliente -> PIQ_IA es aparte de esta
+publicación: se instala después, con los pasos de LEEME_SYNC.txt.)
 
 
 --------------------------------------------------------------------

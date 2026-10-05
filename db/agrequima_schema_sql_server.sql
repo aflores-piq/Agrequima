@@ -286,16 +286,18 @@ GO
    ===================================================================== */
 IF OBJECT_ID('dbo.SaldoBancario') IS NULL
 BEGIN
+    -- Estructura IDÉNTICA a Agrequima.dbo.SaldoBancario del servidor del cliente
+    -- (docs/legacy/financiero/estructura_vistas_cliente.csv): es una copia fiel
+    -- que llena la sincronización nocturna (sync_financiero.py) y que también
+    -- escribe la carga por Excel. Ver deploy_servidor_real/17_copias_fieles_financiero.sql.
     CREATE TABLE dbo.SaldoBancario(
-        SaldoBancarioId INT IDENTITY(1,1) NOT NULL,
-        Concepto        NVARCHAR(50) NULL,      -- 'Saldo inicial' | 'Creditos' | 'Debitos'
-        Anio            INT NULL,
-        Mes             INT NULL,
-        Banco           NVARCHAR(50) NULL,      -- BANRURAL, BANCOR, BI, PROMERICA (hoy)
-        Valor           DECIMAL(18,2) NULL,
-        UsuarioId       INT NULL,
-        FechaMod        DATETIME NOT NULL DEFAULT GETDATE(),
-        CONSTRAINT PK_SaldoBancario PRIMARY KEY CLUSTERED (SaldoBancarioId ASC)
+        concepto  VARCHAR(100) NOT NULL,      -- 'Saldo inicial' | 'Creditos' | 'Debitos'
+        anio      INT NOT NULL,
+        mes       INT NOT NULL,
+        banco     VARCHAR(100) NOT NULL,      -- BANRURAL, BANCOR, BI, PROMERICA (hoy)
+        valor     DECIMAL(18,2) NULL,
+        userid    INT NULL,
+        fechamod  DATETIME NULL
     );
 END
 GO
@@ -314,16 +316,15 @@ GO
 
 IF OBJECT_ID('dbo.OtroIngreso') IS NULL
 BEGIN
+    -- Estructura IDÉNTICA a Agrequima.dbo.OtroIngreso del servidor del cliente (ver arriba).
     CREATE TABLE dbo.OtroIngreso(
-        OtroIngresoId   INT IDENTITY(1,1) NOT NULL,
-        Tipo            NVARCHAR(50) NULL,      -- 'Presupuesto' | 'Ejecutado'
-        Concepto        NVARCHAR(200) NULL,     -- texto libre (hoy 12 valores fijos, no es catálogo)
-        Anio            INT NULL,
-        Mes             INT NULL,
-        Valor           DECIMAL(18,2) NULL,
-        UsuarioId       INT NULL,
-        FechaMod        DATETIME NOT NULL DEFAULT GETDATE(),
-        CONSTRAINT PK_OtroIngreso PRIMARY KEY CLUSTERED (OtroIngresoId ASC)
+        tipo      VARCHAR(100) NOT NULL,      -- 'Presupuesto' | 'Ejecutado'
+        concepto  VARCHAR(150) NOT NULL,      -- texto libre (hoy 12 valores fijos, no es catálogo)
+        anio      INT NOT NULL,
+        mes       INT NOT NULL,
+        valor     DECIMAL(18,2) NULL,
+        userid    INT NULL,
+        fechamod  DATETIME NULL
     );
 END
 GO
