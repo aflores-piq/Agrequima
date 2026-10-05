@@ -1,7 +1,7 @@
 ﻿<#
 .SYNOPSIS
-  Prueba, desde ESTE servidor, la conexión a CONTACC y a Agrequima (servidor del
-  cliente) con las credenciales del .env y que se puedan leer los 10 objetos.
+  Prueba, desde ESTE servidor, la conexión a CONTACC (servidor del cliente) con
+  las credenciales del .env y que se puedan leer las 8 vistas.
   NO copia ni modifica nada. Muestra OK o ERROR por cada cosa.
   Con -Completo prueba además la conexión a PIQ_IA y que las copias fieles tengan
   la estructura correcta (sirve después de correr 17_copias_fieles_financiero.sql).
@@ -66,7 +66,7 @@ $codigo = $LASTEXITCODE
 Write-Host ""
 if ($codigo -eq 0) {
     if ($Completo) { Write-Host "RESULTADO: OK - se puede conectar al cliente y las copias de PIQ_IA están bien." -ForegroundColor Green }
-    else { Write-Host "RESULTADO: OK - este servidor puede conectarse a CONTACC y a Agrequima y leer los 10 objetos." -ForegroundColor Green }
+    else { Write-Host "RESULTADO: OK - este servidor puede conectarse a CONTACC y leer las 8 vistas." -ForegroundColor Green }
 }
 elseif ($codigo -eq 2) {
     Write-Host "RESULTADO: ERROR DE CONFIGURACIÓN - falta alguna variable en el .env (ver LEEME_SYNC.txt, paso 3)." -ForegroundColor Red

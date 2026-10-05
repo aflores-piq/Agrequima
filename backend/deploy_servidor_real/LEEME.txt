@@ -23,7 +23,7 @@ Archivos que vas a usar:
   13_saldos_bancos_financiero.sql -> lo abris tambien en SSMS, crea dbo.SaldosBancos y dbo.SaldoBancario (modulo Financiero, Conciliacion bancaria/Flujo de caja) (ver Paso 3K)
   14_otro_ingreso_financiero.sql -> lo abris tambien en SSMS, crea dbo.OtroIngreso (modulo Financiero, Otros ingresos generados) (ver Paso 3K)
   15_tablas_financiero.sql      -> lo abris tambien en SSMS, crea las 7 tablas de Financiero restantes (BalanceSaldos, BalanceGeneral, CatalogoCuentas, CentrosDeCosto, Presupuestos, AsociadosCuota, ChequesCirculacion) (ver Paso 3K)
-  17_copias_fieles_financiero.sql -> lo abris tambien en SSMS, crea en PIQ_IA una COPIA FIEL (mismo nombre, mismos campos) de cada una de las 10 vistas/tablas del cliente (ver LEEME_SYNC.txt)
+  17_copias_fieles_financiero.sql -> lo abris tambien en SSMS, crea en PIQ_IA una COPIA FIEL (mismo nombre, mismos campos) de cada una de las 8 vistas de CONTACC del cliente (ver LEEME_SYNC.txt)
   18_vistas_financiero.sql      -> lo abris tambien en SSMS, convierte las 8 tablas resumidas que lee la web en VISTAS sobre esas copias fieles (ver LEEME_SYNC.txt)
   16a_datos_financiero.sql,     -> los abris tambien en SSMS, cargan los datos REALES de las 10 tablas
   16b_datos_financiero.sql         de Financiero (ver Paso 3L) -- partido en 2 archivos porque
@@ -34,7 +34,7 @@ Archivos que vas a usar:
   generar_hash_password.py       -> genera el valor que necesita 02_seed_roles_y_admin.sql
   generar_datos_financiero.py    -> herramienta para regenerar 16a/16b_datos_financiero.sql con datos mas nuevos (no hace falta correrlo para instalar, ver Paso 3L)
   sync_piq_ia.py                 -> el programa que trae los datos de Importaciones/Nutrientes cada noche (Financiero lo hace sync_financiero.py)
-  sync_financiero.py             -> el programa que trae cada noche las 10 vistas/tablas de Financiero del cliente (ver LEEME_SYNC.txt)
+  sync_financiero.py             -> el programa que trae cada noche las 8 vistas de CONTACC del cliente (ver LEEME_SYNC.txt)
   probar_conexion_origen.ps1, correr_sync_financiero.ps1, instalar_tarea_programada.ps1 -> PowerShell para probar la conexion, correr la sincronizacion de Financiero una vez a mano e instalar la tarea diaria (ver LEEME_SYNC.txt)
   LEEME_SYNC.txt                 -> guia paso a paso de la sincronizacion nocturna de Financiero
   .env.ejemplo                   -> plantilla de configuracion (la vas a copiar y completar)
@@ -870,11 +870,14 @@ No me acuerdo la contraseña que puse en el Paso 2 / la quiero cambiar
 ====================================================================
 
 Con sync_financiero.py (ver LEEME_SYNC.txt). Cada noche copia COMPLETAS
-las 10 vistas/tablas del cliente (8 de CONTACC y SaldoBancario/OtroIngreso
-de Agrequima, servidor 10.10.0.6,65280) a sus copias fieles en PIQ_IA
-(mismo nombre, mismos campos), y las pantallas las leen a través de las
-vistas de 18_vistas_financiero.sql. Si una tabla falla, conserva los
-datos del día anterior; hay un log diario en logs\sync_financiero_AAAAMMDD.log.
+las 8 vistas de CONTACC del cliente (servidor 10.10.0.6,65280) a sus
+copias fieles en PIQ_IA (mismo nombre, mismos campos), y las pantallas las
+leen a través de las vistas de 18_vistas_financiero.sql. Si una falla,
+conserva los datos del día anterior; hay un log diario en
+logs\sync_financiero_AAAAMMDD.log.
+
+SaldoBancario y OtroIngreso NO se sincronizan: se cargan SOLO por Excel
+desde la pantalla de cargas del sistema.
 
 Lo que describía esta sección antes (sync_piq_ia.py escribía las vistas
 de CONTACC en tablas "vw_piq_*" que ninguna pantalla leía) ya NO aplica:

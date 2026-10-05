@@ -43,7 +43,7 @@ function Mostrar-Comandos {
     Write-Host ""
     Write-Host "Cómo manejar la tarea (en un PowerShell, algunos requieren 'Como administrador'):" -ForegroundColor Cyan
     Write-Host "  Ver estado y último resultado :  Get-ScheduledTask -TaskName $NombreTarea | Get-ScheduledTaskInfo"
-    Write-Host "      (LastTaskResult = 0 significa que la última corrida salió OK; 1 = falló algún objeto)"
+    Write-Host "      (LastTaskResult = 0 significa que la última corrida salió OK; 1 = falló alguna vista)"
     Write-Host "  Correrla a mano ahora         :  Start-ScheduledTask -TaskName $NombreTarea"
     Write-Host "  Desactivarla (sin borrarla)   :  Disable-ScheduledTask -TaskName $NombreTarea"
     Write-Host "  Volver a activarla            :  Enable-ScheduledTask -TaskName $NombreTarea"
@@ -117,7 +117,7 @@ if (-not $esAdmin) {
 
 $existia = [bool](Get-ScheduledTask -TaskName $NombreTarea -ErrorAction SilentlyContinue)
 Register-ScheduledTask -TaskName $NombreTarea -Action $accion -Trigger $disparador -Settings $configuracion `
-    -Principal $principal -Description "PIQ_IA: copia cada noche las 10 vistas/tablas de Financiero del cliente (sync_financiero.py). Ver LEEME_SYNC.txt." -Force | Out-Null
+    -Principal $principal -Description "PIQ_IA: copia cada noche las 8 vistas de CONTACC de Financiero (sync_financiero.py). Ver LEEME_SYNC.txt." -Force | Out-Null
 
 $info = Get-ScheduledTask -TaskName $NombreTarea
 Write-Host ""

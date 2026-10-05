@@ -1,14 +1,18 @@
-"""Sincronización nocturna del módulo Financiero: copia COMPLETA de los 10
-objetos del servidor del cliente (10.10.0.6,65280) a sus copias fieles en
-PIQ_IA (mismo nombre, mismos campos, mismo orden -- ver
+"""Sincronización nocturna del módulo Financiero: copia COMPLETA de las 8
+vistas de CONTACC del servidor del cliente (10.10.0.6,65280) a sus copias
+fieles en PIQ_IA (mismo nombre, mismos campos, mismo orden -- ver
 17_copias_fieles_financiero.sql). Las pantallas del Financiero leen esas
 copias a través de las vistas de 18_vistas_financiero.sql.
 
-  Base CONTACC   (8): vw_piq_balance_saldos, vw_piq_balance_general,
-                      vw_catalogo_cuentas, vw_piq_centrosdecosto,
-                      vw_piq_presupuestos, vw_piq_asociados_cuota,
-                      vw_piq_cheques_circulacion, vw_piq_saldos_bancos
-  Base Agrequima (2): SaldoBancario, OtroIngreso
+  Base CONTACC (8): vw_piq_balance_saldos, vw_piq_balance_general,
+                    vw_catalogo_cuentas, vw_piq_centrosdecosto,
+                    vw_piq_presupuestos, vw_piq_asociados_cuota,
+                    vw_piq_cheques_circulacion, vw_piq_saldos_bancos
+
+SaldoBancario y OtroIngreso NO forman parte de esta sincronización: el
+cliente manda esos datos por Excel y se cargan SOLO desde la pantalla de
+cargas del sistema. Este script no las conoce ni las toca (ni se conecta
+a la base Agrequima del cliente).
 
 POR QUÉ UN SCRIPT APARTE de sync_piq_ia.py: ese script espeja
 Importacion/Nutrientes/catálogos con un mecanismo distinto (refleja el
@@ -22,17 +26,15 @@ CÓMO NUNCA DEJA UNA TABLA A MEDIAS: para cada objeto lee TODO el origen a
 una tabla de staging (dbo.stg_sync_<objeto>) de la base de destino; recién
 cuando la lectura terminó completa y sin errores, y la cantidad de filas
 coincide, hace DELETE + INSERT desde el staging sobre la copia real y COMMIT
--- el reemplazo va en UNA sola transacción. Si algo falla en cualquier punto (conexión caída, error de
-estructura, error de inserción), la transacción se revierte y la tabla
-conserva los datos del día anterior. Si un objeto falla, los demás siguen.
+-- el reemplazo va en UNA sola transacción. Si algo falla en cualquier punto
+(conexión caída, error de estructura, error de inserción), la transacción
+se revierte y la tabla conserva los datos del día anterior. Si un objeto falla, los demás siguen.
 Si el origen devuelve 0 filas y la copia tenía datos, NO la reemplaza
 (casi seguro es un problema del origen, no que realmente no haya datos).
 
 NO TOCA: Importacion, Nutrientes, catálogos de nomenclatura/agrupadores,
-CatalogoAgrupadorCuentas, Usuarios, Roles ni nada que se cargue por Excel
-(salvo SaldoBancario/OtroIngreso, que SÍ son parte de los 10 objetos --
-ver SYNC_FINANCIERO_OMITIR para excluirlas si se prefiere seguir
-cargándolas solo por Excel).
+CatalogoAgrupadorCuentas, Usuarios, Roles, SaldoBancario, OtroIngreso ni
+nada que se cargue por Excel o por la pantalla de cargas.
 
 Configuración (todo por variables de entorno / archivo .env, nunca en el
 código). Busca el .env en: SYNC_ENV_FILE (si está definida), la carpeta
@@ -46,20 +48,16 @@ de este script, su carpeta padre y la anterior (en el servidor real, el
     SYNC_CONTACC_DB_NAME     (opcional, default CONTACC)
     SYNC_CONTACC_DB_USER
     SYNC_CONTACC_DB_PASSWORD
-  Origen Agrequima (todo opcional: si falta, usa el de CONTACC):
-    SYNC_AGREQUIMA_DB_SERVER, SYNC_AGREQUIMA_DB_NAME (default Agrequima),
-    SYNC_AGREQUIMA_DB_USER, SYNC_AGREQUIMA_DB_PASSWORD
   Opcionales:
     SYNC_FINANCIERO_LOG_DIR       carpeta del log (default: ..\\logs)
     SYNC_FINANCIERO_REINTENTOS    intentos por objeto (default 2)
     SYNC_FINANCIERO_ESPERA_SEG    espera entre intentos (default 60)
-    SYNC_FINANCIERO_OMITIR        objetos a NO sincronizar, separados por coma
 
 Uso:
-    python sync_financiero.py                  (los 10 objetos)
-    python sync_financiero.py --solo SaldoBancario,OtroIngreso
-    python sync_financiero.py --probar         (solo prueba la conexión a CONTACC y a Agrequima y que se
-                                                puedan leer los 10 objetos; no copia nada)
+    python sync_financiero.py                  (las 8 vistas)
+    python sync_financiero.py --solo vw_piq_presupuestos,vw_piq_saldos_bancos
+    python sync_financiero.py --probar         (solo prueba la conexión a CONTACC y que se
+                                                puedan leer las 8 vistas; no copia nada)
     python sync_financiero.py --probar-completo  (lo anterior + conexión a PIQ_IA y estructura de las copias)
 
 Código de salida: 0 = todo OK; 1 = falló al menos un objeto;
@@ -79,12 +77,12 @@ from dotenv import load_dotenv
 
 CARPETA_SCRIPT = Path(__file__).resolve().parent
 
-# --- Estructura esperada de los 10 objetos (generada desde ---
+# --- Estructura esperada de las 8 vistas de CONTACC (generada desde ---
 # --- docs/legacy/financiero/estructura_vistas_cliente.csv)  ---
-# (objeto, base de origen, [(campo, tipo SQL, acepta_nulos), ...]). El destino
-# tiene el mismo nombre que el objeto de origen, en el esquema dbo.
+# (objeto, [(campo, tipo SQL, acepta_nulos), ...]). El destino tiene el mismo
+# nombre que la vista de origen, en el esquema dbo.
 OBJETOS = [
-    ("vw_piq_balance_saldos", "CONTACC", [
+    ("vw_piq_balance_saldos", [
         ("emp_nit", "VARCHAR(20)", False),
         ("Cta_Codigo", "VARCHAR(20)", False),
         ("Cta_Descripcion", "VARCHAR(100)", False),
@@ -95,7 +93,7 @@ OBJETOS = [
         ("Saldo", "MONEY", True),
         ("Cod_Centro", "VARCHAR(20)", False),
     ]),
-    ("vw_piq_balance_general", "CONTACC", [
+    ("vw_piq_balance_general", [
         ("emp_nit", "VARCHAR(20)", True),
         ("Cod_n1", "VARCHAR(20)", True),
         ("Nom_n1", "VARCHAR(100)", True),
@@ -108,21 +106,21 @@ OBJETOS = [
         ("Saldo", "MONEY", True),
         ("Inicial", "INT", False),
     ]),
-    ("vw_catalogo_cuentas", "CONTACC", [
+    ("vw_catalogo_cuentas", [
         ("cta_nivel", "TINYINT", True),
         ("Codigo_N1", "VARCHAR(20)", False),
         ("Nombre_n1", "VARCHAR(100)", False),
         ("Codigo_N5", "VARCHAR(20)", True),
         ("Nombre_N5", "VARCHAR(100)", True),
     ]),
-    ("vw_piq_centrosdecosto", "CONTACC", [
+    ("vw_piq_centrosdecosto", [
         ("emp_nit", "VARCHAR(20)", False),
         ("Cod_centro", "VARCHAR(20)", False),
         ("Des_centro", "VARCHAR(40)", True),
         ("nivel", "TINYINT", True),
         ("CC_Grupo1", "VARCHAR(20)", True),
     ]),
-    ("vw_piq_presupuestos", "CONTACC", [
+    ("vw_piq_presupuestos", [
         ("emp_nit", "VARCHAR(20)", False),
         ("par_ano", "SMALLINT", False),
         ("par_mes", "SMALLINT", False),
@@ -130,7 +128,7 @@ OBJETOS = [
         ("pre_presupuesto", "MONEY", True),
         ("cod_centro", "VARCHAR(20)", False),
     ]),
-    ("vw_piq_asociados_cuota", "CONTACC", [
+    ("vw_piq_asociados_cuota", [
         ("emp_nit", "VARCHAR(20)", True),
         ("Sal_Ano", "SMALLINT", False),
         ("cod_n5", "VARCHAR(20)", True),
@@ -139,7 +137,7 @@ OBJETOS = [
         ("nombre_mostrar", "VARCHAR(25)", True),
         ("cuota", "MONEY", True),
     ]),
-    ("vw_piq_cheques_circulacion", "CONTACC", [
+    ("vw_piq_cheques_circulacion", [
         ("ban_codigo", "VARCHAR(10)", False),
         ("cta_numero", "VARCHAR(30)", True),
         ("cta_nombre", "VARCHAR(50)", True),
@@ -153,7 +151,7 @@ OBJETOS = [
         ("doc_motivo", "VARCHAR(250)", False),
         ("doc_monto", "MONEY", True),
     ]),
-    ("vw_piq_saldos_bancos", "CONTACC", [
+    ("vw_piq_saldos_bancos", [
         ("ban_codigo", "VARCHAR(10)", False),
         ("Sal_Mes", "INT", False),
         ("Sal_Ano", "INT", False),
@@ -161,24 +159,6 @@ OBJETOS = [
         ("EntradasL", "MONEY", True),
         ("SalidasL", "MONEY", True),
         ("FinalL", "MONEY", True),
-    ]),
-    ("SaldoBancario", "Agrequima", [
-        ("concepto", "VARCHAR(100)", False),
-        ("anio", "INT", False),
-        ("mes", "INT", False),
-        ("banco", "VARCHAR(100)", False),
-        ("valor", "DECIMAL(18,2)", True),
-        ("userid", "INT", True),
-        ("fechamod", "DATETIME", True),
-    ]),
-    ("OtroIngreso", "Agrequima", [
-        ("tipo", "VARCHAR(100)", False),
-        ("concepto", "VARCHAR(150)", False),
-        ("anio", "INT", False),
-        ("mes", "INT", False),
-        ("valor", "DECIMAL(18,2)", True),
-        ("userid", "INT", True),
-        ("fechamod", "DATETIME", True),
     ]),
 ]
 
@@ -225,21 +205,14 @@ def _config_destino() -> dict:
     return dict(server=_env("DB_SERVER"), base=_env("DB_NAME"), usuario=_env("DB_USER"), password=_env("DB_PASSWORD"))
 
 
-def _config_origenes() -> dict:
+def _config_origen() -> dict:
     faltan = [v for v in ("SYNC_CONTACC_DB_SERVER", "SYNC_CONTACC_DB_USER", "SYNC_CONTACC_DB_PASSWORD") if not _env(v)]
     if faltan:
         raise RuntimeError(f"Faltan variables del origen en el .env: {', '.join(faltan)}")
-    contacc = dict(
+    return dict(
         server=_env("SYNC_CONTACC_DB_SERVER"), base=_env("SYNC_CONTACC_DB_NAME", "CONTACC"),
         usuario=_env("SYNC_CONTACC_DB_USER"), password=_env("SYNC_CONTACC_DB_PASSWORD"),
     )
-    agrequima = dict(
-        server=_env("SYNC_AGREQUIMA_DB_SERVER", contacc["server"]),
-        base=_env("SYNC_AGREQUIMA_DB_NAME", "Agrequima"),
-        usuario=_env("SYNC_AGREQUIMA_DB_USER", contacc["usuario"]),
-        password=_env("SYNC_AGREQUIMA_DB_PASSWORD", contacc["password"]),
-    )
-    return {"CONTACC": contacc, "Agrequima": agrequima}
 
 
 class _ConsolaSegura(logging.StreamHandler):
@@ -306,7 +279,7 @@ def _lista_columnas(columnas: list) -> str:
     return ", ".join(f"[{c}]" for c, _, _ in columnas)
 
 
-def _intento(objeto: str, base: str, columnas: list, destino: dict, origen: dict, log: logging.Logger):
+def _intento(objeto: str, columnas: list, destino: dict, origen: dict, log: logging.Logger):
     """Un intento completo de sincronizar UN objeto. Devuelve (leidas, cargadas).
 
     Fase 1 (autocommit): lee TODO el origen a una tabla de staging real
@@ -391,18 +364,16 @@ def _intento(objeto: str, base: str, columnas: list, destino: dict, origen: dict
                     pass
 
 
-def sincronizar_objeto(objeto, base, columnas, destino, origenes, intentos, espera, log):
+def sincronizar_objeto(objeto, columnas, destino, origen, intentos, espera, log):
     """Devuelve dict con el resultado. Nunca lanza: un objeto que falla no frena a los demás."""
     inicio = time.time()
     ultimo_error = ""
     for n in range(1, intentos + 1):
         try:
-            leidas, cargadas = _intento(objeto, base, columnas, destino, origenes[base], log)
+            leidas, cargadas = _intento(objeto, columnas, destino, origen, log)
             seg = time.time() - inicio
-            log.info(
-                "[%s] OK  origen=%s  filas leidas=%d  cargadas=%d  (%.1f s)", objeto, base, leidas, cargadas, seg
-            )
-            return dict(objeto=objeto, base=base, estado="OK", leidas=leidas, cargadas=cargadas, error="")
+            log.info("[%s] OK  filas leidas=%d  cargadas=%d  (%.1f s)", objeto, leidas, cargadas, seg)
+            return dict(objeto=objeto, estado="OK", leidas=leidas, cargadas=cargadas, error="")
         except ErrorNoReintentable as exc:
             ultimo_error = str(exc)
             log.error("[%s] ERROR (no se reintenta): %s", objeto, ultimo_error)
@@ -415,27 +386,23 @@ def sincronizar_objeto(objeto, base, columnas, destino, origenes, intentos, espe
                 log.info("[%s] se reintenta en %d s ...", objeto, espera)
                 time.sleep(espera)
     log.error("[%s] FALLÓ: la copia en PIQ_IA conserva los datos anteriores (no se modificó).", objeto)
-    return dict(objeto=objeto, base=base, estado="ERROR", leidas=None, cargadas=None, error=ultimo_error)
+    return dict(objeto=objeto, estado="ERROR", leidas=None, cargadas=None, error=ultimo_error)
 
 
-def probar(destino: dict, origenes: dict, log: logging.Logger, completo: bool = False) -> int:
-    """Modo --probar: NO copia nada. Verifica que se pueda entrar a los dos orígenes con las
-    credenciales del .env y que cada objeto exista y se pueda leer. Con completo=True
+def probar(destino: dict, origen: dict, log: logging.Logger, completo: bool = False) -> int:
+    """Modo --probar: NO copia nada. Verifica que se pueda entrar a CONTACC con las
+    credenciales del .env y que cada vista exista y se pueda leer. Con completo=True
     (--probar-completo) además prueba la conexión a PIQ_IA y la estructura de las copias."""
     fallos = 0
-    for nombre in ("CONTACC", "Agrequima"):
-        cfg = origenes[nombre]
-        try:
-            conn = pyodbc.connect(_cadena_conexion(**cfg), timeout=15)
-        except Exception as exc:
-            fallos += 1
-            log.error("[ORIGEN %s] ERROR  no se pudo conectar a %s (base %s): %s", nombre, cfg["server"], cfg["base"], exc)
-            continue
-        log.info("[ORIGEN %s] OK  conexión a %s, base %s", nombre, cfg["server"], cfg["base"])
+    try:
+        conn = pyodbc.connect(_cadena_conexion(**origen), timeout=15)
+    except Exception as exc:
+        fallos += 1
+        log.error("[ORIGEN CONTACC] ERROR  no se pudo conectar a %s (base %s): %s", origen["server"], origen["base"], exc)
+    else:
+        log.info("[ORIGEN CONTACC] OK  conexión a %s, base %s", origen["server"], origen["base"])
         cur = conn.cursor()
-        for objeto, base, columnas in OBJETOS:
-            if base != nombre:
-                continue
+        for objeto, columnas in OBJETOS:
             try:
                 cur.execute(f"SELECT TOP 0 {_lista_columnas(columnas)} FROM dbo.[{objeto}]")
                 log.info("      OK     dbo.%s (%d campos)", objeto, len(columnas))
@@ -449,12 +416,11 @@ def probar(destino: dict, origenes: dict, log: logging.Logger, completo: bool = 
     try:
         conn = pyodbc.connect(_cadena_conexion(**destino), timeout=15)
     except Exception as exc:
-        fallos += 1
         log.error("[DESTINO] ERROR  no se pudo conectar a %s (base %s): %s", destino["server"], destino["base"], exc)
         return 1
     log.info("[DESTINO] OK  conexión a %s, base %s", destino["server"], destino["base"])
     cur = conn.cursor()
-    for objeto, base, columnas in OBJETOS:
+    for objeto, columnas in OBJETOS:
         try:
             _verificar_estructura_destino(cur, objeto, columnas)
             log.info("      OK     dbo.%s tiene la estructura esperada", objeto)
@@ -476,16 +442,15 @@ def main(argv=None) -> int:
 
     try:
         destino = _config_destino()
-        origenes = _config_origenes()
+        origen = _config_origen()
     except RuntimeError as exc:
         log.error("Configuración incompleta: %s", exc)
         log.info("=== FIN sincronización Financiero (resultado=ERROR DE CONFIGURACIÓN) ===")
         return 2
 
     if "--probar" in argv or "--probar-completo" in argv:
-        return probar(destino, origenes, log, completo="--probar-completo" in argv)
+        return probar(destino, origen, log, completo="--probar-completo" in argv)
 
-    omitir = {x.strip().lower() for x in (_env("SYNC_FINANCIERO_OMITIR", "") or "").split(",") if x.strip()}
     solo = None
     if "--solo" in argv:
         solo = {x.strip().lower() for x in argv[argv.index("--solo") + 1].split(",") if x.strip()}
@@ -493,16 +458,16 @@ def main(argv=None) -> int:
     espera = max(0, int(_env("SYNC_FINANCIERO_ESPERA_SEG", "60")))
 
     resultados = []
-    for objeto, base, columnas in OBJETOS:
-        if (solo is not None and objeto.lower() not in solo) or objeto.lower() in omitir:
-            log.info("[%s] omitido (--solo / SYNC_FINANCIERO_OMITIR).", objeto)
+    for objeto, columnas in OBJETOS:
+        if solo is not None and objeto.lower() not in solo:
+            log.info("[%s] omitido (--solo).", objeto)
             continue
-        resultados.append(sincronizar_objeto(objeto, base, columnas, destino, origenes, intentos, espera, log))
+        resultados.append(sincronizar_objeto(objeto, columnas, destino, origen, intentos, espera, log))
 
     log.info("--- Resumen ---")
-    log.info("%-30s %-10s %-7s %10s %10s", "objeto", "origen", "estado", "leidas", "cargadas")
+    log.info("%-30s %-7s %10s %10s", "objeto", "estado", "leidas", "cargadas")
     for r in resultados:
-        log.info("%-30s %-10s %-7s %10s %10s", r["objeto"], r["base"], r["estado"], r["leidas"] if r["leidas"] is not None else "-", r["cargadas"] if r["cargadas"] is not None else "-")
+        log.info("%-30s %-7s %10s %10s", r["objeto"], r["estado"], r["leidas"] if r["leidas"] is not None else "-", r["cargadas"] if r["cargadas"] is not None else "-")
     fallidos = [r["objeto"] for r in resultados if r["estado"] != "OK"]
     if fallidos:
         log.error("Fallaron %d objeto(s): %s", len(fallidos), ", ".join(fallidos))

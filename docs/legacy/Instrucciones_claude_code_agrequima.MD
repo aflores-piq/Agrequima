@@ -607,6 +607,8 @@ El cliente confirmó el estado real del servidor de producción: base `PIQ_IA` e
 
 ## 24. Financiero: copias fieles de las vistas del cliente + sincronización nocturna (2026-10-05)
 
+> **CORREGIDO en la sección 25:** esta sección describe `SaldoBancario` y `OtroIngreso` como parte de la sincronización (10 objetos). Fue un error de la instrucción: esas dos tablas se cargan SOLO por Excel y NO se sincronizan. Vale lo que dice la sección 25: la sincronización trae únicamente las 8 vistas de CONTACC.
+
 **Pedido del cliente (textual, resumido):** que Financiero quede "tal cual como estaba en el Power BI": una tabla con el nombre de la vista por cada vista que se trae del servidor del cliente, con todos sus campos y sin resumir ("si mañana necesito un campo que tenía, no tengo que rehacer la tabla"), y que esas tablas se actualicen todas las noches con los datos del día anterior, desde el servidor del cliente (VPN).
 
 **Qué se encontró (comparando `docs/legacy/financiero/estructura_vistas_cliente.csv`, sacado de `INFORMATION_SCHEMA.COLUMNS` del cliente, contra lo que había en `PIQ_IA`):**
@@ -634,3 +636,25 @@ El cliente confirmó el estado real del servidor de producción: base `PIQ_IA` e
 **Lo que NO se pudo probar acá:** el registro real de la tarea programada (requiere PowerShell de administrador; se validó la construcción de la tarea, el chequeo de permisos y el comando exacto) y la conexión real a `10.10.0.6,65280` desde el servidor (esta máquina no es ese servidor).
 
 **Riesgos documentados:** (1) `SaldoBancario`/`OtroIngreso` también se cargan por Excel desde la web; el sync nocturno reemplaza su contenido con el del cliente (opción `SYNC_FINANCIERO_OMITIR` para excluirlas). (2) El servidor tiene que llegar por red/VPN a 10.10.0.6,65280. (3) `16a/16b_datos_financiero.sql` y `cargar_datos_financiero_inicial.py` no sirven una vez creadas las vistas (escriben en tablas que pasan a ser vistas).
+
+## 25. Corrección: SaldoBancario y OtroIngreso se cargan SOLO por Excel, no se sincronizan (2026-10-05)
+
+**Aclaración del cliente (textual, resumida):** Saldos bancarios y Otros ingresos los manda el cliente por Excel y se cargan desde el mantenimiento de cargas del sistema, igual que Importaciones, Plaguicidas y Nutrientes; ellos ven directamente lo que se cargue. Las demás tablas sí se alimentan de la contabilidad. Esto siempre fue así: **nunca se pidió sincronizar `SaldoBancario` ni `OtroIngreso`**; la instrucción de la sección 24 las incluyó por error en la lista de objetos.
+
+**Qué se revirtió (todo lo que la sección 24 hizo sobre esas dos tablas):**
+- `17_copias_fieles_financiero.sql` ya no crea, migra ni renombra nada de `SaldoBancario`/`OtroIngreso` (se quitó el bloque de migración y su verificación); ahora maneja solo las 8 copias de CONTACC (+ sus índices).
+- `etl_saldo_bancario.py` y `etl_otro_ingreso.py` vuelven a escribir `UsuarioId` (restaurados tal cual estaban antes del commit `3ff1ce5`); `db/agrequima_schema_sql_server.sql` vuelve a la definición original de las dos tablas (id autonumérico, `UsuarioId`, `NVARCHAR(50)/(200)`).
+- En la base de desarrollo y en `Agrequima_Test` las dos tablas volvieron a su estructura y datos originales **desde los `*_respaldo` que había dejado la migración**, y esos respaldos dejaron de existir al renombrarse de vuelta. Desarrollo: antes tabla nueva 210/480 filas (idéntica a su respaldo), después 210 y 480 con id autonumérico, `UsuarioId`, PK y sin `*_respaldo`. `Agrequima_Test`: 5 y 2 filas (datos de las pruebas).
+
+**`sync_financiero.py`:** ahora conoce solo las 8 vistas de CONTACC, **fijas en el código** (ya no depende de ninguna variable para excluir las otras dos). Se quitó la conexión a la base Agrequima del cliente, las variables `SYNC_AGREQUIMA_*` (del código, de `.env.ejemplo` y de la guía) y `SYNC_FINANCIERO_OMITIR`, que solo existía para este caso. `probar_conexion_origen.ps1` prueba solo CONTACC. `LEEME_SYNC.txt` reescrita: 8 vistas, `SaldoBancario`/`OtroIngreso` solo por Excel, y como el código de la web no cambia **ya no hace falta reiniciar el servicio**. `LEEME.txt` al día.
+
+**Verificación local** (clon de la base de desarrollo anterior a todos los cambios como "PIQ_IA" + una base que simula solo CONTACC con los CSV; ambas borradas al terminar; el `.env` de prueba tenía únicamente variables de CONTACC):
+- Pantallas que leen `SaldoBancario`/`OtroIngreso` (Conciliación bancaria, Flujo de caja, Otros ingresos): 102 respuestas de la API (14 endpoints × 9 períodos) antes y después de revertir las tablas: **0 valores distintos**; ningún cambio en esas tres pantallas.
+- Carga por Excel en la base de desarrollo (archivos de ejemplo, año 2099): ambas pantallas responden 200, escriben `Concepto/Anio/Mes/Banco/Valor` (o `Tipo/Concepto/...`), `UsuarioId` del usuario que carga y `FechaMod`; recargar el mismo período reemplaza sin duplicar; los 210 y 480 registros reales no se tocaron; filas de prueba, auditorías y usuario temporal borrados, y las tablas `stg_` reconstruidas desde los CSV.
+- Flujo completo con los archivos del paquete: 17 (2 corridas, idempotente: crea 8 tablas y 6 índices solo la primera vez) → primera carga con `correr_sync_financiero.ps1` (8 vistas OK, filas leídas = cargadas) → 18 (2 corridas). 8/8 copias idénticas al origen (campos, filas y `EXCEPT` en ambos sentidos = 0); 8/8 vistas idénticas a las tablas resumidas anteriores (filas, valores y tipos); `SaldoBancario`/`OtroIngreso` con el **mismo conteo, checksum y estructura** antes y después de 17 + sync + 18; cuadre de las 14 pantallas/endpoints que alimentan las 17 vistas del Financiero antes/después: 102 respuestas, 34.130 valores, **0 diferencias**.
+- Fallas (7 escenarios, todos pasan): credenciales malas (las 8 conservan los datos de ayer); una vista inexistente en el origen (las otras 7 siguen); falla en pleno reemplazo (el `DELETE` se revierte); origen con 0 filas; corte real de la conexión de origen a mitad de la lectura sin reintento (conserva) y con reintento (se recupera); `SaldoBancario`/`OtroIngreso` intactas durante todas las corridas.
+- Tests (108 backend), `tsc -b` y `npm run build` limpios.
+
+**Defecto encontrado en el camino, sin relación con este cambio y NO corregido:** `dashboard_financiero.py` ordena las cuentas con `sorted(..., key=lambda c: -c.anio_actual)` (y variantes) sin criterio de desempate; las cuentas con el mismo importe (típicamente 0,00) salen en el orden en que SQL devolvió el `GROUP BY`, que no está garantizado y puede cambiar entre procesos (se observó una vez en Estados financieros, 2026-01: dos cuentas de Egresos con igual importe actual intercambiaron lugar, con los mismos valores). Arreglo posible: agregar el nombre de la cuenta como segundo criterio.
+
+**Lo que NO se pudo probar acá:** el registro real de la tarea programada (requiere PowerShell de administrador) y la conexión real a `10.10.0.6,65280` desde el servidor.

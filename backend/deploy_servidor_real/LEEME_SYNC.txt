@@ -9,48 +9,45 @@ QUÉ HACE ESTO, EN CORTO
 Hasta ahora las pantallas del Financiero leían 8 tablas "resumidas" que se
 cargaron a mano desde CSV. Con esta publicación:
 
-  1. PIQ_IA tiene una COPIA FIEL de cada uno de los 10 objetos del servidor
-     del cliente (10.10.0.6,65280): mismo nombre, mismos campos, mismo orden,
-     tipos equivalentes, sin resumir nada.
-        Base CONTACC   (8): vw_piq_balance_saldos, vw_piq_balance_general,
-                            vw_catalogo_cuentas, vw_piq_centrosdecosto,
-                            vw_piq_presupuestos, vw_piq_asociados_cuota,
-                            vw_piq_cheques_circulacion, vw_piq_saldos_bancos
-        Base Agrequima (2): SaldoBancario, OtroIngreso
-  2. Cada noche a las 2:00 a. m. una tarea de Windows copia esos 10 objetos
-     completos (sync_financiero.py). Así el cliente tiene siempre los datos
-     del día anterior, como en Power BI.
+  1. PIQ_IA tiene una COPIA FIEL de cada una de las 8 vistas de CONTACC del
+     servidor del cliente (10.10.0.6,65280): mismo nombre, mismos campos,
+     mismo orden, tipos equivalentes, sin resumir nada:
+         vw_piq_balance_saldos, vw_piq_balance_general, vw_catalogo_cuentas,
+         vw_piq_centrosdecosto, vw_piq_presupuestos, vw_piq_asociados_cuota,
+         vw_piq_cheques_circulacion, vw_piq_saldos_bancos
+  2. Cada noche a las 2:00 a. m. una tarea de Windows copia esas 8 vistas
+     completas (sync_financiero.py). Así el cliente tiene siempre los datos
+     del día anterior de la contabilidad, como en Power BI.
   3. Las pantallas siguen leyendo BalanceSaldos, BalanceGeneral, CatalogoCuentas,
      CentrosDeCosto, Presupuestos, AsociadosCuota, ChequesCirculacion y
      SaldosBancos, pero ahora esas 8 son VISTAS calculadas sobre las copias
      fieles. El código de la web no cambia en eso.
-  Si falta un campo mañana (porque te lo piden), ya está en la copia fiel:
-  solo hay que agregarlo a la vista, no rehacer ninguna tabla.
+  Si mañana hace falta un campo que ya venía del cliente, ya está en la copia
+  fiel: solo hay que agregarlo a la vista, no rehacer ninguna tabla.
+
+IMPORTANTE - SALDOS BANCARIOS Y OTROS INGRESOS NO SE SINCRONIZAN
+-----------------------------------------------------------------
+dbo.SaldoBancario y dbo.OtroIngreso NO vienen de la contabilidad: el cliente
+manda esos datos por Excel y se cargan SOLO desde la pantalla de cargas del
+sistema (mantenimiento de carga), igual que Importaciones, Plaguicidas y
+Nutrientes. Esta publicación NO las toca: ni los scripts SQL, ni la
+sincronización nocturna, ni las cargas por Excel. Quedan exactamente como
+están hoy, con los datos que ya se cargaron.
 
 REGLAS DE SEGURIDAD DEL SINCRONIZADOR
 -------------------------------------
-  - Para cada objeto lee TODO el origen a una tabla temporal de staging y
+  - Para cada vista lee TODO el origen a una tabla temporal de staging y
     recién cuando la lectura terminó completa reemplaza la copia, en UNA
     transacción. Si falla la conexión o la lectura o el reemplazo, la copia
     conserva los datos del día anterior (nunca queda vacía ni a medias).
-  - Si un objeto falla, los demás siguen.
+  - Si una vista falla, las demás siguen.
   - Si el origen devuelve 0 filas y la copia tenía datos, NO la reemplaza.
-  - Reintenta cada objeto 2 veces (espera 60 s) por si la VPN se cae un instante.
+  - Reintenta cada vista 2 veces (espera 60 s) por si la VPN se cae un instante.
   - NO toca Importacion, Nutrientes, catálogos, CatalogoAgrupadorCuentas,
-    Usuarios ni Roles.
+    SaldoBancario, OtroIngreso, Usuarios ni Roles.
 
-ATENCIÓN 1 - SaldoBancario y OtroIngreso
-----------------------------------------
-Estas dos tablas ya existían en PIQ_IA y la web permite cargarlas por Excel
-(pantallas de Administración). Como son 2 de los 10 objetos del cliente,
-la sincronización nocturna REEMPLAZA su contenido por el del servidor del
-cliente: lo que se cargue por Excel y no exista allá se pierde la noche
-siguiente. Si preferís seguir cargándolas SOLO por Excel, agregá esta línea
-al .env (paso 3) y la sincronización las saltea:
-      SYNC_FINANCIERO_OMITIR=SaldoBancario,OtroIngreso
-
-ATENCIÓN 2 - ¿llega el servidor al cliente?
--------------------------------------------
+ATENCIÓN - ¿llega el servidor al cliente?
+-----------------------------------------
 El que corre la sincronización es ESTE servidor (VMI1979377): tiene que poder
 llegar a 10.10.0.6,65280. Que tu PC llegue por VPN no alcanza. El paso 4 lo
 comprueba. Si no llega, hay que dar acceso de red/VPN al servidor, o correr
@@ -74,14 +71,11 @@ de esa máquina al SQL de este servidor.
         (versión autónoma de Importaciones/Nutrientes; solo se le quitó la
          parte de Financiero. Copiarlo SOLO si en el servidor se usa ese archivo.)
 
-  app\services\etl_saldo_bancario.py    -> C:\Pronostiq\Agrequima-pronostiq\backend\app\services\
-  app\services\etl_otro_ingreso.py      -> C:\Pronostiq\Agrequima-pronostiq\backend\app\services\
-        (cambio chico: la columna UsuarioId de esas dos tablas ahora se llama
-         userid, como en el cliente; sin esto las cargas por Excel fallarían)
   app\scripts\sync_piq_ia.py            -> C:\Pronostiq\Agrequima-pronostiq\backend\app\scripts\
 
 No hace falta tocar el frontend, ni requirements.txt (pyodbc y python-dotenv
-ya están instalados), ni 11b..16b (ya corridos).
+ya están instalados), ni 11b..16b (ya corridos). El código de la web
+(backend\app\services y routers) NO cambia en esta publicación.
 
 
 ====================================================================
@@ -94,9 +88,9 @@ ya están instalados), ni 11b..16b (ya corridos).
        WITH FORMAT, INIT, NAME = 'PIQ_IA - antes de sync financiero';
    (si no existe C:\Pronostiq\Backups, crearla antes.)
 
-2. Copia de las carpetas de código que se van a pisar (símbolo del sistema):
-       xcopy "C:\Pronostiq\Agrequima-pronostiq\backend\app" "C:\Pronostiq\Backups\backend_app_antes_sync\" /E /I /H
+2. Copia de las carpetas que se van a pisar (símbolo del sistema):
        xcopy "C:\Pronostiq\Agrequima-pronostiq\deploy" "C:\Pronostiq\Backups\deploy_antes_sync\" /E /I /H
+       xcopy "C:\Pronostiq\Agrequima-pronostiq\backend\app\scripts" "C:\Pronostiq\Backups\app_scripts_antes_sync\" /E /I /H
    y una copia del archivo de configuración:
        copy "C:\Pronostiq\Agrequima-pronostiq\.env" "C:\Pronostiq\Backups\.env.antes_sync"
 
@@ -105,9 +99,9 @@ ya están instalados), ni 11b..16b (ya corridos).
  PASO 2 - COPIAR LOS ARCHIVOS
 ====================================================================
 
-Copiar cada archivo a la carpeta que indica la tabla de arriba. Los 2 de
-backend\app\services y el de backend\app\scripts reemplazan a los existentes.
-No hace falta detener el servicio todavía; el paso 8 lo reinicia.
+Copiar cada archivo a la carpeta que indica la tabla de arriba. El de
+backend\app\scripts reemplaza al existente. No hace falta reiniciar el
+servicio por esto: ningún archivo que usa la web cambia.
 
 
 ====================================================================
@@ -130,19 +124,9 @@ Formato: la coma de "10.10.0.6,65280" es parte del valor (IP,puerto). Si la
 contraseña tiene espacios, o un " #" (espacio y numeral), ponerla entre
 comillas simples: SYNC_CONTACC_DB_PASSWORD='mi clave #1'.
 
-La base Agrequima (SaldoBancario y OtroIngreso) usa por defecto el mismo
-servidor, usuario y contraseña que CONTACC y la base "Agrequima". Solo si
-fueran distintos, agregar además (todas opcionales):
+Opcionales (los valores indicados son los que ya usa por defecto):
 
-   SYNC_AGREQUIMA_DB_SERVER=10.10.0.6,65280
-   SYNC_AGREQUIMA_DB_NAME=Agrequima
-   SYNC_AGREQUIMA_DB_USER=<usuario>
-   SYNC_AGREQUIMA_DB_PASSWORD=<contraseña>
-
-Otras opcionales (los valores indicados son los que ya usa por defecto):
-
-   SYNC_FINANCIERO_OMITIR=            (ver ATENCIÓN 1: objetos a NO sincronizar, separados por coma)
-   SYNC_FINANCIERO_REINTENTOS=2       (intentos por objeto)
+   SYNC_FINANCIERO_REINTENTOS=2       (intentos por vista)
    SYNC_FINANCIERO_ESPERA_SEG=60      (espera entre intentos)
    SYNC_FINANCIERO_LOG_DIR=C:\Pronostiq\Agrequima-pronostiq\logs
 
@@ -157,12 +141,12 @@ En PowerShell, en C:\Pronostiq\Agrequima-pronostiq\deploy :
 
    powershell -ExecutionPolicy Bypass -File .\probar_conexion_origen.ps1
 
-Debe terminar en verde con "RESULTADO: OK". Prueba entrar a CONTACC y a Agrequima
-con las credenciales del .env y leer los 10 objetos. Si no:
+Debe terminar en verde con "RESULTADO: OK". Prueba entrar a CONTACC con las
+credenciales del .env y leer las 8 vistas. Si no:
    - "Login failed" / "Error de inicio de sesión"  -> usuario o contraseña del paso 3.
    - "timeout", "no se encontró el servidor", "TCP Provider"  -> el servidor no
-     llega a 10.10.0.6,65280 (ver ATENCIÓN 2). No seguir hasta resolverlo.
-   - "Invalid object name" en un objeto  -> el cliente renombró esa vista; avisar.
+     llega a 10.10.0.6,65280 (ver ATENCIÓN). No seguir hasta resolverlo.
+   - "Invalid object name" en una vista  -> el cliente renombró esa vista; avisar.
 
 
 ====================================================================
@@ -172,21 +156,13 @@ con las credenciales del .env y leer los 10 objetos. Si no:
 1. En SSMS, conectado a VMI1979377\SQLEXPRESS, abrir 17_copias_fieles_financiero.sql
    y ejecutarlo completo (F5). Es idempotente: se puede correr de nuevo sin riesgo.
 2. En "Mensajes" no debe haber nada en rojo. El último resultado debe mostrar
-   los 10 objetos con estado = OK.
-3. Qué hizo con SaldoBancario y OtroIngreso (que ya existían con otra estructura):
-   las reconstruyó con la estructura exacta del cliente sin perder datos: la
-   tabla anterior quedó como dbo.SaldoBancario_respaldo y dbo.OtroIngreso_respaldo.
-   Verificar:
-       SELECT 'SaldoBancario' AS tabla, COUNT(*) AS filas FROM dbo.SaldoBancario
-       UNION ALL SELECT 'SaldoBancario_respaldo', COUNT(*) FROM dbo.SaldoBancario_respaldo
-       UNION ALL SELECT 'OtroIngreso', COUNT(*) FROM dbo.OtroIngreso
-       UNION ALL SELECT 'OtroIngreso_respaldo', COUNT(*) FROM dbo.OtroIngreso_respaldo;
-   -> cada tabla y su _respaldo deben tener la MISMA cantidad de filas.
-   Si el script se detiene con un error de "no coincide" o "ya existe ..._respaldo",
-   no tocó nada: copiar el mensaje completo para revisarlo.
-4. Las otras 8 copias (vw_piq_*) se crean vacías, con un índice por año/mes.
-5. Opcional: comprobar también el destino desde PowerShell (conexión a PIQ_IA y
-   estructura de las 10 copias):
+   las 8 vistas con estado = OK (mismos campos, tipos y orden que el cliente).
+3. Crea las 8 tablas vw_piq_* vacías, con un índice por año/mes. No toca ninguna
+   otra tabla (SaldoBancario y OtroIngreso quedan como están). Si ya existiera una
+   tabla con el mismo nombre pero otra estructura, NO la borra: la renombra a
+   <nombre>_previa y crea la correcta.
+4. Opcional: comprobar también el destino desde PowerShell (conexión a PIQ_IA y
+   estructura de las 8 copias):
        powershell -ExecutionPolicy Bypass -File .\probar_conexion_origen.ps1 -Completo
    Debe terminar en "RESULTADO: OK".
 
@@ -200,7 +176,7 @@ En PowerShell, en deploy\ :
    powershell -ExecutionPolicy Bypass -File .\correr_sync_financiero.ps1
 
 Tarda unos minutos (Presupuestos tiene ~128.000 filas). Al final muestra el
-resumen del log: los 10 objetos con estado OK y "leidas = cargadas".
+resumen del log: las 8 vistas con estado OK y "leidas = cargadas".
 Verificar las filas en SSMS:
 
    SELECT 'vw_piq_balance_saldos' AS objeto, COUNT(*) AS filas FROM dbo.vw_piq_balance_saldos
@@ -210,16 +186,14 @@ Verificar las filas en SSMS:
    UNION ALL SELECT 'vw_piq_presupuestos', COUNT(*) FROM dbo.vw_piq_presupuestos
    UNION ALL SELECT 'vw_piq_asociados_cuota', COUNT(*) FROM dbo.vw_piq_asociados_cuota
    UNION ALL SELECT 'vw_piq_cheques_circulacion', COUNT(*) FROM dbo.vw_piq_cheques_circulacion
-   UNION ALL SELECT 'vw_piq_saldos_bancos', COUNT(*) FROM dbo.vw_piq_saldos_bancos
-   UNION ALL SELECT 'SaldoBancario', COUNT(*) FROM dbo.SaldoBancario
-   UNION ALL SELECT 'OtroIngreso', COUNT(*) FROM dbo.OtroIngreso;
+   UNION ALL SELECT 'vw_piq_saldos_bancos', COUNT(*) FROM dbo.vw_piq_saldos_bancos;
 
 Ninguna en 0, y los mismos números que el resumen. Para comparar contra el
 cliente, abrir SSMS contra 10.10.0.6,65280 y correr el mismo COUNT(*) sobre
-CONTACC.dbo.vw_piq_balance_saldos, etc. (y Agrequima.dbo.SaldoBancario/OtroIngreso).
+CONTACC.dbo.vw_piq_balance_saldos, etc.
 
-Si algún objeto sale en ERROR: lo que falló no se modificó. Corregir la causa
-(mensaje en rojo / log) y repetir el comando; también se puede correr solo ese:
+Si alguna vista sale en ERROR: lo que falló no se modificó. Corregir la causa
+(mensaje en rojo / log) y repetir el comando; también se puede correr solo esa:
    .\correr_sync_financiero.ps1 -Solo "vw_piq_presupuestos"
 NO seguir al paso 7 hasta que las 8 vw_piq_* tengan datos.
 
@@ -242,30 +216,19 @@ NO seguir al paso 7 hasta que las 8 vw_piq_* tengan datos.
    SaldosBancos tiene menos filas en la vista que en la copia fiel porque se
    suman las filas repetidas por banco/mes/año.
 3. NO volver a correr 16a_datos_financiero.sql / 16b_datos_financiero.sql ni
-   cargar_datos_financiero_inicial.py: ya no pueden cargar esas tablas (ahora
-   son vistas) y los datos vienen del sincronizador.
+   cargar_datos_financiero_inicial.py: ya no pueden cargar esas 8 tablas (ahora
+   son vistas) y los datos vienen del sincronizador. (SaldoBancario y OtroIngreso
+   no cambian: se siguen cargando por Excel.)
 
 
 ====================================================================
- PASO 8 - REINICIAR EL SERVICIO
+ PASO 8 - PROBAR LAS PANTALLAS (no hace falta reiniciar el servicio)
 ====================================================================
 
-Símbolo del sistema como Administrador, en C:\Pronostiq\Agrequima-pronostiq :
-
-    nssm.exe restart <NombreDelServicio>
-
-(el mismo nombre que se usó en la publicación anterior; si no se recuerda,
-ver services.msc). Confirmar que levantó: services.msc "En ejecución" y que no
-hay un traceback de arranque en el log más reciente de logs\.
-
-
-====================================================================
- PASO 9 - PROBAR LAS PANTALLAS
-====================================================================
-
-Entrar con un usuario con acceso a Financiero y abrir cada pantalla: Estados
-financieros, Cuotas de asociados, Ejecución de gastos (mes y acumulado),
-Conciliación bancaria, Flujo de caja, Ejecución vs presupuesto (mes y
+Las vistas tienen el mismo nombre que las tablas anteriores, así que el servicio
+las toma sin reiniciar. Entrar con un usuario con acceso a Financiero y abrir cada
+pantalla: Estados financieros, Cuotas de asociados, Ejecución de gastos (mes y
+acumulado), Conciliación bancaria, Flujo de caja, Ejecución vs presupuesto (mes y
 acumulado), Comparativo ejecutado, Importaciones (ingresos, comparativo,
 kilolitros, contribución por millar) y Otros ingresos. Todas deben cargar sin
 error y con datos.
@@ -275,12 +238,14 @@ Los números pueden ser distintos a los de ayer: antes eran la carga manual del
 (Antes de publicar se verificó, con los mismos datos de origen, que las vistas
 dan exactamente los mismos números que las tablas anteriores.)
 
-Si se usa la carga por Excel de Saldos bancarios / Otros ingresos, probar una
-carga chica: debe seguir funcionando.
+Conciliación bancaria, Flujo de caja y Otros ingresos generados leen
+SaldoBancario y OtroIngreso, que no cambian: deben mostrar lo mismo que antes.
+Si hay dudas con la caché del navegador, recargar con Ctrl+F5.
+(Si se prefiere reiniciar el servicio por precaución: nssm.exe restart <NombreDelServicio>.)
 
 
 ====================================================================
- PASO 10 - INSTALAR LA TAREA DE LAS 2:00 A. M.
+ PASO 9 - INSTALAR LA TAREA DE LAS 2:00 A. M.
 ====================================================================
 
 PowerShell ABIERTO COMO ADMINISTRADOR, en deploy\ :
@@ -304,18 +269,18 @@ unos minutos y mirar Get-ScheduledTaskInfo: LastTaskResult = 0 significa OK.
 
 
 ====================================================================
- PASO 11 - REVISAR EL LOG AL DÍA SIGUIENTE
+ PASO 10 - REVISAR EL LOG AL DÍA SIGUIENTE
 ====================================================================
 
 1. Log del día:  C:\Pronostiq\Agrequima-pronostiq\logs\sync_financiero_AAAAMMDD.log
    (ej. sync_financiero_20261006.log). Abrirlo con el Bloc de notas. Buscar:
       "=== INICIO"  y  "=== FIN sincronización Financiero (resultado=OK) ==="
-   y la tabla "--- Resumen ---" con los 10 objetos en OK y filas leídas = cargadas.
-   Cualquier línea con "ERROR" dice qué objeto falló y por qué; ese objeto
+   y la tabla "--- Resumen ---" con las 8 vistas en OK y filas leídas = cargadas.
+   Cualquier línea con "ERROR" dice qué vista falló y por qué; esa vista
    conserva los datos del día anterior.
 2. Resultado de la tarea:
    Get-ScheduledTask -TaskName PIQ_IA_Sync_Financiero | Get-ScheduledTaskInfo
-   LastRunTime = 02:00 de hoy y LastTaskResult = 0 (1 = falló algún objeto;
+   LastRunTime = 02:00 de hoy y LastTaskResult = 0 (1 = falló alguna vista;
    2 = falta una variable en el .env).
 3. Que realmente trajo el día anterior (en SSMS, base PIQ_IA):
        SELECT MAX(Sal_Ano * 100 + Sal_Mes) AS ultimo_periodo FROM dbo.vw_piq_balance_saldos;
@@ -350,21 +315,11 @@ B. Devolver las 8 tablas resumidas originales (deshacer el paso 7). En SSMS:
    (Está completo y listo para descomentar al final de 18_vistas_financiero.sql.)
    Con esto la web vuelve a leer las tablas viejas con la carga manual del 2 de octubre.
 
-C. Devolver SaldoBancario y OtroIngreso a la estructura anterior (deshacer lo del paso 5).
-   En SSMS, y después restaurar los 2 archivos .py originales de la copia del paso 1
-   (etl_saldo_bancario.py y etl_otro_ingreso.py) y reiniciar el servicio:
-       BEGIN TRANSACTION;
-       EXEC sp_rename 'dbo.SaldoBancario', 'SaldoBancario_nueva_descartada';
-       EXEC sp_rename 'dbo.SaldoBancario_respaldo', 'SaldoBancario';
-       EXEC sp_rename 'dbo.OtroIngreso', 'OtroIngreso_nueva_descartada';
-       EXEC sp_rename 'dbo.OtroIngreso_respaldo', 'OtroIngreso';
-       COMMIT TRANSACTION;
+C. Volver los archivos: borrar los copiados en el paso 2 y restaurar
+   C:\Pronostiq\Backups\deploy_antes_sync\ y app_scripts_antes_sync\ (y el .env
+   desde .env.antes_sync).
 
-D. Volver el código: borrar los archivos copiados en el paso 2 y restaurar
-   C:\Pronostiq\Backups\backend_app_antes_sync\ y deploy_antes_sync\ (y el .env
-   desde .env.antes_sync). Reiniciar el servicio (paso 8).
-
-E. Último recurso: restaurar PIQ_IA desde el .bak del paso 1 (SSMS: clic derecho
+D. Último recurso: restaurar PIQ_IA desde el .bak del paso 1 (SSMS: clic derecho
    en PIQ_IA > Tareas > Restaurar > Base de datos). Primero parar el servicio de
    la app para que no haya conexiones abiertas.
 
@@ -382,7 +337,7 @@ pueden borrar a mano cuando todo esté verificado.
  "El origen devolvió 0 filas pero la copia tenía N"  -> problema del lado del
       cliente (vista vacía); se conservaron los datos anteriores. Avisar.
  "Login failed" / "timeout"  -> credenciales del .env o red/VPN (paso 4).
- Una tabla "se queda" con datos viejos pero el resto se actualiza -> es lo
-      esperado cuando ese objeto falla: ver su línea de ERROR en el log.
+ Una vista "se queda" con datos viejos pero el resto se actualiza -> es lo
+      esperado cuando esa vista falla: ver su línea de ERROR en el log.
  La pantalla muestra error después del paso 7 -> aplicar el punto B y avisar con
       el mensaje del log del backend (carpeta logs\).

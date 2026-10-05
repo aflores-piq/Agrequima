@@ -90,7 +90,7 @@ def procesar_carga_otro_ingreso(
             conn.execute(
                 text(
                     """
-                    INSERT INTO dbo.OtroIngreso (Tipo, Concepto, Anio, Mes, Valor, userid, FechaMod)
+                    INSERT INTO dbo.OtroIngreso (Tipo, Concepto, Anio, Mes, Valor, UsuarioId, FechaMod)
                     SELECT Tipo, Concepto, CAST(Anio AS INT), CAST(Mes AS INT), Valor, :usuario_id, GETDATE()
                     FROM dbo.stg_OtroIngreso
                     WHERE Tipo IS NOT NULL OR Concepto IS NOT NULL OR Valor IS NOT NULL

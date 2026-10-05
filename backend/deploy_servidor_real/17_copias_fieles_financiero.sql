@@ -1,7 +1,7 @@
 ﻿/* =====================================================================
-   PIQ_IA -- Copias fieles de las vistas/tablas del cliente (módulo Financiero)
+   PIQ_IA -- Copias fieles de las vistas de CONTACC del cliente (módulo Financiero)
    =====================================================================
-   Crea, en PIQ_IA, UNA tabla por cada uno de los 10 objetos de origen,
+   Crea, en PIQ_IA, UNA tabla por cada una de las 8 vistas de CONTACC,
    con el MISMO nombre, los MISMOS campos, en el MISMO orden y con tipos
    equivalentes a los del servidor del cliente (10.10.0.6,65280). Fuente
    de la estructura: docs/legacy/financiero/estructura_vistas_cliente.csv
@@ -9,24 +9,13 @@
    transformaciones: la sincronización nocturna (sync_financiero.py)
    copia ahí los datos completos tal cual vienen del cliente.
 
-     Base CONTACC  (8): vw_piq_balance_saldos, vw_piq_balance_general,
-                        vw_catalogo_cuentas, vw_piq_centrosdecosto,
-                        vw_piq_presupuestos, vw_piq_asociados_cuota,
-                        vw_piq_cheques_circulacion, vw_piq_saldos_bancos
-     Base Agrequima (2): SaldoBancario, OtroIngreso
+     vw_piq_balance_saldos, vw_piq_balance_general, vw_catalogo_cuentas,
+     vw_piq_centrosdecosto, vw_piq_presupuestos, vw_piq_asociados_cuota,
+     vw_piq_cheques_circulacion, vw_piq_saldos_bancos
 
-   dbo.SaldoBancario y dbo.OtroIngreso YA EXISTÍAN en PIQ_IA con otra
-   estructura (id autonumérico al principio, columna UsuarioId, textos
-   NVARCHAR(50)/(200), campos que aceptaban NULL). Este script las
-   reconstruye con la estructura exacta del cliente SIN perder datos:
-     1. crea dbo.<tabla>_nueva con la estructura del cliente,
-     2. copia todas las filas,
-     3. verifica que la cantidad de filas y el contenido sean idénticos
-        (si no lo son, revierte todo y no toca nada),
-     4. renombra la tabla vieja a dbo.<tabla>_respaldo y la nueva a
-        dbo.<tabla>, todo dentro de una transacción.
-   La tabla _respaldo se conserva (se puede borrar a mano cuando se
-   verifique todo).
+   NO toca dbo.SaldoBancario ni dbo.OtroIngreso: esas dos se cargan SOLO
+   por Excel desde la pantalla de cargas y no forman parte de la
+   sincronización. Quedan exactamente como están.
 
    IDEMPOTENTE: se puede correr las veces que haga falta. Crea solo lo que
    falta y NUNCA borra ni modifica datos de una tabla que ya tiene la
@@ -373,192 +362,7 @@ END
 ELSE
     PRINT 'dbo.vw_piq_saldos_bancos ya tiene la estructura correcta -- no se tocó.';
 GO
-/* ============ 2. Copias de Agrequima (2) -- ya existían: se migran ============ */
-/* ---- dbo.SaldoBancario: migración a la estructura del cliente (sin perder datos) ---- */
-DECLARE @firma_real NVARCHAR(MAX) =
-    STUFF((
-        SELECT N'|' + c.COLUMN_NAME + N' ' + UPPER(c.DATA_TYPE)
-             + CASE WHEN c.DATA_TYPE IN ('varchar', 'nvarchar', 'char', 'nchar')
-                    THEN N'(' + CASE WHEN c.CHARACTER_MAXIMUM_LENGTH = -1 THEN N'MAX' ELSE CAST(c.CHARACTER_MAXIMUM_LENGTH AS NVARCHAR(10)) END + N')'
-                    WHEN c.DATA_TYPE IN ('decimal', 'numeric')
-                    THEN N'(' + CAST(c.NUMERIC_PRECISION AS NVARCHAR(5)) + N',' + CAST(c.NUMERIC_SCALE AS NVARCHAR(5)) + N')'
-                    ELSE N'' END
-             + N' ' + c.IS_NULLABLE
-        FROM INFORMATION_SCHEMA.COLUMNS c
-        WHERE c.TABLE_SCHEMA = 'dbo' AND c.TABLE_NAME = 'SaldoBancario'
-        ORDER BY c.ORDINAL_POSITION
-        FOR XML PATH(''), TYPE).value('.', 'NVARCHAR(MAX)'), 1, 1, N'');
-IF OBJECT_ID('dbo.SaldoBancario', 'U') IS NULL
-BEGIN
-    CREATE TABLE dbo.SaldoBancario(
-        concepto VARCHAR(100) NOT NULL,
-        anio     INT NOT NULL,
-        mes      INT NOT NULL,
-        banco    VARCHAR(100) NOT NULL,
-        valor    DECIMAL(18,2) NULL,
-        userid   INT NULL,
-        fechamod DATETIME NULL
-    );
-    PRINT 'Tabla dbo.SaldoBancario creada (no existía).';
-END
-ELSE IF COL_LENGTH('dbo.SaldoBancario', 'SaldoBancarioId') IS NULL
-BEGIN
-    IF ISNULL(@firma_real, N'') <> N'concepto VARCHAR(100) NO|anio INT NO|mes INT NO|banco VARCHAR(100) NO|valor DECIMAL(18,2) YES|userid INT YES|fechamod DATETIME YES'
-        THROW 50005, 'dbo.SaldoBancario no tiene ni la estructura vieja de la app ni la del cliente. No se tocó nada; revisarla a mano.', 1;
-    PRINT 'dbo.SaldoBancario ya tiene la estructura del cliente -- no se tocó.';
-END
-ELSE
-BEGIN
-    -- Se ejecuta como SQL dinámico: así SQL Server solo compila las columnas viejas
-    -- (UsuarioId, SaldoBancarioId...) cuando de verdad hace falta migrar; si la tabla ya
-    -- tiene la estructura nueva, este bloque ni se compila y el script sigue siendo idempotente.
-    DECLARE @migracion NVARCHAR(MAX) = N'    SET XACT_ABORT ON;
-    BEGIN TRY
-        IF OBJECT_ID(''dbo.SaldoBancario_respaldo'', ''U'') IS NOT NULL
-            THROW 50001, ''Ya existe dbo.SaldoBancario_respaldo (de una migración anterior). Revisarla y renombrarla o borrarla a mano antes de reintentar; no se tocó nada.'', 1;
-
-        IF EXISTS (SELECT 1 FROM dbo.SaldoBancario WHERE Anio IS NULL OR Mes IS NULL)
-            THROW 50002, ''dbo.SaldoBancario tiene filas con NULL en campos que la estructura del cliente no acepta nulos (año/mes). No se tocó nada; revisar esas filas.'', 1;
-
-        BEGIN TRANSACTION;
-
-        IF OBJECT_ID(''dbo.SaldoBancario_nueva'', ''U'') IS NOT NULL DROP TABLE dbo.SaldoBancario_nueva;
-        CREATE TABLE dbo.SaldoBancario_nueva(
-        concepto VARCHAR(100) NOT NULL,
-        anio     INT NOT NULL,
-        mes      INT NOT NULL,
-        banco    VARCHAR(100) NOT NULL,
-        valor    DECIMAL(18,2) NULL,
-        userid   INT NULL,
-        fechamod DATETIME NULL
-        );
-
-        INSERT INTO dbo.SaldoBancario_nueva (concepto, anio, mes, banco, valor, userid, fechamod)
-        SELECT ISNULL(Concepto, N''''), Anio, Mes, ISNULL(Banco, N''''), Valor, UsuarioId, FechaMod
-        FROM dbo.SaldoBancario;
-
-        -- Verificación ANTES de tocar nada: misma cantidad de filas y mismo contenido.
-        IF (SELECT COUNT(*) FROM dbo.SaldoBancario) <> (SELECT COUNT(*) FROM dbo.SaldoBancario_nueva)
-            THROW 50003, ''La copia migrada no tiene la misma cantidad de filas que la tabla original. Se revirtió todo; no se perdió nada.'', 1;
-
-        IF EXISTS (
-            SELECT ISNULL(Concepto, N''''), Anio, Mes, ISNULL(Banco, N''''), Valor, UsuarioId, FechaMod FROM dbo.SaldoBancario
-            EXCEPT
-            SELECT CAST(concepto AS NVARCHAR(100)), anio, mes, CAST(banco AS NVARCHAR(100)), valor, userid, fechamod FROM dbo.SaldoBancario_nueva
-        ) OR EXISTS (
-            SELECT CAST(concepto AS NVARCHAR(100)), anio, mes, CAST(banco AS NVARCHAR(100)), valor, userid, fechamod FROM dbo.SaldoBancario_nueva
-            EXCEPT
-            SELECT ISNULL(Concepto, N''''), Anio, Mes, ISNULL(Banco, N''''), Valor, UsuarioId, FechaMod FROM dbo.SaldoBancario
-        )
-            THROW 50004, ''El contenido de la copia migrada no coincide con la tabla original (¿caracteres que no entran en VARCHAR?). Se revirtió todo; no se perdió nada.'', 1;
-
-        EXEC sp_rename ''dbo.SaldoBancario'', ''SaldoBancario_respaldo'';
-        EXEC sp_rename ''dbo.SaldoBancario_nueva'', ''SaldoBancario'';
-
-        COMMIT TRANSACTION;
-        PRINT ''dbo.SaldoBancario migrada a la estructura del cliente. La tabla anterior quedó como dbo.SaldoBancario_respaldo (se puede borrar cuando se verifique todo).'';
-    END TRY
-    BEGIN CATCH
-        IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
-        THROW;
-    END CATCH
-';
-    EXEC sp_executesql @migracion;
-END
-GO
-/* ---- dbo.OtroIngreso: migración a la estructura del cliente (sin perder datos) ---- */
-DECLARE @firma_real NVARCHAR(MAX) =
-    STUFF((
-        SELECT N'|' + c.COLUMN_NAME + N' ' + UPPER(c.DATA_TYPE)
-             + CASE WHEN c.DATA_TYPE IN ('varchar', 'nvarchar', 'char', 'nchar')
-                    THEN N'(' + CASE WHEN c.CHARACTER_MAXIMUM_LENGTH = -1 THEN N'MAX' ELSE CAST(c.CHARACTER_MAXIMUM_LENGTH AS NVARCHAR(10)) END + N')'
-                    WHEN c.DATA_TYPE IN ('decimal', 'numeric')
-                    THEN N'(' + CAST(c.NUMERIC_PRECISION AS NVARCHAR(5)) + N',' + CAST(c.NUMERIC_SCALE AS NVARCHAR(5)) + N')'
-                    ELSE N'' END
-             + N' ' + c.IS_NULLABLE
-        FROM INFORMATION_SCHEMA.COLUMNS c
-        WHERE c.TABLE_SCHEMA = 'dbo' AND c.TABLE_NAME = 'OtroIngreso'
-        ORDER BY c.ORDINAL_POSITION
-        FOR XML PATH(''), TYPE).value('.', 'NVARCHAR(MAX)'), 1, 1, N'');
-IF OBJECT_ID('dbo.OtroIngreso', 'U') IS NULL
-BEGIN
-    CREATE TABLE dbo.OtroIngreso(
-        tipo     VARCHAR(100) NOT NULL,
-        concepto VARCHAR(150) NOT NULL,
-        anio     INT NOT NULL,
-        mes      INT NOT NULL,
-        valor    DECIMAL(18,2) NULL,
-        userid   INT NULL,
-        fechamod DATETIME NULL
-    );
-    PRINT 'Tabla dbo.OtroIngreso creada (no existía).';
-END
-ELSE IF COL_LENGTH('dbo.OtroIngreso', 'OtroIngresoId') IS NULL
-BEGIN
-    IF ISNULL(@firma_real, N'') <> N'tipo VARCHAR(100) NO|concepto VARCHAR(150) NO|anio INT NO|mes INT NO|valor DECIMAL(18,2) YES|userid INT YES|fechamod DATETIME YES'
-        THROW 50005, 'dbo.OtroIngreso no tiene ni la estructura vieja de la app ni la del cliente. No se tocó nada; revisarla a mano.', 1;
-    PRINT 'dbo.OtroIngreso ya tiene la estructura del cliente -- no se tocó.';
-END
-ELSE
-BEGIN
-    -- Se ejecuta como SQL dinámico: así SQL Server solo compila las columnas viejas
-    -- (UsuarioId, SaldoBancarioId...) cuando de verdad hace falta migrar; si la tabla ya
-    -- tiene la estructura nueva, este bloque ni se compila y el script sigue siendo idempotente.
-    DECLARE @migracion NVARCHAR(MAX) = N'    SET XACT_ABORT ON;
-    BEGIN TRY
-        IF OBJECT_ID(''dbo.OtroIngreso_respaldo'', ''U'') IS NOT NULL
-            THROW 50001, ''Ya existe dbo.OtroIngreso_respaldo (de una migración anterior). Revisarla y renombrarla o borrarla a mano antes de reintentar; no se tocó nada.'', 1;
-
-        IF EXISTS (SELECT 1 FROM dbo.OtroIngreso WHERE Anio IS NULL OR Mes IS NULL)
-            THROW 50002, ''dbo.OtroIngreso tiene filas con NULL en campos que la estructura del cliente no acepta nulos (año/mes). No se tocó nada; revisar esas filas.'', 1;
-
-        BEGIN TRANSACTION;
-
-        IF OBJECT_ID(''dbo.OtroIngreso_nueva'', ''U'') IS NOT NULL DROP TABLE dbo.OtroIngreso_nueva;
-        CREATE TABLE dbo.OtroIngreso_nueva(
-        tipo     VARCHAR(100) NOT NULL,
-        concepto VARCHAR(150) NOT NULL,
-        anio     INT NOT NULL,
-        mes      INT NOT NULL,
-        valor    DECIMAL(18,2) NULL,
-        userid   INT NULL,
-        fechamod DATETIME NULL
-        );
-
-        INSERT INTO dbo.OtroIngreso_nueva (tipo, concepto, anio, mes, valor, userid, fechamod)
-        SELECT ISNULL(Tipo, N''''), ISNULL(Concepto, N''''), Anio, Mes, Valor, UsuarioId, FechaMod
-        FROM dbo.OtroIngreso;
-
-        -- Verificación ANTES de tocar nada: misma cantidad de filas y mismo contenido.
-        IF (SELECT COUNT(*) FROM dbo.OtroIngreso) <> (SELECT COUNT(*) FROM dbo.OtroIngreso_nueva)
-            THROW 50003, ''La copia migrada no tiene la misma cantidad de filas que la tabla original. Se revirtió todo; no se perdió nada.'', 1;
-
-        IF EXISTS (
-            SELECT ISNULL(Tipo, N''''), ISNULL(Concepto, N''''), Anio, Mes, Valor, UsuarioId, FechaMod FROM dbo.OtroIngreso
-            EXCEPT
-            SELECT CAST(tipo AS NVARCHAR(100)), CAST(concepto AS NVARCHAR(150)), anio, mes, valor, userid, fechamod FROM dbo.OtroIngreso_nueva
-        ) OR EXISTS (
-            SELECT CAST(tipo AS NVARCHAR(100)), CAST(concepto AS NVARCHAR(150)), anio, mes, valor, userid, fechamod FROM dbo.OtroIngreso_nueva
-            EXCEPT
-            SELECT ISNULL(Tipo, N''''), ISNULL(Concepto, N''''), Anio, Mes, Valor, UsuarioId, FechaMod FROM dbo.OtroIngreso
-        )
-            THROW 50004, ''El contenido de la copia migrada no coincide con la tabla original (¿caracteres que no entran en VARCHAR?). Se revirtió todo; no se perdió nada.'', 1;
-
-        EXEC sp_rename ''dbo.OtroIngreso'', ''OtroIngreso_respaldo'';
-        EXEC sp_rename ''dbo.OtroIngreso_nueva'', ''OtroIngreso'';
-
-        COMMIT TRANSACTION;
-        PRINT ''dbo.OtroIngreso migrada a la estructura del cliente. La tabla anterior quedó como dbo.OtroIngreso_respaldo (se puede borrar cuando se verifique todo).'';
-    END TRY
-    BEGIN CATCH
-        IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
-        THROW;
-    END CATCH
-';
-    EXEC sp_executesql @migracion;
-END
-GO
-/* ======= 3. Índices (hacen que las vistas de 18_vistas_financiero.sql lean más rápido
+/* ======= 2. Índices (hacen que las vistas de 18_vistas_financiero.sql lean más rápido
    que las tablas resumidas actuales: medido, la suma de los 14 endpoints del Financiero
    baja ~30%). Son índices agrupados por año/mes, que es como filtra la web. Idempotentes. ======= */
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID('dbo.vw_piq_balance_saldos') AND name = 'IX_vw_piq_balance_saldos')
@@ -597,7 +401,7 @@ BEGIN
     PRINT 'Índice IX_vw_piq_asociados_cuota creado.';
 END
 GO
-/* ===================== 4. Verificación ===================== */
+/* ===================== 3. Verificación ===================== */
 -- Cada objeto debe mostrar estado = OK (mismos campos, tipos, nulabilidad y orden que el cliente).
 SELECT e.objeto,
        e.campos_esperados,
@@ -612,9 +416,7 @@ FROM (VALUES
         (N'vw_piq_presupuestos', 6, N'emp_nit VARCHAR(20) NO|par_ano SMALLINT NO|par_mes SMALLINT NO|cta_codigo NVARCHAR(20) NO|pre_presupuesto MONEY YES|cod_centro VARCHAR(20) NO'),
         (N'vw_piq_asociados_cuota', 7, N'emp_nit VARCHAR(20) YES|Sal_Ano SMALLINT NO|cod_n5 VARCHAR(20) YES|nom_n5 VARCHAR(100) YES|grupo VARCHAR(1) YES|nombre_mostrar VARCHAR(25) YES|cuota MONEY YES'),
         (N'vw_piq_cheques_circulacion', 12, N'ban_codigo VARCHAR(10) NO|cta_numero VARCHAR(30) YES|cta_nombre VARCHAR(50) YES|Cta_Codigo VARCHAR(20) YES|par_ano SMALLINT NO|par_mes SMALLINT NO|doc_numero VARCHAR(20) NO|doc_fecha DATETIME YES|doc_fchcobro DATETIME YES|doc_nombre VARCHAR(100) YES|doc_motivo VARCHAR(250) NO|doc_monto MONEY YES'),
-        (N'vw_piq_saldos_bancos', 7, N'ban_codigo VARCHAR(10) NO|Sal_Mes INT NO|Sal_Ano INT NO|InicialL MONEY YES|EntradasL MONEY YES|SalidasL MONEY YES|FinalL MONEY YES'),
-        (N'SaldoBancario', 7, N'concepto VARCHAR(100) NO|anio INT NO|mes INT NO|banco VARCHAR(100) NO|valor DECIMAL(18,2) YES|userid INT YES|fechamod DATETIME YES'),
-        (N'OtroIngreso', 7, N'tipo VARCHAR(100) NO|concepto VARCHAR(150) NO|anio INT NO|mes INT NO|valor DECIMAL(18,2) YES|userid INT YES|fechamod DATETIME YES')
+        (N'vw_piq_saldos_bancos', 7, N'ban_codigo VARCHAR(10) NO|Sal_Mes INT NO|Sal_Ano INT NO|InicialL MONEY YES|EntradasL MONEY YES|SalidasL MONEY YES|FinalL MONEY YES')
 ) AS e(objeto, campos_esperados, firma_esperada)
 CROSS APPLY (
     SELECT

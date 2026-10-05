@@ -9,15 +9,15 @@
   refrescar los datos cuando haga falta.
 
 .PARAMETER Solo
-  Opcional: sincronizar solo algunos objetos, separados por coma.
-  Ej.: -Solo "SaldoBancario,OtroIngreso"
+  Opcional: sincronizar solo algunas vistas, separadas por coma.
+  Ej.: -Solo "vw_piq_presupuestos,vw_piq_saldos_bancos"
 
 .EXAMPLE
   powershell -ExecutionPolicy Bypass -File .\correr_sync_financiero.ps1
 
 .NOTES
   Va en C:\Pronostiq\Agrequima-pronostiq\deploy\ (junto a sync_financiero.py).
-  Código de salida: 0 = todo OK; 1 = falló algún objeto (el resto sí se copió y el
+  Código de salida: 0 = todo OK; 1 = falló alguna vista (el resto sí se copió y la
   que falló conserva los datos del día anterior); 2 = falta configuración en el .env.
   El log del día queda en ..\logs\sync_financiero_AAAAMMDD.log
 #>
@@ -55,13 +55,15 @@ $argumentos = @($Script)
 if ($Solo) { $argumentos += @("--solo", $Solo) }
 
 Write-Host ""
-Write-Host "=== Sincronización de Financiero (cliente -> PIQ_IA) ===" -ForegroundColor Cyan
+Write-Host "=== Sincronización de Financiero (CONTACC -> PIQ_IA, 8 vistas) ===" -ForegroundColor Cyan
 Write-Host "Inicio : $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
 Write-Host "Python : $Python"
 Write-Host "(la copia de Presupuestos, ~128.000 filas, tarda un par de minutos; es normal)"
 Write-Host ""
 
+$salida = New-Object System.Collections.ArrayList
 & $Python @argumentos | ForEach-Object {
+    [void]$salida.Add($_)
     if ($_ -match " ERROR ") { Write-Host $_ -ForegroundColor Red }
     elseif ($_ -match " WARNING ") { Write-Host $_ -ForegroundColor Yellow }
     else { Write-Host $_ }
@@ -69,8 +71,14 @@ Write-Host ""
 $codigo = $LASTEXITCODE
 
 # --- Resumen del log del día (la última corrida) ---
-if ($env:SYNC_FINANCIERO_LOG_DIR) { $CarpetaLog = $env:SYNC_FINANCIERO_LOG_DIR } else { $CarpetaLog = Join-Path (Split-Path -Parent $Deploy) "logs" }
-$Log = Join-Path $CarpetaLog ("sync_financiero_{0:yyyyMMdd}.log" -f (Get-Date))
+# La ruta real del log la imprime el propio sync ("... INFO  Log: <ruta>"), así funciona aunque
+# SYNC_FINANCIERO_LOG_DIR esté definida en el .env y no como variable de entorno.
+$Log = $null
+foreach ($linea in $salida) { if ($linea -match "INFO\s+Log:\s+(.+)$") { $Log = $Matches[1].Trim(); break } }
+if (-not $Log) {
+    if ($env:SYNC_FINANCIERO_LOG_DIR) { $CarpetaLog = $env:SYNC_FINANCIERO_LOG_DIR } else { $CarpetaLog = Join-Path (Split-Path -Parent $Deploy) "logs" }
+    $Log = Join-Path $CarpetaLog ("sync_financiero_{0:yyyyMMdd}.log" -f (Get-Date))
+}
 Write-Host ""
 Write-Host "=== Resumen de la corrida (del log) ===" -ForegroundColor Cyan
 if (Test-Path $Log) {
@@ -87,7 +95,7 @@ else {
 }
 
 Write-Host ""
-if ($codigo -eq 0) { if ($Solo) { Write-Host "RESULTADO: OK - quedaron sincronizados los objetos pedidos ($Solo)." -ForegroundColor Green } else { Write-Host "RESULTADO: OK - los 10 objetos quedaron sincronizados." -ForegroundColor Green } }
+if ($codigo -eq 0) { if ($Solo) { Write-Host "RESULTADO: OK - quedaron sincronizados los objetos pedidos ($Solo)." -ForegroundColor Green } else { Write-Host "RESULTADO: OK - las 8 vistas quedaron sincronizadas." -ForegroundColor Green } }
 elseif ($codigo -eq 2) { Write-Host "RESULTADO: ERROR DE CONFIGURACIÓN - falta alguna variable en el .env (LEEME_SYNC.txt, paso 3)." -ForegroundColor Red }
 else { Write-Host "RESULTADO: CON ERRORES - revisar las líneas en rojo. Lo que falló conserva los datos anteriores." -ForegroundColor Red }
 exit $codigo
