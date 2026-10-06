@@ -1,0 +1,100 @@
+VERIFICACIÓN DE LOS DATOS DE FINANCIERO  (verificar_datos_financiero.ps1)
+===========================================================================
+
+PARA QUÉ SIRVE
+--------------
+Revisa que los datos del Financiero estén bien y que cuadren. SOLO LEE: no cambia,
+no borra ni agrega nada en ninguna base (solo guarda un archivo de reporte).
+Hace 4 revisiones y al final dice "OK" o "REVISAR":
+
+  1. Lo que está en la contabilidad del cliente (CONTACC) contra la copia que se
+     trajo a PIQ_IA: mismas filas, mismos totales, mismo contenido.
+  2. Esa copia contra lo que realmente lee la web (las vistas): que no se pierda
+     ni se invente nada en el camino.
+  3. Los datos verificados de la semana pasada (las tablas que terminan en
+     "_respaldo") contra lo que lee la web hoy. Esta es la más importante: todo lo
+     que estaba bien la semana pasada tiene que seguir igual. Lo nuevo (meses
+     nuevos) se muestra aparte y NO es un error.
+  4. Saldos bancarios y Otros ingresos (los que se cargan por Excel): solo muestra
+     cuántas filas hay, hasta qué mes y los totales. Es informativo.
+
+
+DÓNDE COPIARLO
+--------------
+Copiar verificar_datos_financiero.ps1 a:
+
+    C:\Pronostiq\Agrequima-pronostiq\deploy\
+
+(junto a sync_financiero.py). Usa el mismo archivo .env de la app
+(C:\Pronostiq\Agrequima-pronostiq\.env) para conectarse a CONTACC; la contraseña
+nunca se muestra en pantalla ni en el reporte.
+
+
+CÓMO CORRERLO
+-------------
+Abrir PowerShell en el servidor y escribir:
+
+    cd C:\Pronostiq\Agrequima-pronostiq\deploy
+    powershell -ExecutionPolicy Bypass -File .\verificar_datos_financiero.ps1
+
+Se conecta a PIQ_IA con la cuenta de Windows con la que se abrió PowerShell. Si dice
+que no tiene permiso, correr lo mismo agregando al final:  -AutenticacionSql
+(usa el usuario y la contraseña de la base que ya están en el .env).
+
+El servidor tiene que poder llegar a 10.10.0.6,65280 (lo mismo que necesita la
+sincronización nocturna). Si no llega, igual hace las revisiones 2, 3 y 4 y avisa
+que la 1 no se pudo hacer.
+
+
+CUÁNTO TARDA
+------------
+Normalmente de 1 a 3 minutos (en las pruebas con estos mismos datos tardó entre 3 y
+13 segundos; el resto es el tiempo de ir y volver al servidor del cliente por la VPN).
+No hace falta parar la app ni la sincronización para correrlo.
+
+
+CÓMO LEER EL RESULTADO
+----------------------
+Va mostrando cada revisión con tablas. Al final aparece un RESUMEN con una fila por
+tabla y una columna por revisión, y una última línea:
+
+  RESULTADO: OK, los datos cuadran       -> todo bien. No hay nada que hacer.
+  RESULTADO: REVISAR                     -> debajo viene la lista exacta de lo que hay
+                                            que mirar (qué revisión y qué tabla).
+
+Puede aparecer un "AVISO" en amarillo aun con resultado OK. Significa que la
+contabilidad agregó o cambió datos DESPUÉS de la última sincronización (por ejemplo,
+hoy durante el día). No es un error: esos datos entran solos en la próxima
+sincronización de las 2:00 a. m.
+
+Todo lo que se ve en pantalla también queda guardado en:
+
+    C:\Pronostiq\Agrequima-pronostiq\logs\verificacion_financiero_AAAAMMDD_HHMM.txt
+
+Código de salida (por si se programa): 0 = OK, 1 = REVISAR, 2 = no pudo conectarse.
+
+
+QUÉ HACER SI SALE "REVISAR"
+---------------------------
+Primero: NO borrar nada, y en especial NO borrar las tablas "_respaldo". Después:
+
+  - Revisión 1 (origen contra copia): correr la sincronización a mano
+        powershell -ExecutionPolicy Bypass -File .\correr_sync_financiero.ps1
+    y volver a correr esta verificación. Si ahora sale OK, era un cambio de la
+    contabilidad que todavía no se había traído. Si sigue igual, mandar el reporte.
+  - Revisión 2 (copia contra vista): no debería pasar nunca. Mandar el reporte.
+  - Revisión 3 (respaldo contra vista): el reporte muestra hasta 10 ejemplos con el
+    valor ANTERIOR y el valor NUEVO, y en qué año y mes están. Si son meses viejos,
+    puede ser que la contabilidad haya corregido algo en meses ya cerrados: mostrarle
+    los ejemplos a quien lleva la contabilidad para confirmarlo. Si nadie lo cambió a
+    propósito, mandar el reporte.
+
+En cualquier caso, enviar el archivo de reporte (el .txt de la carpeta logs) completo:
+tiene todo lo necesario para revisarlo sin volver a correr nada.
+
+
+CUÁNDO CORRERLO
+---------------
+Una vez ahora (después de la primera sincronización) y de vez en cuando, por ejemplo
+una vez por semana o antes de un cierre importante. No tiene ningún efecto sobre los
+datos, se puede correr las veces que se quiera.
