@@ -96,6 +96,9 @@ export function CategoricalDonut({ data, totalReal }: { data: RankingItem[]; tot
         <ul className="min-w-0 flex-1 space-y-6">
           {data.map((item, i) => (
             <li key={item.etiqueta} className="flex items-center gap-2 text-sm">
+              {/* Posición en columna de ancho fijo al borde izquierdo de la leyenda
+                  (dígitos alineados a la derecha, uno debajo del otro). */}
+              <span className="w-5 shrink-0 text-right tabular-nums text-ink">{i + 1}</span>
               <span
                 className="h-3 w-3 shrink-0 rounded-sm"
                 style={{ backgroundColor: PALETA_RANK[i % PALETA_RANK.length] }}

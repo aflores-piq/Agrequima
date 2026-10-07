@@ -15,10 +15,21 @@ import { colorIntensidad } from "../../theme/colors";
 import { formatUSD, formatUSDAbrev, formatUSDCorto } from "../../utils/format";
 import type { RankingItem } from "../../types/dashboard";
 
-const ANCHO_ETIQUETA_MAX = 190;
+// Tope del ancho del nombre: 190 - 6 px de espacio número/nombre, para que el
+// eje (y por lo tanto el largo de las barras) no crezca más que antes en los
+// rankings con nombres largos; esos nombres se cortan con "…" 6 px antes.
+const ANCHO_ETIQUETA_MAX = 184;
 const FUENTE_TICK = "10px sans-serif";
 const MARGEN_DERECHO_MINIMO = 8;
 const ALTO_TICK = 18;
+// Columna del número de posición (1..20), pegada al borde izquierdo del eje,
+// de ancho fijo y alineada a la derecha para que los dígitos queden uno debajo
+// del otro (igual que la columna "#" de las tablas Top N). Entre el número y
+// el nombre hay un espacio mínimo fijo (~2-3 espacios): si el nombre es corto
+// y sobra lugar, la separación es mayor (el nombre sigue alineado a la derecha).
+const ANCHO_CAJA_NUMERO = 20;
+const ESPACIO_NUMERO_NOMBRE = 8;
+const ANCHO_COLUMNA_NUMERO = ANCHO_CAJA_NUMERO + ESPACIO_NUMERO_NOMBRE;
 // Alto mínimo por fila para que el texto en una sola línea no se
 // encimice con la barra vecina — con 20 elementos esto hace que la
 // tarjeta sea más alta que un gráfico simple, a propósito (ver
@@ -71,25 +82,45 @@ function EtiquetaValorFija({ x, y, width, height, value, max }: any) {
  * se encimice con la barra de al lado sin importar el largo del
  * nombre. El nombre completo queda disponible en el tooltip nativo del
  * <div> (title) y en el tooltip del gráfico al pasar sobre la barra. */
-function TickEtiquetaTruncada({ x, y, payload, anchoEtiqueta }: any) {
+function TickEtiquetaTruncada({ x, y, payload, anchoEtiqueta, index }: any) {
   const texto = String(payload.value);
+  // El número va en su propia caja, de ancho fijo, justo a la izquierda de la
+  // caja del nombre (que queda como siempre: alineada a la derecha, truncada
+  // con "…"), o sea pegada al borde izquierdo de la gráfica. Así el número
+  // nunca se recorta por un nombre largo y los dígitos quedan alineados.
+  const xBordeIzquierdoEje = x - anchoEtiqueta - 4 - ANCHO_COLUMNA_NUMERO;
   return (
-    <foreignObject x={x - anchoEtiqueta - 4} y={y - ALTO_TICK / 2} width={anchoEtiqueta} height={ALTO_TICK}>
-      <div
-        title={texto}
-        style={{
-          whiteSpace: "nowrap",
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          textAlign: "right",
-          fontSize: "10px",
-          lineHeight: `${ALTO_TICK}px`,
-          color: "rgb(var(--color-ink-faint))",
-        }}
-      >
-        {texto}
-      </div>
-    </foreignObject>
+    <>
+      <foreignObject x={xBordeIzquierdoEje} y={y - ALTO_TICK / 2} width={ANCHO_CAJA_NUMERO} height={ALTO_TICK}>
+        <div
+          style={{
+            textAlign: "right",
+            fontSize: "10px",
+            lineHeight: `${ALTO_TICK}px`,
+            fontVariantNumeric: "tabular-nums",
+            color: "rgb(var(--color-ink-faint))",
+          }}
+        >
+          {(index ?? 0) + 1}
+        </div>
+      </foreignObject>
+      <foreignObject x={x - anchoEtiqueta - 4} y={y - ALTO_TICK / 2} width={anchoEtiqueta} height={ALTO_TICK}>
+        <div
+          title={texto}
+          style={{
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            textAlign: "right",
+            fontSize: "10px",
+            lineHeight: `${ALTO_TICK}px`,
+            color: "rgb(var(--color-ink-faint))",
+          }}
+        >
+          {texto}
+        </div>
+      </foreignObject>
+    </>
   );
 }
 
@@ -156,7 +187,7 @@ export function RankingBarChart({ theme, data }: { theme: DashboardTheme; data: 
           <YAxis
             type="category"
             dataKey="etiqueta"
-            width={anchoEtiqueta + 6}
+            width={anchoEtiqueta + 6 + ANCHO_COLUMNA_NUMERO}
             tick={<TickEtiquetaTruncada anchoEtiqueta={anchoEtiqueta} />}
             tickLine={false}
             interval={0}
