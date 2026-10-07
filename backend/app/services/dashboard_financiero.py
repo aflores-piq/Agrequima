@@ -95,6 +95,7 @@ from app.schemas.dashboard_financiero import (
     TotalMensual,
 )
 from app.services.agrupador_cuentas import MapasAgrupador, cargar_mapas_agrupador, grupo_de_cuenta
+from app.services.dashboard_otros_informes import _nombre_display_ejecucion_gastos
 
 MESES = [
     "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
@@ -163,10 +164,20 @@ def _detalle_grupo_mensual(
     mes: int,
     anio_ant: int,
     mes_ant: int,
-    columna: str,
+    col_mes_ant: str,
+    col_mes: str,
+    col_acum: str,
     mapas: MapasAgrupador,
     primer_digito: str,
 ) -> tuple[list[FilaGrupoMensual], TotalMensual]:
+    # Regla de cada columna = medida DAX de la página "Estado de ingresos y
+    # desembolsos mensual" del .pbix (PIQ_AGREQUIMA.pbix):
+    #   Ingresos: mes anterior = SUM(Creditos) (Mes_Anterior_Créditos);
+    #             mes = SUM(Creditos); acumulado = Creditos - Debitos (SaldoAcumuladoIngresos).
+    #   Egresos:  mes anterior = SUM(Debitos) (Mes_Anterior_Debitos);
+    #             mes = Debitos - Creditos (Saldo_Calculado); acumulado = Debitos - Creditos (SaldoAcumulado).
+    # El ACUMULADO es siempre NETO (antes se sumaba solo Debitos/Creditos y los
+    # créditos de cuentas de gasto -p. ej. devoluciones- no se restaban).
     # LEFT(Cta_Codigo,1) = '4'/'5' -- es el filtro REAL usado por las
     # medidas DAX del .pbix ("Acumulado Ingresos/Egresos mes corriente",
     # PIQ_AGREQUIMA.pbix, tabla _Calculos), confirmado contra números de
@@ -187,15 +198,15 @@ def _detalle_grupo_mensual(
             SELECT
                 Cta_Codigo AS codigo,
                 MAX(Cta_Descripcion) AS nombre,
-                SUM(CASE WHEN Sal_Ano = :anio_ant AND Sal_Mes = :mes_ant THEN {columna} ELSE 0 END) AS mes_anterior,
-                SUM(CASE WHEN Sal_Ano = :anio AND Sal_Mes = :mes THEN {columna} ELSE 0 END) AS mes_actual,
-                SUM(CASE WHEN Sal_Ano = :anio AND Sal_Mes <= :mes THEN {columna} ELSE 0 END) AS acumulado_anio
+                SUM(CASE WHEN Sal_Ano = :anio_ant AND Sal_Mes = :mes_ant THEN {col_mes_ant} ELSE 0 END) AS mes_anterior,
+                SUM(CASE WHEN Sal_Ano = :anio AND Sal_Mes = :mes THEN {col_mes} ELSE 0 END) AS mes_actual,
+                SUM(CASE WHEN Sal_Ano = :anio AND Sal_Mes <= :mes THEN {col_acum} ELSE 0 END) AS acumulado_anio
             FROM dbo.BalanceSaldos
             WHERE ((Sal_Ano = :anio_ant AND Sal_Mes = :mes_ant) OR (Sal_Ano = :anio AND Sal_Mes <= :mes))
                 AND LEFT(Cta_Codigo, 1) = :primer_digito
             GROUP BY Cta_Codigo
-            HAVING SUM(CASE WHEN Sal_Ano = :anio_ant AND Sal_Mes = :mes_ant THEN {columna} ELSE 0 END) <> 0
-                OR SUM(CASE WHEN Sal_Ano = :anio AND Sal_Mes <= :mes THEN {columna} ELSE 0 END) <> 0
+            HAVING SUM(CASE WHEN Sal_Ano = :anio_ant AND Sal_Mes = :mes_ant THEN {col_mes_ant} ELSE 0 END) <> 0
+                OR SUM(CASE WHEN Sal_Ano = :anio AND Sal_Mes <= :mes THEN {col_acum} ELSE 0 END) <> 0
             """
         ),
         {"anio": anio, "mes": mes, "anio_ant": anio_ant, "mes_ant": mes_ant, "primer_digito": primer_digito},
@@ -204,6 +215,8 @@ def _detalle_grupo_mensual(
     por_grupo: dict[str, dict] = {}
     for f in filas:
         grupo = grupo_de_cuenta(mapas, f["codigo"]) or "Sin clasificar"
+        if primer_digito == "5":
+            grupo = _nombre_display_ejecucion_gastos(grupo)  # con comas, como Power BI
         acc = por_grupo.setdefault(grupo, {"totales": [0.0, 0.0, 0.0], "cuentas": []})
         mes_anterior, mes_actual, acumulado_anio = _num(f["mes_anterior"]), _num(f["mes_actual"]), _num(f["acumulado_anio"])
         acc["totales"][0] += mes_anterior
@@ -232,22 +245,44 @@ def _detalle_grupo_mensual(
     return detalle, total
 
 
+def _suma_mes_bruta(db: Session, anio: int, mes: int, columna: str, primer_digito: str) -> float:
+    """SUM(Creditos) o SUM(Debitos) de las cuentas de ese primer dígito en el mes."""
+    valor = db.execute(
+        text(
+            f"SELECT SUM({columna}) FROM dbo.BalanceSaldos "
+            "WHERE Sal_Ano = :anio AND Sal_Mes = :mes AND LEFT(Cta_Codigo, 1) = :d"
+        ),
+        {"anio": anio, "mes": mes, "d": primer_digito},
+    ).scalar()
+    return _num(valor)
+
+
 def _pagina_ingresos_desembolsos_mensual(db: Session, anio: int, mes: int) -> IngresosDesembolsosMensual:
     anio_ant, mes_ant = _periodo_anterior(anio, mes)
     mapas_ingresos, _ = cargar_mapas_agrupador(db, "Ingresos")
     mapas_egresos, _ = cargar_mapas_agrupador(db, "Egresos")
 
-    detalle_ingresos, total_ingresos = _detalle_grupo_mensual(db, anio, mes, anio_ant, mes_ant, "Creditos", mapas_ingresos, "4")
-    detalle_egresos, total_egresos = _detalle_grupo_mensual(db, anio, mes, anio_ant, mes_ant, "Debitos", mapas_egresos, "5")
+    detalle_ingresos, total_ingresos = _detalle_grupo_mensual(
+        db, anio, mes, anio_ant, mes_ant, "Creditos", "Creditos", "Creditos - Debitos", mapas_ingresos, "4"
+    )
+    detalle_egresos, total_egresos = _detalle_grupo_mensual(
+        db, anio, mes, anio_ant, mes_ant, "Debitos", "Debitos - Creditos", "Debitos - Creditos", mapas_egresos, "5"
+    )
+
+    # Tarjetas y gráfica del MES = medidas CreditosGrafico / DebitosGrafico del .pbix
+    # (SUM(Creditos) y SUM(Debitos) del mes, sin netear). El resultado del mes es
+    # Ingresos mes corriente - Egresos mes corriente (medida "Saldo mes corriente").
+    ingresos_mes = _suma_mes_bruta(db, anio, mes, "Creditos", "4")
+    egresos_mes = _suma_mes_bruta(db, anio, mes, "Debitos", "5")
 
     kpis = KpisIngresosDesembolsosMensual(
-        ingresos=total_ingresos.mes_actual,
-        egresos=total_egresos.mes_actual,
-        resultado=total_ingresos.mes_actual - total_egresos.mes_actual,
+        ingresos=ingresos_mes,
+        egresos=egresos_mes,
+        resultado=ingresos_mes - egresos_mes,
     )
     resultado_del_ejercicio = TotalMensual(
         mes_anterior=total_ingresos.mes_anterior - total_egresos.mes_anterior,
-        mes_actual=total_ingresos.mes_actual - total_egresos.mes_actual,
+        mes_actual=ingresos_mes - egresos_mes,
         acumulado_anio=total_ingresos.acumulado_anio - total_egresos.acumulado_anio,
     )
 
@@ -262,8 +297,8 @@ def _pagina_ingresos_desembolsos_mensual(db: Session, anio: int, mes: int) -> In
         titulo_grafico_mes=f"Estado de Ingresos y Desembolsos {etiqueta_mes_actual} {anio}",
         titulo_grafico_acumulado=f"Acumulado al mes de {etiqueta_mes_actual} de {anio}",
         grafico_mes=BarraTresCategorias(
-            ingresos=total_ingresos.mes_actual, egresos=total_egresos.mes_actual,
-            resultado=total_ingresos.mes_actual - total_egresos.mes_actual,
+            ingresos=ingresos_mes, egresos=egresos_mes,
+            resultado=ingresos_mes - egresos_mes,
         ),
         grafico_acumulado=BarraTresCategorias(
             ingresos=total_ingresos.acumulado_anio, egresos=total_egresos.acumulado_anio,
@@ -280,9 +315,27 @@ def _pagina_ingresos_desembolsos_mensual(db: Session, anio: int, mes: int) -> In
 # --- Página 2: Estado de ingresos y desembolsos acumulado -------------
 
 
+def _clave_cuenta_comparativa(primer_digito: str):
+    if primer_digito == "5":
+        return lambda c: (c.anio_actual, c.cuenta)
+    return lambda c: (-c.variacion, c.cuenta)
+
+
+def _clave_grupo_comparativa(primer_digito: str):
+    if primer_digito == "5":
+        return lambda f: (f.anio_actual, f.grupo)
+    return lambda f: (-f.variacion, f.grupo)
+
+
 def _detalle_grupo_comparativo(
     db: Session, anio: int, anio_ant: int, mes: int, columna: str, mapas: MapasAgrupador, primer_digito: str
 ) -> tuple[list[FilaGrupoComparativa], TotalComparativo]:
+    # `columna` es la expresión NETA de las medidas DAX IngresosAnioActual/Anterior
+    # (Creditos - Debitos) y EgresosAnioActual/Anterior (Debitos - Creditos) del .pbix:
+    # SUM(Debitos) - SUM(Creditos) de Enero al mes elegido. Antes se sumaba solo
+    # Debitos (egresos) o solo Creditos (ingresos) y los créditos de cuentas de gasto
+    # (devoluciones/correcciones) no se restaban: agosto 2026 daba Q6,576,130 en vez
+    # de Q6,575,984 y agosto 2025 Q6,159,518 en vez de Q6,145,507.
     # Mismo filtro LEFT(Cta_Codigo,1) que _detalle_grupo_mensual (ver su
     # comentario) -- idéntico bug, misma causa, misma fuente real.
     filas = db.execute(
@@ -307,6 +360,8 @@ def _detalle_grupo_comparativo(
     por_grupo: dict[str, dict] = {}
     for f in filas:
         grupo = grupo_de_cuenta(mapas, f["codigo"]) or "Sin clasificar"
+        if primer_digito == "5":
+            grupo = _nombre_display_ejecucion_gastos(grupo)  # con comas, como Power BI
         acc = por_grupo.setdefault(grupo, {"totales": [0.0, 0.0], "cuentas": []})
         anio_anterior, anio_actual = _num(f["anio_anterior"]), _num(f["anio_actual"])
         acc["totales"][0] += anio_anterior
@@ -315,17 +370,21 @@ def _detalle_grupo_comparativo(
             FilaCuentaComparativa(cuenta=f["nombre"] or f["codigo"], anio_anterior=anio_anterior, anio_actual=anio_actual, variacion=anio_actual - anio_anterior)
         )
 
+    # Orden = el de las tablas del .pbix (página "Estado de ingresos y desembolsos
+    # acumulado", OrderBy del visual): EGRESOS de menor a mayor por EgresosAnioActual
+    # (acumulado del año actual); INGRESOS de mayor a menor por VariacionIngresos.
+    # Aplica a las categorías y, dentro de cada una, a sus cuentas; el nombre desempata.
     detalle = [
         FilaGrupoComparativa(
             grupo=g,
             anio_anterior=v["totales"][0],
             anio_actual=v["totales"][1],
             variacion=v["totales"][1] - v["totales"][0],
-            cuentas=sorted(v["cuentas"], key=lambda c: -c.anio_actual),
+            cuentas=sorted(v["cuentas"], key=_clave_cuenta_comparativa(primer_digito)),
         )
         for g, v in por_grupo.items()
     ]
-    detalle.sort(key=lambda f: -f.anio_actual)
+    detalle.sort(key=_clave_grupo_comparativa(primer_digito))
     total = TotalComparativo(
         anio_anterior=sum(f.anio_anterior for f in detalle),
         anio_actual=sum(f.anio_actual for f in detalle),
@@ -339,8 +398,8 @@ def _pagina_ingresos_desembolsos_acumulado(db: Session, anio: int, mes: int) -> 
     mapas_ingresos, _ = cargar_mapas_agrupador(db, "Ingresos")
     mapas_egresos, _ = cargar_mapas_agrupador(db, "Egresos")
 
-    detalle_ingresos, total_ingresos = _detalle_grupo_comparativo(db, anio, anio_ant, mes, "Creditos", mapas_ingresos, "4")
-    detalle_egresos, total_egresos = _detalle_grupo_comparativo(db, anio, anio_ant, mes, "Debitos", mapas_egresos, "5")
+    detalle_ingresos, total_ingresos = _detalle_grupo_comparativo(db, anio, anio_ant, mes, "Creditos - Debitos", mapas_ingresos, "4")
+    detalle_egresos, total_egresos = _detalle_grupo_comparativo(db, anio, anio_ant, mes, "Debitos - Creditos", mapas_egresos, "5")
 
     kpis = KpisIngresosDesembolsosAcumulado(
         ingresos=total_ingresos.anio_actual,

@@ -326,7 +326,7 @@ export function DashboardFinancieroPage() {
                     <div className="flex flex-wrap justify-center gap-3">
                       <KpiCardIcono letra="I" color={COLOR_TEAL} label="Ingresos" valor={formatQ(p2.kpis.ingresos)} />
                       <KpiCardIcono letra="E" color={COLOR_CORAL} label="Egresos" valor={formatQ(p2.kpis.egresos)} />
-                      <KpiCardIcono letra="S" color={COLOR_AZUL} label="Saldo" valor={formatQ(p2.kpis.saldo)} />
+                      <KpiCardIcono letra="R" color={COLOR_AZUL} label="Saldo" valor={formatQ(p2.kpis.saldo)} />
                     </div>
 
                     <TablaGrupoExpandible

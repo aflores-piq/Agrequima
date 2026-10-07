@@ -137,7 +137,7 @@ def test_pagina1_ingresos_desembolsos_mensual(client, admin_headers):
     assert cuentas_cuotas == [{"cuenta": "Cuotas de Asociados", "mes_anterior": 5000.0, "mes_actual": 6000.0, "acumulado_anio": 11000.0}]
 
     egresos_por_grupo = {f["grupo"]: f for f in p1["detalle_egresos"]}
-    assert egresos_por_grupo["Sueldos Bonificaciones y Prestaciones de Ley"]["acumulado_anio"] == 6200.0
+    assert egresos_por_grupo["Sueldos, Bonificaciones y Prestaciones de Ley"]["acumulado_anio"] == 6200.0  # con comas, como Power BI
     assert egresos_por_grupo["Gastos Generales de Funcionamiento"]["acumulado_anio"] == 1100.0
     assert p1["total_egresos"] == {"mes_anterior": 3500.0, "mes_actual": 3800.0, "acumulado_anio": 7300.0}
 
@@ -164,6 +164,16 @@ def test_pagina2_ingresos_desembolsos_acumulado(client, admin_headers):
     assert p2["total_ingresos"] == {"anio_anterior": 6300.0, "anio_actual": 15500.0, "variacion": 9200.0}
     assert p2["total_egresos"] == {"anio_anterior": 3350.0, "anio_actual": 7300.0, "variacion": 3950.0}
     assert p2["resultado_del_ejercicio"] == {"anio_anterior": 2950.0, "anio_actual": 8200.0, "variacion": 5250.0}
+
+    # Orden del .pbix en esta pantalla: Egresos de menor a mayor por el acumulado del año
+    # actual; Ingresos de mayor a menor por Variación (categorías y, dentro, sus cuentas).
+    egresos_actual = [f["anio_actual"] for f in p2["detalle_egresos"]]
+    assert egresos_actual == sorted(egresos_actual)
+    variaciones = [f["variacion"] for f in p2["detalle_ingresos"]]
+    assert variaciones == sorted(variaciones, reverse=True)
+    for f in p2["detalle_egresos"]:
+        cuentas = [c["anio_actual"] for c in f["cuentas"]]
+        assert cuentas == sorted(cuentas)
 
 
 def test_pagina3_balance_general_mensual(client, admin_headers):
