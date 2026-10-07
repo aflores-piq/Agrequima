@@ -19,7 +19,7 @@
      2. dbo.Importacion: las filas ya cargadas con el código absorbido
         pasan al Grupo/CodigoAgrupador del canónico.
 
-   QUÉ UNIFICA (29 absorciones, 28 productos): mismos ingredientes en otro
+   QUÉ UNIFICA (28 absorciones, 27 productos): mismos ingredientes en otro
    orden, ortografía o tipeo, inglés vs español y combinaciones de 3 o 4
    componentes. QUÉ NO UNIFICA (a propósito, por dudoso o por indicación):
    Metalaxil vs Metalaxil-M, las variantes de cobre (cobre, cobre metálico,
@@ -27,7 +27,8 @@
    Cipermetrina vs Permetrina vs Zeta-cipermetrina, sales (Paraquat /
    Dicloruro de paraquat, Diquat / Diquat dibromida, Glifosato / Sal de
    glifosato de potasio, Propamocarb / Hidrocloruro de propamocarb),
-   Haloxifop-metil vs Haloxifop-P-metil, Thiocyclam y su oxalato, y los
+   Haloxifop-metil vs Haloxifop-P-metil, Thiocyclam y su oxalato, el caso
+   de cobre con porcentajes (IA-160 / IA-357, pendiente de decisión) y los
    que ya se ven unificados por mayúsculas/tildes (Fosfuro de aluminio,
    Hidróxido de cobre).
 
@@ -102,8 +103,7 @@ INSERT INTO @pares (Par, CodigoAbsorbido, CodigoCanonico) VALUES
     (25, 'IA-412', 'IA-176'),   -- Cymoxanil + Propamocarb  <-  Propamocarb + Cimoxanil
     (26, 'IA-475', 'IA-018'),   -- Abamectina + Thiamethoxam  <-  Tiametoxam + Abamectina
     (27, 'IA-346', 'IA-324'),   -- Imidacloprid + Lambda cialotrina  <-  Lambda-cialotrina + Imidacloprid
-    (28, 'IA-160', 'IA-357'),   -- Mancozeb + Cobre Metalico + Oxicloruro De Cobr  <-  Cobre metalico (27% Caldo bordeles (8%Cu) + 58
-    (29, 'IA-260', 'IA-483');   -- Tiametoxam, Tiabendazol, Fludioxonil, Metalaxi  <-  Fludioxonil + Metalaxil-M + Tiabendazol + Tiam
+    (28, 'IA-260', 'IA-483');   -- Tiametoxam, Tiabendazol, Fludioxonil, Metalaxi  <-  Fludioxonil + Metalaxil-M + Tiabendazol + Tiam
 
 -- Totales de control de dbo.Importacion antes de tocar nada
 DECLARE @filasAntes INT           = (SELECT COUNT(*) FROM dbo.Importacion);
