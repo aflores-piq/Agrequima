@@ -1018,3 +1018,41 @@ BEGIN
     );
 END
 GO
+-- dbo.CatalogoBancos: apariencia (nombre, color, orden) de cada banco en Conciliación bancaria
+-- y Flujo de caja. La lista de bancos sale de los datos; un banco que no esté acá se muestra
+-- igual (código como nombre, gris #9E9E9E, al final). Ver
+-- backend/deploy_servidor_real/19_catalogo_bancos_financiero.sql (mismo contenido, con la
+-- explicación completa de cada columna y ejemplos de INSERT/UPDATE).
+IF OBJECT_ID('dbo.CatalogoBancos') IS NULL
+BEGIN
+    CREATE TABLE dbo.CatalogoBancos(
+        catalogobancoid      INT IDENTITY(1,1) NOT NULL CONSTRAINT PK_CatalogoBancos PRIMARY KEY,
+        ban_codigo           NVARCHAR(50)  NOT NULL CONSTRAINT UQ_CatalogoBancos_ban_codigo UNIQUE,
+        nombre_conciliacion  NVARCHAR(100) NULL,
+        nombre_flujo         NVARCHAR(100) NULL,
+        color_hex            VARCHAR(7)    NULL,
+        orden                INT           NULL,
+        orden_flujo          INT           NULL,
+        activo               BIT           NOT NULL CONSTRAINT DF_CatalogoBancos_activo DEFAULT 1,
+        alias_saldo_bancario NVARCHAR(100) NULL,
+        fechamod             DATETIME      NOT NULL CONSTRAINT DF_CatalogoBancos_fechamod DEFAULT GETDATE(),
+        CONSTRAINT CK_CatalogoBancos_color CHECK (
+            color_hex IS NULL OR color_hex LIKE '#[0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f]')
+    );
+END
+GO
+
+DECLARE @promerica NVARCHAR(50) = N'PROM' + NCHAR(201) + N'RICA';
+IF NOT EXISTS (SELECT 1 FROM dbo.CatalogoBancos WHERE ban_codigo = N'BANCOR')
+    INSERT INTO dbo.CatalogoBancos (ban_codigo, nombre_conciliacion, nombre_flujo, color_hex, orden, orden_flujo, activo, alias_saldo_bancario)
+    VALUES (N'BANCOR', N'BAC', N'BAC Reformador', '#E4002B', 1, 3, 1, N'BANCOR');
+IF NOT EXISTS (SELECT 1 FROM dbo.CatalogoBancos WHERE ban_codigo = N'BANRURAL')
+    INSERT INTO dbo.CatalogoBancos (ban_codigo, nombre_conciliacion, nombre_flujo, color_hex, orden, orden_flujo, activo, alias_saldo_bancario)
+    VALUES (N'BANRURAL', N'BANRURAL', N'Banrural', '#365E3E', 2, 1, 1, N'BANRURAL');
+IF NOT EXISTS (SELECT 1 FROM dbo.CatalogoBancos WHERE ban_codigo = N'BI')
+    INSERT INTO dbo.CatalogoBancos (ban_codigo, nombre_conciliacion, nombre_flujo, color_hex, orden, orden_flujo, activo, alias_saldo_bancario)
+    VALUES (N'BI', N'BI', N'Banco Industrial', '#003865', 3, 2, 1, N'BI');
+IF NOT EXISTS (SELECT 1 FROM dbo.CatalogoBancos WHERE ban_codigo = @promerica)
+    INSERT INTO dbo.CatalogoBancos (ban_codigo, nombre_conciliacion, nombre_flujo, color_hex, orden, orden_flujo, activo, alias_saldo_bancario)
+    VALUES (@promerica, @promerica, N'Promerica', '#00693C', 4, 4, 1, N'PROMERICA');
+GO

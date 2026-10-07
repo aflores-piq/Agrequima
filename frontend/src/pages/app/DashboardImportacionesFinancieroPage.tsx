@@ -17,6 +17,7 @@ import { useTablaOrdenable, type ColumnaOrdenable } from "../../hooks/useTablaOr
 import { FINANCIERO_SURFACE, GAP_TITULO_PRIMER_ELEMENTO, VERDE_ENCABEZADO } from "../../components/TablaGrupoExpandible";
 import { COLOR_EJECUTADO, COLOR_PRESUPUESTO, ultimoDiaDelMes } from "./DashboardOtrosInformesPage";
 import { useTheme } from "../../theme/ThemeContext";
+import { calcularEscalaEje } from "../../utils/escalaEje";
 import {
   formatPercent2,
   formatPercentEntero,
@@ -681,8 +682,8 @@ function GraficoCIFLineas({
 const COLOR_PRECIO_AGREQUIMA = "#2C786C";
 const COLOR_PRECIO_GREMIAGRO = "#4DB6AC";
 const COLOR_PRECIO_TOTAL = "#3182BD";
-const DOMINIO_PRECIO: [number, number] = [4, 12];
-const TICKS_PRECIO = [4, 6, 8, 10, 12];
+// El eje Y de esta gráfica (antes fijo 4-12) se calcula de los datos que
+// muestra (utils/escalaEje.ts) dentro de GraficoPrecioLineas.
 
 function EtiquetaCajaPrecio({
   x,
@@ -726,7 +727,8 @@ function GraficoPrecioLineas({ titulo, datos }: { titulo: string; datos: PuntoPr
   const gutterIzquierdo = margin.left + anchoEjeYPrecio;
   const gutterDerecho = anchoTarjeta ? anchoTarjeta - margin.right : undefined;
   const altoSvg = anchoTarjeta ? anchoTarjeta / aspecto : 0;
-  const { escalaX, escalaY } = crearEscalas(datos.length, DOMINIO_PRECIO, anchoTarjeta, altoSvg, margin, gutterIzquierdo);
+  const escalaPrecio = calcularEscalaEje(datos.flatMap((d) => [d.agrequima, d.gremiagro, d.total]));
+  const { escalaX, escalaY } = crearEscalas(datos.length, escalaPrecio.dominio, anchoTarjeta, altoSvg, margin, gutterIzquierdo);
   return (
     <div
       ref={refTarjeta}
@@ -745,9 +747,9 @@ function GraficoPrecioLineas({ titulo, datos }: { titulo: string; datos: PuntoPr
           />
           <YAxis
             type="number"
-            domain={DOMINIO_PRECIO}
-            ticks={TICKS_PRECIO}
-            tickFormatter={(v: number) => v.toFixed(0)}
+            domain={escalaPrecio.dominio}
+            ticks={escalaPrecio.ticks}
+            tickFormatter={(v: number) => (Number.isInteger(v) ? v.toFixed(0) : v.toFixed(1))}
             tick={{ fontSize: 12, fontWeight: 700, fill: "rgb(var(--color-ink))" }}
             axisLine={false}
             tickLine={false}
@@ -811,10 +813,9 @@ const ANCHO_TABLA_1 = "46.6%"; // 773/1658
 const GAP_GRAFICA1_GRAFICA2 = "1.3%"; // 21px
 const GAP_GRAFICA2_TABLA = "1.6%"; // 27px
 
-// Eje Y fijo de la gráfica CIF de esta pantalla (Agrequima+Gremiagro) --
-// dado directamente por el usuario.
-const DOMINIO_CIF_TOTAL: [number, number] = [12_000_000, 34_000_000];
-const TICKS_CIF_TOTAL = [12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34].map((m) => m * 1_000_000);
+// El eje Y de la gráfica CIF de esta pantalla (Agrequima+Gremiagro) se
+// calcula de los datos que muestra (antes fijo 12,000,000-34,000,000,
+// que dejaba fuera cualquier valor fuera de ese rango).
 
 function PaginaIngresosImportacion() {
   const [data, setData] = useState<IngresosImportacionResponse | null>(null);
@@ -856,6 +857,7 @@ function PaginaIngresosImportacion() {
     ? `Comparativo CIF US$ ${data.anio_anterior} vs. ${data.anio} Agrequima-Gremiagro`
     : "Ingresos por importación";
   const tituloGrafico = "Comparativo CIF US$ Importaciones Plaguicidas (Expresado en Miles de US$)";
+  const escalaCif = calcularEscalaEje((data?.grafico_cif ?? []).flatMap((d) => [d.cif_anio_anterior, d.cif_anio_actual]));
   const tituloPrecio = data
     ? `Comportamiento acumulado a ${MESES_LARGOS[data.ultimo_mes_con_datos - 1]} ${data.anio}, precio kilolitro en US$.`
     : "";
@@ -879,8 +881,8 @@ function PaginaIngresosImportacion() {
               datos={data.grafico_cif}
               anioAnterior={data.anio_anterior}
               anioActual={data.anio}
-              dominioY={DOMINIO_CIF_TOTAL}
-              ticksY={TICKS_CIF_TOTAL}
+              dominioY={escalaCif.dominio}
+              ticksY={escalaCif.ticks}
               anioAnteriorSinDatos={data.anio_anterior_sin_datos}
               proporcionAltoAncho={PROPORCION_ALTO_ANCHO_IMPORTACION}
             />
@@ -1363,13 +1365,13 @@ function GraficoColumnasContribucion({
   const fila = [{ presupuesto, realizado }];
   const [refTarjeta, anchoTarjeta] = useAnchoElemento<HTMLDivElement>();
   const barSize = anchoTarjeta ? Math.round(anchoTarjeta * 0.12) : undefined;
-  const maxValor = Math.max(presupuesto, realizado, 1);
-  // +1 escalón de aire extra sobre el valor más alto real -- si no,
-  // la etiqueta de una barra que casi toca el techo del dominio queda
-  // pegada contra el chip de % de ejecución (confirmado con captura
-  // real: Q4,011,995 con escalaMax=Q4,200,000, solo 4.5% de aire).
-  const escalaMax = (Math.ceil(maxValor / 200_000) + 1) * 200_000 || 200_000;
-  const anchoEjeY = calcularAnchoEjeY([formatQ(escalaMax)]);
+  // Eje Y calculado de los 2 valores que muestra, con margen sobre el más
+  // alto (la etiqueta de la barra más alta no debe quedar pegada contra el
+  // chip de % de ejecución -- caso real: Q4,011,995 con tope Q4,200,000,
+  // solo 4.5% de aire) y sin paso escrito a mano (antes saltos fijos de
+  // Q200,000).
+  const escala = calcularEscalaEje([presupuesto, realizado]);
+  const anchoEjeY = calcularAnchoEjeY(escala.ticks.map((v) => formatQ(v)));
   const hayPresupuesto = presupuesto !== 0;
   const gutterIzquierdo = 16 + anchoEjeY;
   const gutterDerecho = 16;
@@ -1394,7 +1396,8 @@ function GraficoColumnasContribucion({
           <XAxis dataKey={() => ""} tick={false} axisLine={false} tickLine={false} />
           <YAxis
             type="number"
-            domain={[0, escalaMax]}
+            domain={escala.dominio}
+            ticks={escala.ticks}
             tickFormatter={(v: number) => formatQ(v)}
             tick={{ fontSize: 12, fontWeight: 700, fill: "rgb(var(--color-ink))" }}
             axisLine={false}

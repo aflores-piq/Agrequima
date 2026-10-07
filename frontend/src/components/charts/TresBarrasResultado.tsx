@@ -9,6 +9,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { DOMINIO_AUTO_SIN_RECORTAR_NEGATIVOS } from "../../utils/escalaEje";
 import { formatQ } from "../../utils/format";
 import { FINANCIERO_SURFACE } from "../TablaGrupoExpandible";
 
@@ -56,6 +57,7 @@ export function TresBarrasResultado({
         <CartesianGrid strokeDasharray="3 3" stroke="rgb(var(--color-line))" vertical={false} />
         <XAxis dataKey="categoria" stroke="rgb(var(--color-ink))" fontSize={12} tickLine={false} />
         <YAxis
+          domain={DOMINIO_AUTO_SIN_RECORTAR_NEGATIVOS}
           tickFormatter={(v: number) => formatQ(v)}
           stroke="rgb(var(--color-ink))"
           fontSize={12}

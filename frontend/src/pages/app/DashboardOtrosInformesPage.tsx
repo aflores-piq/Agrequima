@@ -22,6 +22,8 @@ import {
   KpiCardIconoComparativo,
   VERDE_ENCABEZADO,
 } from "../../components/TablaGrupoExpandible";
+import { colorBordeBanco, degradadoBanco } from "../../utils/colorBanco";
+import { calcularEscalaEje } from "../../utils/escalaEje";
 import { formatPercent, formatQ, formatQ2, MESES_LARGOS, pctSeguro } from "../../utils/format";
 import type {
   BancoConciliacion,
@@ -307,7 +309,9 @@ function GraficoCuotaVsCancelado({ data }: { data: CuotasAsociadosResponse }) {
     cancelado: t.total_cancelado,
     color: COLOR_POR_TIPO[t.tipo],
   }));
-  const maxValor = Math.max(...filas.map((f) => f.cuota)) * 1.25;
+  // Tope del eje = valor más alto que se dibuja (cuota O cancelado, si el
+  // cancelado pasara a la cuota no se corta) + 25 % de aire.
+  const maxValor = Math.max(...filas.flatMap((f) => [f.cuota, f.cancelado]), 1) * 1.25;
   const margin = { top: 20, right: 8, bottom: 4, left: 8 };
   // ALTO_EJE_X fijo e IDÉNTICO en los 2 <XAxis> -- BUG REAL encontrado
   // verificando con getBoundingClientRect: con `hide` en el eje del
@@ -1045,15 +1049,10 @@ const ALTO_GRAFICA_GRUPO = 280;
 // eje Y es una medida DAX distinta por página (_Calculos.EscalaEjeY en
 // mensual, _Calculos.EscalaEjeY_CentroAcumulado en acumulado), ninguna
 // extraíble como literal desde Layout.json.
-// Mensual: se fija en 1,000,000 porque el usuario confirmó viendo el
-// reporte real que los 3 grupos caben en esa escala para Agosto 2026 (un
-// valor puntual validado, no una fórmula).
-// Acumulado: NO puede ser el mismo literal fijo -- los montos acumulados
-// crecen mes a mes (un acumulado a Diciembre es ~12x uno a Enero), así
-// que se calcula dinámicamente a partir de los datos reales cargados
-// (calcularEscalaEjeY), redondeando hacia arriba al siguiente
-// 1/2/5×10^n "número redondo" como hace Power BI.
-const ESCALA_EJE_Y_MENSUAL = { max: 1_000_000, ticks: [0, 500_000, 1_000_000] };
+// AMBAS páginas (mensual y acumulado) calculan la escala con
+// calcularEscalaEjeY a partir de los datos que muestran -- ya no existe
+// ningún tope fijo (antes el mensual estaba fijo en 1,000,000, valor
+// puntual de Agosto 2026, y cortaba la barra si un mes lo superaba).
 
 // Medida DAX real extraída con pbixray de _Calculos.EscalaEjeY_CentroAcumulado:
 //   MAX ( [TotalEjecutado_Acumulado], [TotalPresupuesto_Acumulado] ) * 1.3
@@ -1069,17 +1068,32 @@ const ESCALA_EJE_Y_MENSUAL = { max: 1_000_000, ticks: [0, 500_000, 1_000_000] };
 // (Consolidado: Ejecutado Q6,575,984 / Presupuesto Q8,440,050 -> tope
 // real 8,440,050×1.3=10,972,065 -> tramo más cercano 5,000,000 -> eje
 // 0/5,000,000/10,000,000, igual que el reporte real).
-function calcularEscalaEjeY(valores: number[]): { max: number; ticks: number[] } {
-  const maxDax = Math.max(0, ...valores) * 1.3;
-  if (maxDax <= 0) return { max: 1, ticks: [0, 0.5, 1] };
+//
+// Dos salvaguardas agregadas (el eje nunca debe recortar un dato): (1) si el
+// redondeo "al más cercano" dejara el tope por debajo del valor más alto
+// (p. ej. dato 1,050,000 -> tope 1,000,000), se sube al siguiente tramo
+// 1/2/5×10^n; (2) con valores negativos se usa la escala genérica
+// (utils/escalaEje.ts), que baja el mínimo igual que sube el máximo. Con
+// datos positivos que no se recortan, el resultado es el mismo de siempre.
+function calcularEscalaEjeY(valores: number[]): { min: number; max: number; ticks: number[] } {
+  if (valores.some((v) => v < 0)) {
+    const escala = calcularEscalaEje(valores, 0.3);
+    return { min: escala.min, max: escala.max, ticks: escala.ticks };
+  }
+  const maxDatos = Math.max(0, ...valores);
+  const maxDax = maxDatos * 1.3;
+  if (maxDax <= 0) return { min: 0, max: 1, ticks: [0, 0.5, 1] };
   const pasoBruto = maxDax / 2;
-  const magnitud = Math.pow(10, Math.floor(Math.log10(pasoBruto)));
-  const normalizado = pasoBruto / magnitud;
-  const candidatos = [1, 2, 5, 10];
-  const pasoNormalizado = candidatos.reduce((mejor, c) => (Math.abs(c - normalizado) < Math.abs(mejor - normalizado) ? c : mejor));
-  const paso = pasoNormalizado * magnitud;
+  const pasos: number[] = [];
+  for (let k = -6; k <= 14; k++) for (const base of [1, 2, 5]) pasos.push(base * Math.pow(10, k));
+  let indice = 0;
+  for (let i = 1; i < pasos.length; i++) {
+    if (Math.abs(pasos[i] - pasoBruto) < Math.abs(pasos[indice] - pasoBruto)) indice = i;
+  }
+  while (indice < pasos.length - 1 && pasos[indice] * 2 < maxDatos * 1.02) indice++;
+  const paso = pasos[indice];
   const max = paso * 2;
-  return { max, ticks: [0, paso, max] };
+  return { min: 0, max, ticks: [0, paso, max] };
 }
 
 // Último día real del mes (28/29 de febrero según año bisiesto, 30 o 31
@@ -1138,11 +1152,13 @@ function ChipsResumenGrupo({ tarjeta }: { tarjeta: TarjetaResumenGasto }) {
 export function GraficoColumnasGrupoEjecucion({
   presupuesto,
   ejecutado,
+  escalaMin = 0,
   escalaMax,
   escalaTicks,
 }: {
   presupuesto: number;
   ejecutado: number;
+  escalaMin?: number;
   escalaMax: number;
   escalaTicks: number[];
 }) {
@@ -1154,7 +1170,7 @@ export function GraficoColumnasGrupoEjecucion({
         <XAxis dataKey={() => ""} tick={false} axisLine={false} tickLine={false} />
         <YAxis
           type="number"
-          domain={[0, escalaMax]}
+          domain={[escalaMin, escalaMax]}
           ticks={escalaTicks}
           tickFormatter={(v: number) => formatQ(v)}
           tick={estiloEtiquetaEje}
@@ -1270,12 +1286,10 @@ function PaginaEjecucionGastos({ acumulado }: { acumulado: boolean }) {
       : `Ejecución Gastos ${MESES_LARGOS[data.mes - 1]} ${data.anio}`
     : `Ejecución de Gastos ${acumulado ? "Acumulado" : "por Mes"}`;
 
-  // Escala del eje Y: mensual usa el valor fijo validado contra Agosto
-  // 2026 real; acumulado la calcula de los datos reales cargados, porque
-  // los montos acumulados crecen mes a mes (ver comentario en
-  // calcularEscalaEjeY).
-  const escalaEjeY =
-    acumulado && data ? calcularEscalaEjeY(data.tarjetas.flatMap((t) => [t.presupuesto, t.ejecutado])) : ESCALA_EJE_Y_MENSUAL;
+  // Escala del eje Y: mensual y acumulado se calculan de los datos que se
+  // muestran (ver comentario en calcularEscalaEjeY); se recalcula al
+  // cambiar año/mes.
+  const escalaEjeY = calcularEscalaEjeY((data?.tarjetas ?? []).flatMap((t) => [t.presupuesto, t.ejecutado]));
 
   return (
     <div className="space-y-3">
@@ -1388,6 +1402,7 @@ function PaginaEjecucionGastos({ acumulado }: { acumulado: boolean }) {
                   <GraficoColumnasGrupoEjecucion
                     presupuesto={t.presupuesto}
                     ejecutado={t.ejecutado}
+                    escalaMin={escalaEjeY.min}
                     escalaMax={escalaEjeY.max}
                     escalaTicks={escalaEjeY.ticks}
                   />
@@ -1405,8 +1420,10 @@ function PaginaEjecucionGastos({ acumulado }: { acumulado: boolean }) {
 //
 // Fuente de verdad: spec Deneb (Vega) real del .pbix, dado por el
 // usuario -- encabezado verde (Banco | Saldo Banco | Saldo
-// Contabilidad), una franja de color por banco (BAC/BANRURAL/BI/
-// PROMÉRICA, en ese orden, colores exactos del spec), 5 filas de detalle
+// Contabilidad), una franja de color por banco (la lista, el orden y el
+// color los manda el backend desde dbo.CatalogoBancos -- hoy BAC/BANRURAL/
+// BI/PROMÉRICA con los colores exactos del spec; un banco nuevo sin
+// catálogo llega en gris #9E9E9E), 5 filas de detalle
 // por banco (Saldo inicial, (+) Créditos, (−) Débitos, (−) Documentos en
 // Circulación, Totales en negrita) con espacio entre bancos, moneda con
 // 2 decimales (formatQ2), celdas null = vacías. "Saldo Banco" queda
@@ -1443,8 +1460,12 @@ function FilaConciliacion({ descripcion, saldoBanco, saldoContabilidad, negrita 
 
 function BloqueBanco({ banco }: { banco: BancoConciliacion }) {
   return (
-    <div className="mb-3 overflow-hidden rounded">
-      <div className="px-3 py-1.5 text-base font-bold text-white" style={{ backgroundColor: banco.color }}>
+    // Borde izquierdo de 5px del color del banco en toda la tarjeta; el
+    // encabezado lleva un degradado horizontal de ESE mismo color (color ->
+    // color 70 % + blanco 30 %), nombre en blanco y negrita. Las filas
+    // (incluida Totales) quedan en el gris de siempre, sin color del banco.
+    <div className="mb-3 overflow-hidden rounded" style={{ borderLeft: `5px solid ${colorBordeBanco(banco.color)}` }}>
+      <div className="px-3 py-1.5 text-base font-bold text-white" style={{ backgroundImage: degradadoBanco(banco.color) }}>
         {banco.nombre}
       </div>
       <div style={{ backgroundColor: FINANCIERO_SURFACE }}>
@@ -1557,8 +1578,8 @@ function PaginaConciliacionBancaria() {
 //
 // Fuente de verdad: spec Deneb (Vega) real del .pbix, dado por el
 // usuario -- tabla con tipos de fila (CAJA/BANCO/TOTAL_BANCOS/CHEQUE/
-// TOTAL_CHEQUES/DISPONIBILIDAD/INVERSION_BAC/INVERSION_PROMERICA/
-// TOTAL_FINAL), columnas Saldos/Disponibilidad, línea separadora después
+// TOTAL_CHEQUES/DISPONIBILIDAD/INVERSION/TOTAL_FINAL; una fila INVERSION
+// por cada cuenta 110103xxx que traiga el backend), columnas Saldos/Disponibilidad, línea separadora después
 // de cada total, fila final en verde. Gráfica de 3 barras debajo (NO 2
 // como en Ejecución Gastos): Monetarios/Ahorro, Inversiones, Total
 // disponibilidad -- colores COLOR_TURQUESA/COLOR_GRIS_AZULADO/COLOR_TEAL
@@ -1577,8 +1598,7 @@ const _TIPOS_NEGRITA_FLUJO = new Set([
   "TOTAL_BANCOS",
   "TOTAL_CHEQUES",
   "DISPONIBILIDAD",
-  "INVERSION_BAC",
-  "INVERSION_PROMERICA",
+  "INVERSION",
   "TOTAL_FINAL",
 ]);
 const _TIPOS_LINEA_FLUJO = new Set(["TOTAL_BANCOS", "TOTAL_CHEQUES"]);
@@ -1615,27 +1635,27 @@ function FilaFlujoCajaVista({ fila, fechaTitulo }: { fila: FilaFlujoCaja; fechaT
   );
 }
 
-// Eje Y fijo Q0 a Q8,000,000 cada Q2,000,000 (dado explícitamente por el
-// usuario para esta gráfica en particular, no calculado -- a diferencia
-// del eje dinámico de Ejecución Gastos Acumulado).
-const ESCALA_EJE_Y_FLUJO_MAX = 8_000_000;
-const ESCALA_EJE_Y_FLUJO_TICKS = [0, 2_000_000, 4_000_000, 6_000_000, 8_000_000];
-
 function GraficoFlujoCaja({ barras }: { barras: { etiqueta: string; valor: number; color: string }[] }) {
   const estiloEtiqueta = { fontSize: 11, fontWeight: 700, fill: "rgb(var(--color-ink))" };
+  // Eje Y calculado de las 3 barras que se muestran (antes fijo Q0-Q8,000,000,
+  // que cortaba la barra al pasar de ese tope): se recalcula con cada
+  // año/mes. Ancho del eje según la marca más larga (80px alcanzaba para
+  // "Q8,000,000"; "Q10,000,000" necesita más).
+  const escala = calcularEscalaEje(barras.map((b) => b.valor));
+  const anchoEjeY = Math.max(80, Math.ceil(14 + Math.max(...escala.ticks.map((v) => formatQ(v).length)) * 6.6));
   return (
     <ResponsiveContainer width="100%" height={320}>
       <BarChart data={barras} margin={{ top: 28, right: 16, bottom: 4, left: 4 }} barCategoryGap="20%">
         <XAxis dataKey="etiqueta" tick={estiloEtiqueta} axisLine={false} tickLine={false} />
         <YAxis
           type="number"
-          domain={[0, ESCALA_EJE_Y_FLUJO_MAX]}
-          ticks={ESCALA_EJE_Y_FLUJO_TICKS}
+          domain={escala.dominio}
+          ticks={escala.ticks}
           tickFormatter={(v: number) => formatQ(v)}
           tick={estiloEtiqueta}
           axisLine={false}
           tickLine={false}
-          width={80}
+          width={anchoEjeY}
         />
         <Tooltip
           cursor={{ fill: "rgb(var(--color-ink-faint) / 0.08)" }}

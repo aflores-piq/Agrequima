@@ -138,8 +138,7 @@ export type TipoFilaFlujoCaja =
   | "CHEQUE"
   | "TOTAL_CHEQUES"
   | "DISPONIBILIDAD"
-  | "INVERSION_BAC"
-  | "INVERSION_PROMERICA"
+  | "INVERSION"
   | "TOTAL_FINAL";
 
 export interface FilaFlujoCaja {

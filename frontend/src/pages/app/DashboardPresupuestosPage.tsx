@@ -19,6 +19,7 @@ import {
   VERDE_ENCABEZADO,
 } from "../../components/TablaGrupoExpandible";
 import { COLOR_EJECUTADO, COLOR_PORCENTAJE, COLOR_PRESUPUESTO, ultimoDiaDelMes } from "./DashboardOtrosInformesPage";
+import { calcularEscalaEje } from "../../utils/escalaEje";
 import { formatPercent, formatPercent2, formatQ, MESES_LARGOS, pctSeguro } from "../../utils/format";
 import type {
   ComparativoEjecutadoResponse,
@@ -153,11 +154,10 @@ function calcularAspectoSvg(anchoTarjeta: number): number {
   return anchoTarjeta / Math.max(altoSvgDeseado, 1);
 }
 
-// Eje Y fijo por página -- valores dados directamente por el usuario
-// (no son medidas DAX extraíbles del Layout.json, que solo trae texto/
-// posición, no el dominio real del eje de un clusteredColumnChart).
-const ESCALA_EJE_Y_PRESUPUESTO_MENSUAL = { max: 800_000, ticks: [0, 200_000, 400_000, 600_000, 800_000] };
-const ESCALA_EJE_Y_PRESUPUESTO_ACUMULADO = { max: 8_000_000, ticks: [0, 2_000_000, 4_000_000, 6_000_000, 8_000_000] };
+// Eje Y: ya NO es fijo -- cada gráfica lo calcula de los datos que muestra
+// (utils/escalaEje.ts), así la barra más alta nunca se corta ni toca el
+// borde, y se recalcula al cambiar año/mes. (Antes: 0-800,000 mensual y
+// 0-8,000,000 acumulado/comparativo, escritos a mano.)
 
 // Anchos de columna reales (Report/Layout, columnWidth en px, convertidos
 // a % de la tabla): Gastos ~44%, el resto ~14% cada uno -- casi idénticos
@@ -277,6 +277,7 @@ function GraficoPresupuestoEjecutado({
   titulo,
   presupuesto,
   ejecutado,
+  escalaMin,
   escalaMax,
   escalaTicks,
   fontSizeEtiqueta,
@@ -285,6 +286,7 @@ function GraficoPresupuestoEjecutado({
   titulo: string;
   presupuesto: number;
   ejecutado: number;
+  escalaMin: number;
   escalaMax: number;
   escalaTicks: number[];
   fontSizeEtiqueta: number;
@@ -322,7 +324,7 @@ function GraficoPresupuestoEjecutado({
           <XAxis dataKey={() => ""} tick={false} axisLine={false} tickLine={false} />
           <YAxis
             type="number"
-            domain={[0, escalaMax]}
+            domain={[escalaMin, escalaMax]}
             ticks={escalaTicks}
             tickFormatter={(v: number) => formatQ(v)}
             tick={estiloEtiquetaEje}
@@ -432,7 +434,7 @@ function PaginaEjecucionVsPresupuesto({ acumulado }: { acumulado: boolean }) {
       : `Ejecución Consolidados vs. Presupuesto ${MESES_LARGOS[data.mes - 1]} ${data.anio}`
     : `Ejecución vs Presupuesto${acumulado ? " Acumulado" : ""}`;
 
-  const escala = acumulado ? ESCALA_EJE_Y_PRESUPUESTO_ACUMULADO : ESCALA_EJE_Y_PRESUPUESTO_MENSUAL;
+  const escala = calcularEscalaEje(data ? [data.fila_total.presupuesto, data.fila_total.ejecutado] : []);
   const anchoTabla = acumulado ? ANCHO_TABLA_ACUMULADO : ANCHO_MENSUAL;
   const anchoGrafica = acumulado ? ANCHO_GRAFICA_ACUMULADO : ANCHO_MENSUAL;
   const margenTablaGrafica = acumulado ? MARGEN_TABLA_GRAFICA_ACUMULADO : MARGEN_TABLA_GRAFICA_MENSUAL;
@@ -520,6 +522,7 @@ function PaginaEjecucionVsPresupuesto({ acumulado }: { acumulado: boolean }) {
               titulo={tituloPagina}
               presupuesto={data.fila_total.presupuesto}
               ejecutado={data.fila_total.ejecutado}
+              escalaMin={escala.min}
               escalaMax={escala.max}
               escalaTicks={escala.ticks}
               fontSizeEtiqueta={fontSizeEtiqueta}
@@ -536,7 +539,6 @@ function PaginaEjecucionVsPresupuesto({ acumulado }: { acumulado: boolean }) {
 
 const ANCHO_TABLA_COMPARATIVO = "70.2%"; // 1164/1658
 const ANCHO_GRAFICA_COMPARATIVO = "64.1%"; // 1062/1658 -- NO el mismo ancho que la tabla, así es en el .pbix real
-const ESCALA_EJE_Y_COMPARATIVO = { max: 8_000_000, ticks: [0, 2_000_000, 4_000_000, 6_000_000, 8_000_000] };
 
 // Colores exactos del spec Deneb real ("Comparativo ejecutado" en el
 // .pbix): scale.range=["#5B7FAE","#43B0A6"] con TipoDinamicoEjecutado
@@ -627,6 +629,7 @@ function GraficoComparativoEjecutado({
   anioActual,
   valorAnterior,
   valorActual,
+  escalaMin,
   escalaMax,
   escalaTicks,
 }: {
@@ -635,6 +638,7 @@ function GraficoComparativoEjecutado({
   anioActual: number;
   valorAnterior: number;
   valorActual: number;
+  escalaMin: number;
   escalaMax: number;
   escalaTicks: number[];
 }) {
@@ -667,7 +671,7 @@ function GraficoComparativoEjecutado({
           <XAxis dataKey={() => ""} tick={false} axisLine={false} tickLine={false} />
           <YAxis
             type="number"
-            domain={[0, escalaMax]}
+            domain={[escalaMin, escalaMax]}
             ticks={escalaTicks}
             tickFormatter={(v: number) => formatQ(v)}
             tick={estiloEtiquetaEje}
@@ -752,6 +756,8 @@ function PaginaComparativoEjecutado() {
     return <p className="rounded-tremor-small bg-danger-surface px-4 py-3 text-sm text-danger">{error}</p>;
   }
 
+  // Eje Y de la gráfica: calculado de los 2 valores que muestra.
+  const escalaComparativo = calcularEscalaEje(data ? [data.fila_total.anio_anterior, data.fila_total.anio_actual] : []);
   const periodos = data?.periodos_disponibles ?? [];
   const aniosDisponibles = Array.from(new Set(periodos.map((p) => p.anio))).sort((a, b) => a - b);
   const mesesDelAnio = periodos
@@ -858,8 +864,9 @@ function PaginaComparativoEjecutado() {
               anioActual={data.anio}
               valorAnterior={data.fila_total.anio_anterior}
               valorActual={data.fila_total.anio_actual}
-              escalaMax={ESCALA_EJE_Y_COMPARATIVO.max}
-              escalaTicks={ESCALA_EJE_Y_COMPARATIVO.ticks}
+              escalaMin={escalaComparativo.min}
+              escalaMax={escalaComparativo.max}
+              escalaTicks={escalaComparativo.ticks}
             />
           </div>
         </>

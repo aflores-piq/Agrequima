@@ -25,6 +25,7 @@ Archivos que vas a usar:
   15_tablas_financiero.sql      -> lo abris tambien en SSMS, crea las 7 tablas de Financiero restantes (BalanceSaldos, BalanceGeneral, CatalogoCuentas, CentrosDeCosto, Presupuestos, AsociadosCuota, ChequesCirculacion) (ver Paso 3K)
   17_copias_fieles_financiero.sql -> lo abris tambien en SSMS, crea en PIQ_IA una COPIA FIEL (mismo nombre, mismos campos) de cada una de las 8 vistas de CONTACC del cliente (ver LEEME_SYNC.txt)
   18_vistas_financiero.sql      -> lo abris tambien en SSMS, convierte las 8 tablas resumidas que lee la web en VISTAS sobre esas copias fieles (ver LEEME_SYNC.txt)
+  19_catalogo_bancos_financiero.sql -> lo abris tambien en SSMS, crea dbo.CatalogoBancos (nombre, color y orden de cada banco en Conciliacion bancaria y Flujo de caja; un banco nuevo aparece solo en gris y se le pone color con un INSERT -- ver el encabezado del script)
   16a_datos_financiero.sql,     -> los abris tambien en SSMS, cargan los datos REALES de las 10 tablas
   16b_datos_financiero.sql         de Financiero (ver Paso 3L) -- partido en 2 archivos porque
                                     Presupuestos solo tiene ~128,000 filas y pesa ~15MB.

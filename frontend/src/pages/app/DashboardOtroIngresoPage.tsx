@@ -6,6 +6,7 @@ import { mensajeError } from "../../api/client";
 import { FilterYear } from "../../components/filters/PowerBiFilter";
 import { useFinancieroFilterOtrosIngresos } from "../../financiero/FinancieroFilterContext";
 import { FINANCIERO_SURFACE, GAP_TITULO_PRIMER_ELEMENTO } from "../../components/TablaGrupoExpandible";
+import { DOMINIO_AUTO_SIN_RECORTAR_NEGATIVOS, calcularEscalaEje } from "../../utils/escalaEje";
 import { formatPercentEntero, formatQ } from "../../utils/format";
 import type { FilaOtroIngreso, OtroIngresoResponse } from "../../types/dashboardOtroIngreso";
 
@@ -100,6 +101,7 @@ function GraficoBarrasOtrosIngresos({
           <CartesianGrid horizontal={false} vertical stroke="#666666" strokeOpacity={0.3} />
           <XAxis
             type="number"
+            domain={DOMINIO_AUTO_SIN_RECORTAR_NEGATIVOS}
             tickFormatter={(v: number) => formatQ(v)}
             tick={{ fontSize: 12, fontWeight: 700, fill: "rgb(var(--color-ink))" }}
             axisLine={false}
@@ -166,13 +168,10 @@ function GraficoTotalesOtrosIngresos({ total, anioAnteriorSinDatos = false }: { 
   // Dominio/ticks "nice" en vez de domain={[0,"dataMax"]} -- eso daba un
   // último tick pegado al valor exacto ("Q2,048,918" en vez de un número
   // redondo), Recharts no lo redondea solo cuando el máximo del dominio
-  // coincide con el dato. Paso fijo de Q500,000 (calcado del ejemplo
-  // dado, "Q0, Q500,000, Q1,000,000…").
-  const maxValor = Math.max(total.ejecutado_anio_anterior, total.presupuesto_anio, total.ejecutado_anio, 1);
-  const pasoTotales = 500_000;
-  const dominioMax = Math.ceil(maxValor / pasoTotales) * pasoTotales;
-  const ticksTotales: number[] = [];
-  for (let v = 0; v <= dominioMax; v += pasoTotales) ticksTotales.push(v);
+  // coincide con el dato. Ahora el paso también se calcula de los datos
+  // (antes fijo en Q500,000, que con montos mayores llenaba el eje de
+  // marcas); con los montos actuales da el mismo "Q0, Q500,000, Q1,000,000…".
+  const escalaTotales = calcularEscalaEje(datos.map((d) => d.valor));
   return (
     <div ref={refTarjeta} className="overflow-hidden rounded-tremor-default ring-1 ring-line" style={{ backgroundColor: FINANCIERO_SURFACE }}>
       <ResponsiveContainer width="100%" aspect={aspecto}>
@@ -180,8 +179,8 @@ function GraficoTotalesOtrosIngresos({ total, anioAnteriorSinDatos = false }: { 
           <CartesianGrid horizontal={false} vertical stroke="#666666" strokeOpacity={0.3} />
           <XAxis
             type="number"
-            domain={[0, dominioMax]}
-            ticks={ticksTotales}
+            domain={escalaTotales.dominio}
+            ticks={escalaTotales.ticks}
             tickFormatter={(v: number) => formatQ(v)}
             tick={{ fontSize: 12, fontWeight: 700, fill: "rgb(var(--color-ink))" }}
             axisLine={false}
