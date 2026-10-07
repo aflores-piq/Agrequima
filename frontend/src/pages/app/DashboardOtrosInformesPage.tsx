@@ -25,6 +25,7 @@ import {
 import { colorBordeBanco, degradadoBanco } from "../../utils/colorBanco";
 import { calcularEscalaEje } from "../../utils/escalaEje";
 import { formatPercent, formatQ, formatQ2, MESES_LARGOS, pctSeguro } from "../../utils/format";
+import { lineasTituloFlujoCaja, tituloCuotaAsociados, ultimoDiaDelMes } from "../../utils/titulosFinanciero";
 import type {
   BancoConciliacion,
   ConciliacionBancariaResponse,
@@ -637,9 +638,10 @@ function PaginaCuotasAsociados() {
     // distinto al resto (ronda de estandarización).
     <div className="space-y-3">
       <div className="relative flex min-h-[40px] items-center justify-center">
-        <Title className="px-4 text-center text-2xl font-bold text-ink">{`Cuotas Asociados ${data?.anio ?? ""}`}</Title>
+        <Title className="px-4 text-center text-2xl font-bold text-ink">{data ? tituloCuotaAsociados(data.anio) : "Cuota Asociados"}</Title>
         <div className="absolute right-0 top-0">
           <FilterYearMonth
+            label="Año y Mes"
             theme="gris"
             anio={anio}
             mes={mes}
@@ -694,7 +696,7 @@ function PaginaCuotasAsociados() {
               la igualdad exacta pedida con A/PA/PT del Balance mensual. */}
           <div className="mx-auto flex justify-center gap-3">
             <div className="shrink-0" style={{ width: 269 }}>
-              <KpiCardIcono letra="T" color={COLOR_TEAL} label="Total" valor={formatQ(data.kpis.total)} />
+              <KpiCardIcono letra="T" color={COLOR_TEAL} label="Total cuotas" valor={formatQ(data.kpis.total)} />
             </div>
             <div className="shrink-0" style={{ width: 269 }}>
               <KpiCardIcono letra="C" color={COLOR_TURQUESA} label="Cancelado" valor={formatQ(data.kpis.cancelado)} />
@@ -1097,10 +1099,10 @@ function calcularEscalaEjeY(valores: number[]): { min: number; max: number; tick
 }
 
 // Último día real del mes (28/29 de febrero según año bisiesto, 30 o 31
-// el resto) -- para el título de "Ejecución gastos acumulado".
-export function ultimoDiaDelMes(anio: number, mes: number): number {
-  return new Date(anio, mes, 0).getDate();
-}
+// el resto) -- para el título de "Ejecución gastos acumulado". Vive ahora en
+// utils/titulosFinanciero.ts (junto a los demás títulos dinámicos); se
+// reexporta acá porque Presupuestos e Importaciones lo importan de este archivo.
+export { ultimoDiaDelMes };
 
 // Chips de cabecera de cada tarjeta (nombre + % ejecución a la
 // izquierda, diferencia a la derecha) -- calcado de los 2 advanceCard
@@ -1759,8 +1761,18 @@ function PaginaFlujoCaja() {
             style={{ width: ANCHO_FLUJO_CAJA, marginTop: GAP_TITULO_PRIMER_ELEMENTO }}
           >
             <div className="px-3 py-2 text-center" style={{ backgroundColor: VERDE_ENCABEZADO }}>
-              <div className="text-lg font-bold text-white">Flujo de Caja</div>
-              <div className="text-xs text-white">Cifras Expresadas en Quetzales al {fechaTitulo}</div>
+              {/* _Calculos.TituloFlujoCaja del .pbix: 3 líneas ("Flujo de Caja" /
+                  "Cifras Expresadas en Quetzales" / "Al {último día} de {Mes} de {Año}"). */}
+              {(() => {
+                const [linea1, linea2, linea3] = lineasTituloFlujoCaja(data.anio, data.mes);
+                return (
+                  <>
+                    <div className="text-lg font-bold text-white">{linea1}</div>
+                    <div className="text-xs text-white">{linea2}</div>
+                    <div className="text-xs text-white">{linea3}</div>
+                  </>
+                );
+              })()}
             </div>
             <div style={{ backgroundColor: FINANCIERO_SURFACE }}>
               {/* Orden real (Power BI/spec Deneb): primero el título de

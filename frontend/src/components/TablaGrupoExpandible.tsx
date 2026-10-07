@@ -15,6 +15,9 @@ export const VERDE_ENCABEZADO = "#4CAF50";
 // rgb(68,149,208)/#4495D0 -- ese valor se usó en una ronda anterior y
 // se descartó explícitamente a favor de este). Fijo (no reactivo al
 // tema), igual que VERDE_ENCABEZADO.
+// Rótulo de las tarjetas KPI: blanco en modo oscuro (igual que siempre) y tinta oscura en modo
+// claro -- antes era blanco fijo y en modo claro (tarjeta blanca) no se leía. Ver las clases
+// `text-ink dark:text-white` en KpiCardIcono y KpiCardIconoComparativo.
 export const COLOR_ETIQUETA_KPI = "#FFFFFF";
 
 // Fondo de tarjetas/tablas/gráficos de Financiero -- variable de tema
@@ -318,7 +321,7 @@ export function KpiCardIcono({
           borde DERECHO real de la tarjeta (no contra un borde falso
           pegado al ícono) -- calcado de la referencia real. */}
       <div className="flex min-w-0 flex-1 flex-col items-end justify-center gap-1 px-4 py-3">
-        <span className="text-xs font-semibold" style={{ color: COLOR_ETIQUETA_KPI }}>
+        <span className="text-xs font-semibold text-ink dark:text-white">
           {label}
         </span>
         <span className="text-lg font-semibold text-ink">{valor}</span>
@@ -371,8 +374,11 @@ export function KpiCardIconoComparativo({
       {/* text-center -- calcado de la referencia real, el título, el
           porcentaje y el monto quedan centrados (no a la izquierda,
           como estaba antes). */}
-      <div className="flex min-w-0 flex-1 flex-col justify-center gap-1 px-4 py-3 text-center">
-        <span className="flex flex-col text-[11px] font-semibold leading-tight" style={{ color: COLOR_ETIQUETA_KPI }}>
+      {/* px-2 y whitespace-nowrap: los títulos son de 2 líneas FIJAS (medidas del .pbix, p. ej.
+          "Diferencia porcentual Patrimonio" / "Agosto 2026 vs 2025"); con ventanas angostas un
+          título largo se partía en un 3er renglón y recortaba el monto. */}
+      <div className="flex min-w-0 flex-1 flex-col justify-center gap-1 px-2 py-3 text-center">
+        <span className="flex flex-col whitespace-nowrap text-[11px] font-semibold leading-tight text-ink dark:text-white">
           <span>{tituloLinea1}</span>
           <span>{tituloLinea2}</span>
         </span>

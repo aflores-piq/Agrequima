@@ -34,7 +34,8 @@ const TEMAS: Record<FilterTheme, { wrapper: string; header: string }> = {
   // texto claro en oscuro).
   gris: {
     wrapper: "overflow-hidden rounded-sm bg-slate-300 dark:bg-[#444444]",
-    header: "px-2 pt-1 pb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-900 dark:text-slate-300",
+    // Sin `uppercase`: en Power BI el título del segmentador dice "Año y Mes" (mayúscula solo inicial).
+    header: "px-2 pt-1 pb-1 text-[10px] font-semibold tracking-wide text-slate-900 dark:text-slate-300",
   },
 };
 

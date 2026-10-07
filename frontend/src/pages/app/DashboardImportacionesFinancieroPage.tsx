@@ -565,7 +565,9 @@ function GraficoCIFLineas({
   const altoSvg = anchoTarjeta ? anchoTarjeta / aspecto : 0;
   const posiciones = calcularPosicionesEtiquetas(datos, dominio, anchoTarjeta, altoSvg, margin, gutterIzquierdo, gutterDerecho);
   const { escalaX, escalaY } = crearEscalas(datos.length, dominio, anchoTarjeta, altoSvg, margin, gutterIzquierdo);
-  const etiquetaAnterior = `${anioAnterior}${anioAnteriorSinDatos ? " (sin datos)" : ""}`;
+  // Nombres de serie = medida TipoDinamicoCIF* del .pbix: "CIF US$ {año}".
+  const etiquetaAnterior = `CIF US$ ${anioAnterior}${anioAnteriorSinDatos ? " (sin datos)" : ""}`;
+  const etiquetaActual = `CIF US$ ${anioActual}`;
   return (
     <div
       ref={refTarjeta}
@@ -611,7 +613,7 @@ function GraficoCIFLineas({
           <Line
             type="linear"
             dataKey="cif_anio_actual"
-            name={String(anioActual)}
+            name={etiquetaActual}
             stroke={COLOR_ANIO_ACTUAL_CIF}
             strokeWidth={3}
             dot={{ r: 5, fill: COLOR_ANIO_ACTUAL_CIF }}
@@ -670,7 +672,7 @@ function GraficoCIFLineas({
         gutterDerecho={margin.right}
         items={[
           { etiqueta: etiquetaAnterior, color: COLOR_ANIO_ANTERIOR_CIF },
-          { etiqueta: String(anioActual), color: COLOR_ANIO_ACTUAL_CIF },
+          { etiqueta: etiquetaActual, color: COLOR_ANIO_ACTUAL_CIF },
         ]}
       />
     </div>

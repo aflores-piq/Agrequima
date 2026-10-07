@@ -364,7 +364,7 @@ function TablaOtrosIngresos({
           </tr>
           <tr>
             <td className={claseCelda} style={claseBordeVertical}>
-              <ChipFila color={COLOR_CHIP_PORCENTAJE} etiqueta="% ejecutado" />
+              <ChipFila color={COLOR_CHIP_PORCENTAJE} etiqueta={`% ejecutado ${anio}`} />
             </td>
             {filas.map((f) => (
               <td key={f.concepto} className={claseCelda} style={claseBordeVertical}>

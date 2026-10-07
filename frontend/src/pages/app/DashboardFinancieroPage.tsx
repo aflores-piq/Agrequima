@@ -18,6 +18,15 @@ import {
   type FilaGrupo,
 } from "../../components/TablaGrupoExpandible";
 import { formatPercent, formatQ, MESES_LARGOS, pctSeguro } from "../../utils/format";
+import {
+  tituloBalanceAcumuladoAl,
+  tituloBalanceAcumuladoComparativo,
+  tituloBalanceAl,
+  tituloDiferenciaPorcentual,
+  tituloEstadoAcumulado,
+  tituloEstadoComparativo,
+  tituloGraficaAcumuladoAl,
+} from "../../utils/titulosFinanciero";
 import type { DashboardFinancieroResponse } from "../../types/dashboardFinanciero";
 import { useFinancieroFilterGrupo1 } from "../../financiero/FinancieroFilterContext";
 
@@ -150,12 +159,17 @@ export function DashboardFinancieroPage() {
     .sort((a, b) => a - b);
   const mesOpciones = mesesDelAnioSeleccionado.map((m) => ({ value: String(m), label: MESES_LARGOS[m - 1] }));
 
+  // Títulos de página = medidas DAX del .pbix real (ver utils/titulosFinanciero.ts):
+  // ERComparativo, ERMensual, BalanceMensual y BalanceAcumulado. OJO: en el .pbix
+  // la página "Estado de ingresos y desembolsos mensual" lleva el título
+  // "...Comparativo Al {último día} de {Mes} de {Año} vs {Año-1}" y la página
+  // "...acumulado" lleva "...Acumulado a {Mes} {Año}" -- así está en Power BI.
   const tituloPagina = data
     ? [
-        `Estado de Ingresos y Desembolsos Mensual ${MESES_LARGOS[data.mes - 1]} ${data.anio}`,
-        `Estado de Ingresos y Desembolsos Acumulado ${MESES_LARGOS[data.mes - 1]} ${data.anio}`,
-        `Balance General Mensual ${MESES_LARGOS[data.mes - 1]} ${data.anio}`,
-        `Balance General Comparativo ${MESES_LARGOS[data.mes - 1]} ${data.anio} vs ${data.anio - 1}`,
+        tituloEstadoComparativo(data.anio, data.mes),
+        tituloEstadoAcumulado(data.anio, data.mes),
+        tituloBalanceAcumuladoAl(data.anio, data.mes),
+        tituloBalanceAcumuladoComparativo(data.anio, data.mes),
       ][pagina]
     : "Estados Financieros";
 
@@ -179,6 +193,7 @@ export function DashboardFinancieroPage() {
             módulo (ver PaginaEjecucionGastos, Presupuestos, etc.). */}
         <div className="absolute right-0 top-0">
           <FilterYearMonth
+            label="Año y Mes"
             theme="gris"
             anio={anio}
             mes={mes}
@@ -271,7 +286,7 @@ export function DashboardFinancieroPage() {
                     <ChartCard
                       theme="financiero"
                       estiloTarjeta={{ backgroundColor: FINANCIERO_SURFACE }}
-                      title={p1.titulo_grafico_acumulado}
+                      title={tituloGraficaAcumuladoAl(data.anio, data.mes)}
                       chart={<TresBarrasResultado altura={ALTURA_PANEL_GRAFICO} ingresos={p1.grafico_acumulado.ingresos} egresos={p1.grafico_acumulado.egresos} resultado={p1.grafico_acumulado.resultado} />}
                       table={
                         <TablaCategorias
@@ -292,7 +307,9 @@ export function DashboardFinancieroPage() {
           {pagina === 1 &&
             (() => {
               const p2 = data.ingresos_desembolsos_acumulado;
-              const columnas = [p2.etiqueta_anio_anterior, p2.etiqueta_anio_actual, "Variación"];
+              // Encabezados = medidas ERAnioAnterior / ERAnioActual del .pbix:
+              // "Acumulado {año-1}" y "Acumulado {año}" (la gráfica de abajo conserva "2025"/"2026").
+              const columnas = [`Acumulado ${data.anio - 1}`, `Acumulado ${data.anio}`, "Variación"];
               const datosGrafico = ["Ingresos", "Egresos", "Resultado"].map((cat) => ({
                 categoria: cat,
                 [p2.etiqueta_anio_anterior]:
@@ -459,7 +476,7 @@ export function DashboardFinancieroPage() {
                     <ChartCard
                       theme="financiero"
                       estiloTarjeta={{ backgroundColor: FINANCIERO_SURFACE }}
-                      title={`Balance General al 30 de ${MESES_LARGOS[data.mes - 1]} de ${data.anio}`}
+                      title={tituloBalanceAl(data.anio, data.mes)}
                       chart={<BalanceDonut altura={ALTURA_PANEL_GRAFICO} data={p3.distribucion_balance} activoReferencia={p3.activo_referencia} />}
                       table={
                         <TablaCategorias
@@ -476,7 +493,9 @@ export function DashboardFinancieroPage() {
           {pagina === 3 &&
             (() => {
               const p4 = data.balance_general_comparativo;
-              const columnas = [p4.etiqueta_anio_anterior, p4.etiqueta_anio_actual, "Variación", "% Variación"];
+              // Encabezados = medidas MesAñoAnterior / MesAñoSeleccionado del .pbix:
+              // "{Mes} {año-1}" y "{Mes} {año}" (la leyenda de la gráfica conserva "2025"/"2026").
+              const columnas = [`${MESES_LARGOS[data.mes - 1]} ${data.anio - 1}`, `${MESES_LARGOS[data.mes - 1]} ${data.anio}`, "Variación", "% Variación"];
               // % Variación con 1 decimal (formatPercent, no formatPercent2) --
               // unificado con Balance general mensual: todo % NUEVO de esta
               // ronda va con 1 decimal, sin excepción por pantalla.
@@ -486,7 +505,6 @@ export function DashboardFinancieroPage() {
                 [p4.etiqueta_anio_anterior]: cat === "Activo" ? p4.grafico[0].activo : cat === "Pasivo" ? p4.grafico[0].pasivo : p4.grafico[0].patrimonio,
                 [p4.etiqueta_anio_actual]: cat === "Activo" ? p4.grafico[1].activo : cat === "Pasivo" ? p4.grafico[1].pasivo : p4.grafico[1].patrimonio,
               }));
-              const etiquetaPeriodo = `${MESES_LARGOS[data.mes - 1]} ${data.anio} vs ${data.anio - 1}`;
               return (
                 <div className="space-y-5" style={{ marginTop: GAP_TITULO_PRIMER_ELEMENTO }}>
                   {/* Fila de KPIs de esta página: más ancha que la tabla
@@ -503,24 +521,24 @@ export function DashboardFinancieroPage() {
                       <KpiCardIconoComparativo
                         letra="A"
                         color={COLOR_TEAL}
-                        tituloLinea1="Diferencia % Activo"
-                        tituloLinea2={etiquetaPeriodo}
+                        tituloLinea1={tituloDiferenciaPorcentual("Activo", data.anio, data.mes).linea1}
+                        tituloLinea2={tituloDiferenciaPorcentual("Activo", data.anio, data.mes).linea2}
                         porcentaje={formatPercent(p4.kpis.activo.diferencia_porcentaje)}
                         monto={formatQ(p4.kpis.activo.variacion_q)}
                       />
                       <KpiCardIconoComparativo
                         letra="PA"
                         color={COLOR_CORAL}
-                        tituloLinea1="Diferencia % Pasivo"
-                        tituloLinea2={etiquetaPeriodo}
+                        tituloLinea1={tituloDiferenciaPorcentual("Pasivo", data.anio, data.mes).linea1}
+                        tituloLinea2={tituloDiferenciaPorcentual("Pasivo", data.anio, data.mes).linea2}
                         porcentaje={formatPercent(p4.kpis.pasivo.diferencia_porcentaje)}
                         monto={formatQ(p4.kpis.pasivo.variacion_q)}
                       />
                       <KpiCardIconoComparativo
                         letra="PT"
                         color={COLOR_MARINO}
-                        tituloLinea1="Diferencia % Patrimonio"
-                        tituloLinea2={etiquetaPeriodo}
+                        tituloLinea1={tituloDiferenciaPorcentual("Patrimonio", data.anio, data.mes).linea1}
+                        tituloLinea2={tituloDiferenciaPorcentual("Patrimonio", data.anio, data.mes).linea2}
                         porcentaje={formatPercent(p4.kpis.patrimonio.diferencia_porcentaje)}
                         monto={formatQ(p4.kpis.patrimonio.variacion_q)}
                       />
