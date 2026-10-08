@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
+import type { ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Title } from "@tremor/react";
 import { obtenerDashboardFinanciero } from "../../api/dashboardFinanciero";
 import { mensajeError } from "../../api/client";
 import { FilterYearMonth } from "../../components/filters/PowerBiFilter";
 import { ChartCard } from "../../components/ChartCard";
+import { MensajeSinDatos, textoSinDatos } from "../../components/VistaGraficoTabla";
 import { TresBarrasResultado } from "../../components/charts/TresBarrasResultado";
 import { ComparativoAnioBarChart } from "../../components/charts/ComparativoAnioBarChart";
 import { BalanceDonut } from "../../components/charts/BalanceDonut";
@@ -84,6 +86,13 @@ function TablaCategorias({ filas }: { filas: { etiqueta: string; valores: string
       </tbody>
     </table>
   );
+}
+
+// Si el período elegido no tiene datos (todo en cero), en vez de ejes vacíos se muestra el
+// mensaje "Sin datos para <período>". Solo cambia la gráfica; la tabla queda igual.
+function graficoOSinDatos(valores: ReadonlyArray<number | null | undefined>, periodo: string, grafico: ReactNode): ReactNode {
+  const texto = textoSinDatos(valores, periodo);
+  return texto ? <MensajeSinDatos texto={texto} /> : grafico;
 }
 
 function filaGrupo<T extends { grupo: string; cuentas: { cuenta?: string }[] }>(
@@ -272,7 +281,7 @@ export function DashboardFinancieroPage() {
                       theme="financiero"
                       estiloTarjeta={{ backgroundColor: FINANCIERO_SURFACE }}
                       title={p1.titulo_grafico_mes}
-                      chart={<TresBarrasResultado altura={ALTURA_PANEL_GRAFICO} ingresos={p1.grafico_mes.ingresos} egresos={p1.grafico_mes.egresos} resultado={p1.grafico_mes.resultado} />}
+                      chart={graficoOSinDatos([p1.grafico_mes.ingresos, p1.grafico_mes.egresos, p1.grafico_mes.resultado], `${MESES_LARGOS[data.mes - 1]} ${data.anio}`, <TresBarrasResultado altura={ALTURA_PANEL_GRAFICO} ingresos={p1.grafico_mes.ingresos} egresos={p1.grafico_mes.egresos} resultado={p1.grafico_mes.resultado} />)}
                       table={
                         <TablaCategorias
                           filas={[
@@ -287,7 +296,7 @@ export function DashboardFinancieroPage() {
                       theme="financiero"
                       estiloTarjeta={{ backgroundColor: FINANCIERO_SURFACE }}
                       title={tituloGraficaAcumuladoAl(data.anio, data.mes)}
-                      chart={<TresBarrasResultado altura={ALTURA_PANEL_GRAFICO} ingresos={p1.grafico_acumulado.ingresos} egresos={p1.grafico_acumulado.egresos} resultado={p1.grafico_acumulado.resultado} />}
+                      chart={graficoOSinDatos([p1.grafico_acumulado.ingresos, p1.grafico_acumulado.egresos, p1.grafico_acumulado.resultado], `${MESES_LARGOS[data.mes - 1]} ${data.anio}`, <TresBarrasResultado altura={ALTURA_PANEL_GRAFICO} ingresos={p1.grafico_acumulado.ingresos} egresos={p1.grafico_acumulado.egresos} resultado={p1.grafico_acumulado.resultado} />)}
                       table={
                         <TablaCategorias
                           filas={[
@@ -357,14 +366,16 @@ export function DashboardFinancieroPage() {
                       theme="financiero"
                       estiloTarjeta={{ backgroundColor: FINANCIERO_SURFACE }}
                       title={p2.titulo_grafico}
-                      chart={
+                      chart={graficoOSinDatos(
+                        datosGrafico.flatMap((d: any) => [d[p2.etiqueta_anio_anterior], d[p2.etiqueta_anio_actual]]),
+                        `${MESES_LARGOS[data.mes - 1]} ${data.anio}`,
                         <ComparativoAnioBarChart
                           altura={ALTURA_PANEL_GRAFICO}
                           data={datosGrafico}
                           etiquetaAnioAnterior={p2.etiqueta_anio_anterior}
                           etiquetaAnioActual={p2.etiqueta_anio_actual}
                         />
-                      }
+                      )}
                       table={
                         <TablaCategorias
                           filas={datosGrafico.map((d: any) => ({
@@ -477,7 +488,7 @@ export function DashboardFinancieroPage() {
                       theme="financiero"
                       estiloTarjeta={{ backgroundColor: FINANCIERO_SURFACE }}
                       title={tituloBalanceAl(data.anio, data.mes)}
-                      chart={<BalanceDonut altura={ALTURA_PANEL_GRAFICO} data={p3.distribucion_balance} activoReferencia={p3.activo_referencia} />}
+                      chart={graficoOSinDatos(p3.distribucion_balance.map((d) => d.monto), `${MESES_LARGOS[data.mes - 1]} ${data.anio}`, <BalanceDonut altura={ALTURA_PANEL_GRAFICO} data={p3.distribucion_balance} activoReferencia={p3.activo_referencia} />)}
                       table={
                         <TablaCategorias
                           filas={p3.distribucion_balance.map((d) => ({ etiqueta: d.etiqueta, valores: [formatPercent(d.porcentaje), formatQ(d.monto)] }))}
@@ -626,14 +637,16 @@ export function DashboardFinancieroPage() {
                       theme="financiero"
                       estiloTarjeta={{ backgroundColor: FINANCIERO_SURFACE }}
                       title={p4.titulo_grafico}
-                      chart={
+                      chart={graficoOSinDatos(
+                        datosGrafico.flatMap((d: any) => [d[p4.etiqueta_anio_anterior], d[p4.etiqueta_anio_actual]]),
+                        `${MESES_LARGOS[data.mes - 1]} ${data.anio}`,
                         <ComparativoAnioBarChart
                           altura={ALTURA_PANEL_GRAFICO}
                           data={datosGrafico}
                           etiquetaAnioAnterior={p4.etiqueta_anio_anterior}
                           etiquetaAnioActual={p4.etiqueta_anio_actual}
                         />
-                      }
+                      )}
                       table={
                         <TablaCategorias
                           filas={datosGrafico.map((d: any) => ({

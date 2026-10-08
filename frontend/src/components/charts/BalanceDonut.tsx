@@ -1,4 +1,5 @@
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
+import { tooltipFinanciero } from "./TooltipFinanciero";
 import { formatQ } from "../../utils/format";
 import { FINANCIERO_SURFACE } from "../TablaGrupoExpandible";
 import type { DistribucionBalanceItem } from "../../types/dashboardFinanciero";
@@ -82,14 +83,12 @@ export function BalanceDonut({
                 ))}
               </Pie>
               <Tooltip
-                formatter={(value: number) => formatQ(value)}
-                contentStyle={{
-                  background: FINANCIERO_SURFACE,
-                  border: "1px solid rgb(var(--color-line))",
-                  borderRadius: 8,
-                }}
-                labelStyle={{ color: "rgb(var(--color-ink))" }}
-                itemStyle={{ color: "rgb(var(--color-ink))" }}
+                {...tooltipFinanciero({
+                  tipo: "dona",
+                  formatter: (value) => formatQ(value),
+                  tituloDe: () => "",
+                  colorDe: (item) => COLOR_POR_ETIQUETA[String(item.name)] ?? undefined,
+                })}
               />
             </PieChart>
           </ResponsiveContainer>

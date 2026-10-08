@@ -9,6 +9,8 @@ import { FINANCIERO_SURFACE, GAP_TITULO_PRIMER_ELEMENTO } from "../../components
 import { DOMINIO_AUTO_SIN_RECORTAR_NEGATIVOS, calcularEscalaEje } from "../../utils/escalaEje";
 import { formatPercentEntero, formatQ } from "../../utils/format";
 import type { FilaOtroIngreso, OtroIngresoResponse } from "../../types/dashboardOtroIngreso";
+import { tooltipFinanciero } from "../../components/charts/TooltipFinanciero";
+import { TablaDatosGrafico, TarjetaFinanciero, textoSinDatos } from "../../components/VistaGraficoTabla";
 
 // Ancho real medido del ancho de la tarjeta -- mismo patrón ya usado en
 // Importaciones/Presupuestos.
@@ -67,35 +69,22 @@ const COLOR_CHIP_PORCENTAJE = "#147CC1";
 
 // --- 1. Gráfica de barras horizontales agrupadas ---------------------
 
-function GraficoBarrasOtrosIngresos({
-  titulo,
-  filas,
+function ContenidoBarrasOtrosIngresos({
+  ordenadas,
   anioAnterior,
   anio,
-  anioAnteriorSinDatos = false,
+  anioAnteriorSinDatos,
 }: {
-  titulo: string;
-  filas: FilaOtroIngreso[];
+  ordenadas: FilaOtroIngreso[];
   anioAnterior: number;
   anio: number;
-  anioAnteriorSinDatos?: boolean;
+  anioAnteriorSinDatos: boolean;
 }) {
-  // Conceptos ordenados por su valor MÁXIMO entre las 3 series, descendente.
-  const ordenadas = [...filas].sort(
-    (a, b) =>
-      Math.max(b.ejecutado_anio_anterior, b.presupuesto_anio, b.ejecutado_anio) -
-      Math.max(a.ejecutado_anio_anterior, a.presupuesto_anio, a.ejecutado_anio)
-  );
   const [refTarjeta, anchoTarjeta] = useAnchoElemento<HTMLDivElement>();
   const aspecto = calcularAspectoSvg(anchoTarjeta, PROPORCION_BARRAS, ALTO_EXTRA_TITULO_LEYENDA);
   const anchoEjeY = calcularAnchoEjeYTexto(ordenadas.map((f) => f.concepto));
   return (
-    <div
-      ref={refTarjeta}
-      className="overflow-hidden rounded-tremor-default pt-2 ring-1 ring-line"
-      style={{ backgroundColor: FINANCIERO_SURFACE }}
-    >
-      <p className="text-center text-base font-bold text-ink">{titulo}</p>
+    <div ref={refTarjeta}>
       <ResponsiveContainer width="100%" aspect={aspecto}>
         <BarChart data={ordenadas} layout="vertical" margin={{ top: 8, right: 56, bottom: 4, left: 8 }} barGap={0}>
           <CartesianGrid horizontal={false} vertical stroke="#666666" strokeOpacity={0.3} />
@@ -116,9 +105,15 @@ function GraficoBarrasOtrosIngresos({
             tickLine={false}
           />
           <Tooltip
-            formatter={(v: number) => formatQ(v)}
-            contentStyle={{ background: FINANCIERO_SURFACE, border: "1px solid rgb(var(--color-line))", borderRadius: 8 }}
-            labelStyle={{ color: "rgb(var(--color-ink))" }}
+            {...tooltipFinanciero({
+              formatter: (v) => formatQ(v),
+              nombreDe: (item) =>
+                item.dataKey === "ejecutado_anio_anterior"
+                  ? `Ejecutado ${anioAnterior}`
+                  : item.dataKey === "presupuesto_anio"
+                    ? `Presupuesto ${anio}`
+                    : `Ejecutado ${anio}`,
+            })}
           />
           {/* Sin etiquetas de valor (como en Power BI). Si el año anterior
               no tiene datos (ver anioAnteriorSinDatos), esa serie no se
@@ -150,21 +145,58 @@ function GraficoBarrasOtrosIngresos({
   );
 }
 
+function GraficoBarrasOtrosIngresos({
+  titulo,
+  filas,
+  anioAnterior,
+  anio,
+  anioAnteriorSinDatos = false,
+}: {
+  titulo: string;
+  filas: FilaOtroIngreso[];
+  anioAnterior: number;
+  anio: number;
+  anioAnteriorSinDatos?: boolean;
+}) {
+  // Conceptos ordenados por su valor MÁXIMO entre las 3 series, descendente.
+  const ordenadas = [...filas].sort(
+    (a, b) =>
+      Math.max(b.ejecutado_anio_anterior, b.presupuesto_anio, b.ejecutado_anio) -
+      Math.max(a.ejecutado_anio_anterior, a.presupuesto_anio, a.ejecutado_anio)
+  );
+  return (
+    <TarjetaFinanciero
+      titulo={titulo}
+      sinDatos={textoSinDatos(filas.flatMap((f) => [f.ejecutado_anio_anterior, f.presupuesto_anio, f.ejecutado_anio]), String(anio))}
+      chart={<ContenidoBarrasOtrosIngresos ordenadas={ordenadas} anioAnterior={anioAnterior} anio={anio} anioAnteriorSinDatos={anioAnteriorSinDatos} />}
+      table={
+        <TablaDatosGrafico
+          columnas={["Concepto", `Ejecutado ${anioAnterior}`, `Presupuesto ${anio}`, `Ejecutado ${anio}`]}
+          filas={ordenadas.map((f) => [
+            f.concepto,
+            anioAnteriorSinDatos ? "—" : formatQ(f.ejecutado_anio_anterior),
+            formatQ(f.presupuesto_anio),
+            formatQ(f.ejecutado_anio),
+          ])}
+        />
+      }
+    />
+  );
+}
+
 // --- 2. Gráfica de totales (3 barras horizontales, valor dentro) -----
 
-function GraficoTotalesOtrosIngresos({ total, anioAnteriorSinDatos = false }: { total: FilaOtroIngreso; anioAnteriorSinDatos?: boolean }) {
+function ContenidoTotalesOtrosIngresos({
+  datos,
+  anioAnteriorSinDatos,
+}: {
+  datos: { serie: string; nombre: string; valor: number; color: string }[];
+  anioAnteriorSinDatos: boolean;
+}) {
   const [refTarjeta, anchoTarjeta] = useAnchoElemento<HTMLDivElement>();
   // Sin título ni leyenda (como en Power BI) -- nada de alto extra que
   // despejar, el <svg> ocupa toda la tarjeta.
   const aspecto = calcularAspectoSvg(anchoTarjeta, PROPORCION_TOTALES, 0);
-  const datos = [
-    // Si el año anterior no tiene datos, la barra queda en 0 (invisible)
-    // y su etiqueta dice "(sin datos)" en vez de "Q0" -- mismo criterio
-    // que la gráfica de barras agrupadas de arriba.
-    { serie: "ejecutado_anterior", valor: anioAnteriorSinDatos ? 0 : total.ejecutado_anio_anterior, color: COLOR_EJECUTADO_ANTERIOR },
-    { serie: "presupuesto", valor: total.presupuesto_anio, color: COLOR_PRESUPUESTO_ANIO },
-    { serie: "ejecutado_actual", valor: total.ejecutado_anio, color: COLOR_EJECUTADO_ANIO },
-  ];
   // Dominio/ticks "nice" en vez de domain={[0,"dataMax"]} -- eso daba un
   // último tick pegado al valor exacto ("Q2,048,918" en vez de un número
   // redondo), Recharts no lo redondea solo cuando el máximo del dominio
@@ -173,7 +205,7 @@ function GraficoTotalesOtrosIngresos({ total, anioAnteriorSinDatos = false }: { 
   // marcas); con los montos actuales da el mismo "Q0, Q500,000, Q1,000,000…".
   const escalaTotales = calcularEscalaEje(datos.map((d) => d.valor));
   return (
-    <div ref={refTarjeta} className="overflow-hidden rounded-tremor-default ring-1 ring-line" style={{ backgroundColor: FINANCIERO_SURFACE }}>
+    <div ref={refTarjeta}>
       <ResponsiveContainer width="100%" aspect={aspecto}>
         <BarChart data={datos} layout="vertical" margin={{ top: 8, right: 56, bottom: 4, left: 8 }}>
           <CartesianGrid horizontal={false} vertical stroke="#666666" strokeOpacity={0.3} />
@@ -188,8 +220,12 @@ function GraficoTotalesOtrosIngresos({ total, anioAnteriorSinDatos = false }: { 
           />
           <YAxis type="category" dataKey="serie" hide />
           <Tooltip
-            formatter={(v: number) => formatQ(v)}
-            contentStyle={{ background: FINANCIERO_SURFACE, border: "1px solid rgb(var(--color-line))", borderRadius: 8 }}
+            {...tooltipFinanciero({
+              formatter: (v) => formatQ(v),
+              tituloDe: () => "",
+              nombreDe: (item) => String(item.payload?.nombre ?? ""),
+              colorDe: (item) => item.payload?.color as string | undefined,
+            })}
           />
           <Bar dataKey="valor" isAnimationActive={false} barSize={28}>
             {datos.map((d) => (
@@ -224,6 +260,40 @@ function GraficoTotalesOtrosIngresos({ total, anioAnteriorSinDatos = false }: { 
         </BarChart>
       </ResponsiveContainer>
     </div>
+  );
+}
+
+function GraficoTotalesOtrosIngresos({
+  total,
+  anioAnterior,
+  anio,
+  anioAnteriorSinDatos = false,
+}: {
+  total: FilaOtroIngreso;
+  anioAnterior: number;
+  anio: number;
+  anioAnteriorSinDatos?: boolean;
+}) {
+  const datos = [
+    // Si el año anterior no tiene datos, la barra queda en 0 (invisible)
+    // y su etiqueta dice "(sin datos)" en vez de "Q0" -- mismo criterio
+    // que la gráfica de barras agrupadas de arriba.
+    { serie: "ejecutado_anterior", nombre: `Ejecutado ${anioAnterior}`, valor: anioAnteriorSinDatos ? 0 : total.ejecutado_anio_anterior, color: COLOR_EJECUTADO_ANTERIOR },
+    { serie: "presupuesto", nombre: `Presupuesto ${anio}`, valor: total.presupuesto_anio, color: COLOR_PRESUPUESTO_ANIO },
+    { serie: "ejecutado_actual", nombre: `Ejecutado ${anio}`, valor: total.ejecutado_anio, color: COLOR_EJECUTADO_ANIO },
+  ];
+  return (
+    <TarjetaFinanciero
+      titulo=""
+      sinDatos={textoSinDatos(datos.map((d) => d.valor), String(anio))}
+      chart={<ContenidoTotalesOtrosIngresos datos={datos} anioAnteriorSinDatos={anioAnteriorSinDatos} />}
+      table={
+        <TablaDatosGrafico
+          columnas={["Serie", "Total"]}
+          filas={datos.map((d) => [d.nombre, anioAnteriorSinDatos && d.serie === "ejecutado_anterior" ? "(sin datos)" : formatQ(d.valor)])}
+        />
+      }
+    />
   );
 }
 
@@ -444,7 +514,12 @@ export function DashboardOtroIngresoPage() {
             />
           </div>
           <div className="mx-auto" style={{ width: ANCHO_GRAFICA, marginTop: GAP_ENTRE_GRAFICAS }}>
-            <GraficoTotalesOtrosIngresos total={data.total} anioAnteriorSinDatos={data.anio_anterior_sin_datos} />
+            <GraficoTotalesOtrosIngresos
+              total={data.total}
+              anioAnterior={data.anio_anterior}
+              anio={data.anio}
+              anioAnteriorSinDatos={data.anio_anterior_sin_datos}
+            />
           </div>
           <div className="mx-auto" style={{ width: ANCHO_TABLA, marginTop: GAP_ENTRE_GRAFICAS }}>
             <TablaOtrosIngresos

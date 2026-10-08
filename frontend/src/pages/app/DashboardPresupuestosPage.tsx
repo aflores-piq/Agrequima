@@ -2,6 +2,8 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Title } from "@tremor/react";
 import { Bar, BarChart, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { tooltipFinanciero } from "../../components/charts/TooltipFinanciero";
+import { TablaDatosGrafico, TarjetaFinanciero, textoSinDatos } from "../../components/VistaGraficoTabla";
 import {
   obtenerComparativoEjecutado,
   obtenerEjecucionVsPresupuesto,
@@ -273,7 +275,7 @@ function TablaPresupuesto({
 // visual Deneb de 1062px ≈ 12% del spec real de "Comparativo
 // ejecutado", mismo criterio aplicado acá), con un espacio mínimo
 // (barGap) entre ambas.
-function GraficoPresupuestoEjecutado({
+function ContenidoPresupuestoEjecutado({
   titulo,
   presupuesto,
   ejecutado,
@@ -304,21 +306,7 @@ function GraficoPresupuestoEjecutado({
   const gutterIzquierdo = 16 + anchoEjeY;
   const gutterDerecho = 16;
   return (
-    <div
-      ref={refTarjeta}
-      className="overflow-hidden rounded-tremor-default pt-2 ring-1 ring-line"
-      style={{ backgroundColor: FINANCIERO_SURFACE }}
-    >
-      {/* Título DENTRO del recuadro de la gráfica (parte superior,
-          centrado, negrita, 16px) -- calcado del .pbix real, donde el
-          título es parte del propio visual, no un elemento aparte
-          arriba de la tarjeta. El padding-top va en la TARJETA (no en
-          el <p>): el padding de un elemento no mueve su propio borde
-          superior, así que ponerlo en el <p> no separaba visualmente su
-          borde del borde de la tarjeta (medían el mismo `top` en
-          getBoundingClientRect, aunque el texto en sí sí se viera
-          separado por el padding). */}
-      <p className="text-center text-base font-bold text-ink">{titulo}</p>
+    <div ref={refTarjeta}>
       <ResponsiveContainer width="100%" aspect={aspecto}>
         <BarChart data={fila} margin={{ top: 24, right: gutterDerecho, bottom: 4, left: 16 }} barGap={4}>
           <XAxis dataKey={() => ""} tick={false} axisLine={false} tickLine={false} />
@@ -333,11 +321,11 @@ function GraficoPresupuestoEjecutado({
             width={anchoEjeY}
           />
           <Tooltip
-            cursor={{ fill: "rgb(var(--color-ink-faint) / 0.08)" }}
-            formatter={(v: number) => formatQ(v)}
-            contentStyle={{ background: FINANCIERO_SURFACE, border: "1px solid rgb(var(--color-line))", borderRadius: 8 }}
-            labelStyle={{ color: "rgb(var(--color-ink))" }}
-            itemStyle={{ color: "rgb(var(--color-ink))" }}
+            {...tooltipFinanciero({
+              formatter: (v) => formatQ(v),
+              tituloDe: () => titulo,
+              nombreDe: (item) => (item.dataKey === "presupuesto" ? "Presupuesto" : "Ejecutado"),
+            })}
           />
           <Bar dataKey="presupuesto" fill={COLOR_PRESUPUESTO} radius={[4, 4, 0, 0]} isAnimationActive={false} barSize={barSize}>
             <LabelList
@@ -376,6 +364,57 @@ function GraficoPresupuestoEjecutado({
         ]}
       />
     </div>
+  );
+}
+
+function GraficoPresupuestoEjecutado({
+  titulo,
+  periodo,
+  presupuesto,
+  ejecutado,
+  escalaMin,
+  escalaMax,
+  escalaTicks,
+  fontSizeEtiqueta,
+  fontSizeEje,
+}: {
+  titulo: string;
+  /** Período elegido ("Septiembre 2026"), para el mensaje "Sin datos para ...". */
+  periodo: string;
+  presupuesto: number;
+  ejecutado: number;
+  escalaMin: number;
+  escalaMax: number;
+  escalaTicks: number[];
+  fontSizeEtiqueta: number;
+  fontSizeEje: number;
+}) {
+  return (
+    <TarjetaFinanciero
+      titulo={titulo}
+      sinDatos={textoSinDatos([presupuesto, ejecutado], periodo)}
+      chart={
+        <ContenidoPresupuestoEjecutado
+          titulo={titulo}
+          presupuesto={presupuesto}
+          ejecutado={ejecutado}
+          escalaMin={escalaMin}
+          escalaMax={escalaMax}
+          escalaTicks={escalaTicks}
+          fontSizeEtiqueta={fontSizeEtiqueta}
+          fontSizeEje={fontSizeEje}
+        />
+      }
+      table={
+        <TablaDatosGrafico
+          columnas={["Serie", "Valor"]}
+          filas={[
+            ["Presupuesto", formatQ(presupuesto)],
+            ["Ejecutado", formatQ(ejecutado)],
+          ]}
+        />
+      }
+    />
   );
 }
 
@@ -520,6 +559,7 @@ function PaginaEjecucionVsPresupuesto({ acumulado }: { acumulado: boolean }) {
           <div className="mx-auto" style={{ width: anchoGrafica, marginTop: margenTablaGrafica }}>
             <GraficoPresupuestoEjecutado
               titulo={tituloPagina}
+              periodo={`${MESES_LARGOS[data.mes - 1]} ${data.anio}`}
               presupuesto={data.fila_total.presupuesto}
               ejecutado={data.fila_total.ejecutado}
               escalaMin={escala.min}
@@ -623,7 +663,7 @@ function TablaComparativo({ data }: { data: ComparativoEjecutadoResponse }) {
 // centradas, barras ~12% vía barCategoryGap, sin barSize fijo), pero con
 // los colores/tamaños de fuente del spec Deneb real (16px en vez de
 // 14px/11px, exclusivo de esta pantalla).
-function GraficoComparativoEjecutado({
+function ContenidoComparativoEjecutado({
   titulo,
   anioAnterior,
   anioActual,
@@ -657,15 +697,7 @@ function GraficoComparativoEjecutado({
   const gutterDerecho = 16;
   const aspecto = calcularAspectoSvg(anchoTarjeta);
   return (
-    <div
-      ref={refTarjeta}
-      className="overflow-hidden rounded-tremor-default pt-2 ring-1 ring-line"
-      style={{ backgroundColor: FINANCIERO_SURFACE }}
-    >
-      {/* Título DENTRO del recuadro de la gráfica, igual que
-          GraficoPresupuestoEjecutado (padding-top en la tarjeta, no en
-          el <p>). */}
-      <p className="text-center text-base font-bold text-ink">{titulo}</p>
+    <div ref={refTarjeta}>
       <ResponsiveContainer width="100%" aspect={aspecto}>
         <BarChart data={fila} margin={{ top: 24, right: gutterDerecho, bottom: 4, left: 16 }} barGap={4}>
           <XAxis dataKey={() => ""} tick={false} axisLine={false} tickLine={false} />
@@ -680,11 +712,11 @@ function GraficoComparativoEjecutado({
             width={anchoEjeY}
           />
           <Tooltip
-            cursor={{ fill: "rgb(var(--color-ink-faint) / 0.08)" }}
-            formatter={(v: number) => formatQ(v)}
-            contentStyle={{ background: FINANCIERO_SURFACE, border: "1px solid rgb(var(--color-line))", borderRadius: 8 }}
-            labelStyle={{ color: "rgb(var(--color-ink))" }}
-            itemStyle={{ color: "rgb(var(--color-ink))" }}
+            {...tooltipFinanciero({
+              formatter: (v) => formatQ(v),
+              tituloDe: () => titulo,
+              nombreDe: (item) => String(item.dataKey === "anterior" ? anioAnterior : anioActual),
+            })}
           />
           <Bar dataKey="anterior" fill={COLOR_ANIO_ANTERIOR} radius={[4, 4, 0, 0]} isAnimationActive={false} barSize={barSize}>
             <LabelList
@@ -720,6 +752,57 @@ function GraficoComparativoEjecutado({
         ]}
       />
     </div>
+  );
+}
+
+function GraficoComparativoEjecutado({
+  titulo,
+  periodo,
+  anioAnterior,
+  anioActual,
+  valorAnterior,
+  valorActual,
+  escalaMin,
+  escalaMax,
+  escalaTicks,
+}: {
+  titulo: string;
+  /** Período elegido ("Septiembre 2026"), para el mensaje "Sin datos para ...". */
+  periodo: string;
+  anioAnterior: number;
+  anioActual: number;
+  valorAnterior: number;
+  valorActual: number;
+  escalaMin: number;
+  escalaMax: number;
+  escalaTicks: number[];
+}) {
+  return (
+    <TarjetaFinanciero
+      titulo={titulo}
+      sinDatos={textoSinDatos([valorAnterior, valorActual], periodo)}
+      chart={
+        <ContenidoComparativoEjecutado
+          titulo={titulo}
+          anioAnterior={anioAnterior}
+          anioActual={anioActual}
+          valorAnterior={valorAnterior}
+          valorActual={valorActual}
+          escalaMin={escalaMin}
+          escalaMax={escalaMax}
+          escalaTicks={escalaTicks}
+        />
+      }
+      table={
+        <TablaDatosGrafico
+          columnas={["Año", "Valor"]}
+          filas={[
+            [String(anioAnterior), formatQ(valorAnterior)],
+            [String(anioActual), formatQ(valorActual)],
+          ]}
+        />
+      }
+    />
   );
 }
 
@@ -860,6 +943,7 @@ function PaginaComparativoEjecutado() {
           <div className="mx-auto" style={{ width: ANCHO_GRAFICA_COMPARATIVO, marginTop: MARGEN_TABLA_GRAFICA_COMPARATIVO }}>
             <GraficoComparativoEjecutado
               titulo={tituloPagina}
+              periodo={`${MESES_LARGOS[data.mes - 1]} ${data.anio}`}
               anioAnterior={data.anio_anterior}
               anioActual={data.anio}
               valorAnterior={data.fila_total.anio_anterior}

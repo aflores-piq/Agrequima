@@ -9,9 +9,9 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { tooltipFinanciero } from "./TooltipFinanciero";
 import { DOMINIO_AUTO_SIN_RECORTAR_NEGATIVOS } from "../../utils/escalaEje";
 import { formatQ } from "../../utils/format";
-import { FINANCIERO_SURFACE } from "../TablaGrupoExpandible";
 
 // Colores reales leídos de las capturas del reporte viejo (no
 // inventados): Ingresos = #3f6f6b, Egresos = #e87471, Resultado =
@@ -65,11 +65,11 @@ export function TresBarrasResultado({
           width={95}
         />
         <Tooltip
-          cursor={{ fill: "rgb(var(--color-ink-faint) / 0.08)" }}
-          contentStyle={{ background: FINANCIERO_SURFACE, border: "1px solid rgb(var(--color-line))", borderRadius: 8 }}
-          labelStyle={{ color: "rgb(var(--color-ink))" }}
-          itemStyle={{ color: "rgb(var(--color-ink))" }}
-          formatter={(_value: number, _name: string, item: any) => formatQ(item?.payload?.etiqueta ?? _value)}
+          {...tooltipFinanciero({
+            formatter: (_value, _name, item) => formatQ(Number(item?.payload?.etiqueta ?? _value)),
+            nombreDe: () => "",
+            colorDe: (item) => item.payload?.color as string | undefined,
+          })}
         />
         <Bar dataKey="monto" radius={[3, 3, 0, 0]}>
           {data.map((d) => (

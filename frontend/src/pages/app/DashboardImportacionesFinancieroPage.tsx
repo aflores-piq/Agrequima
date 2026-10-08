@@ -1,7 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Title } from "@tremor/react";
-import { Bar, BarChart, Customized, LabelList, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, Customized, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import type { LabelProps } from "recharts";
 import {
   obtenerContribucionMillar,
@@ -17,6 +18,8 @@ import { useTablaOrdenable, type ColumnaOrdenable } from "../../hooks/useTablaOr
 import { FINANCIERO_SURFACE, GAP_TITULO_PRIMER_ELEMENTO, VERDE_ENCABEZADO } from "../../components/TablaGrupoExpandible";
 import { COLOR_EJECUTADO, COLOR_PRESUPUESTO, ultimoDiaDelMes } from "./DashboardOtrosInformesPage";
 import { useTheme } from "../../theme/ThemeContext";
+import { tooltipFinanciero } from "../../components/charts/TooltipFinanciero";
+import { TablaDatosGrafico, TarjetaFinanciero, textoSinDatos } from "../../components/VistaGraficoTabla";
 import { calcularEscalaEje } from "../../utils/escalaEje";
 import {
   formatPercent2,
@@ -71,9 +74,9 @@ function useAnchoElemento<T extends HTMLElement>() {
 const PROPORCION_ALTO_ANCHO_IMPORTACION = 0.4;
 const ALTO_EXTRA_TITULO_LEYENDA = 60; // px: ~32 (título) + 28 (leyenda)
 
-function calcularAspectoSvg(anchoTarjeta: number, proporcion: number): number {
+function calcularAspectoSvg(anchoTarjeta: number, proporcion: number, altoExtra = 0): number {
   if (!anchoTarjeta) return 1 / proporcion;
-  const altoSvgDeseado = proporcion * anchoTarjeta - ALTO_EXTRA_TITULO_LEYENDA;
+  const altoSvgDeseado = proporcion * anchoTarjeta - ALTO_EXTRA_TITULO_LEYENDA - altoExtra;
   return anchoTarjeta / Math.max(altoSvgDeseado, 1);
 }
 
@@ -185,43 +188,14 @@ function calcularDominioNice(valores: number[]): { dominio: [number, number]; ti
   return { dominio: [min, max], ticks: [min, max] };
 }
 
-// Cuando dos cajitas de etiqueta quedarían pisadas -- ya sea porque los
-// puntos de las 2 series de un mismo mes caen cerca en Y, o porque los
-// meses son tantos que las cajas (más anchas que la separación entre
-// puntos) invaden a las del mes vecino -- se resuelve poniendo cada
-// etiqueta arriba o abajo de su propio punto según lo que YA se colocó:
-// se procesan los 2*N puntos de izquierda a derecha (y, dentro del
-// mismo mes, primero el de valor MAYOR) probando primero "arriba"
-// (comportamiento normal); si esa caja pisa alguna ya colocada, se
-// prueba "abajo"; si ninguna de las 2 alcanza, se deja "arriba" (no hay
-// mejor opción posible con solo 2 posiciones).
-//
-// Las posiciones X se recalculan acá con la MISMA fórmula que usa
-// Recharts para un eje de categorías sin padding extra (confirmado
-// midiendo con getBoundingClientRect: el primer punto cae exactamente
-// en `gutterIzquierdo` y el último en `anchoSvg - margin.right`,
-// espaciados en partes iguales) -- necesario para poder decidir la
-// posición de TODOS los puntos de una sola pasada, antes de que Recharts
-// renderice ninguna etiqueta (el callback `label` de cada serie por
-// separado no tiene forma de saber qué hizo la otra serie).
-// Desplazamiento Y (respecto del punto) del TOPE de la caja, en orden
-// de preferencia: arriba normal, abajo normal, arriba "apilado" un
-// escalón más, abajo apilado un escalón más, etc. Con solo 2 opciones
-// (arriba/abajo), un grupo de 3+ puntos muy juntos en valores bajos
-// (donde "abajo" ya no cabe sin tocar el eje X) no tenía forma de
-// separarse entre sí -- con más variantes, cada uno prueba la primera
-// que no choque ni se salga de los límites.
-const OFFSETS_CANDIDATOS = [-32, 12, -56, 36, -80, 60, -104, 84];
-
 // Escalas X/Y analíticas para un eje de categorías de N puntos sin
 // padding extra (confirmado midiendo con getBoundingClientRect: el
 // primer punto cae exactamente en `gutterIzquierdo` y el último en
 // `anchoSvg - margin.right`, espaciados en partes iguales) -- las mismas
-// que usa Recharts internamente. Se factorizan acá porque las necesitan
-// tanto calcularPosicionesEtiquetas (para decidir colisiones ANTES de
-// que Recharts renderice nada) como la capa de etiquetas por encima de
-// las líneas (Customized, ver GraficoCIFLineas) -- ambas tienen que
-// coincidir en la posición exacta de cada punto.
+// que usa Recharts internamente. Las necesitan las capas de etiquetas por
+// encima de las líneas (Customized) de las gráficas que SÍ llevan
+// etiquetas (precio, contribución): tienen que coincidir en la posición
+// exacta de cada punto.
 function crearEscalas(
   n: number,
   dominio: [number, number],
@@ -235,96 +209,6 @@ function crearEscalas(
   const plotAncho = Math.max(anchoSvg - margin.right - gutterIzquierdo, 1);
   const escalaX = (i: number) => (n > 1 ? gutterIzquierdo + (i * plotAncho) / (n - 1) : gutterIzquierdo);
   return { escalaX, escalaY };
-}
-
-function calcularPosicionesEtiquetas(
-  datos: PuntoCIFMes[],
-  dominio: [number, number],
-  anchoSvg: number,
-  altoSvg: number,
-  margin: { top: number; right: number; bottom: number },
-  gutterIzquierdo: number,
-  gutterDerecho: number | undefined
-): { anterior: number[]; actual: number[] } {
-  const n = datos.length;
-  const anterior: number[] = new Array(n).fill(OFFSETS_CANDIDATOS[0]);
-  const actual: number[] = new Array(n).fill(OFFSETS_CANDIDATOS[0]);
-  if (n === 0 || !anchoSvg || !altoSvg) return { anterior, actual };
-
-  const { escalaX, escalaY } = crearEscalas(n, dominio, anchoSvg, altoSvg, margin, gutterIzquierdo);
-
-  type Candidato = { serie: "anterior" | "actual"; idx: number; x: number; y: number; valor: number; ancho: number };
-  const candidatos: Candidato[] = [];
-  datos.forEach((d, i) => {
-    const x = escalaX(i);
-    // Si el año anterior no tiene datos, esa serie no se dibuja -- no
-    // hay candidato que colocar para ella.
-    if (d.cif_anio_anterior !== null) {
-      candidatos.push({
-        serie: "anterior",
-        idx: i,
-        x,
-        y: escalaY(d.cif_anio_anterior),
-        valor: d.cif_anio_anterior,
-        ancho: Math.max(70, formatUSD(d.cif_anio_anterior).length * 8.5),
-      });
-    }
-    candidatos.push({
-      serie: "actual",
-      idx: i,
-      x,
-      y: escalaY(d.cif_anio_actual),
-      valor: d.cif_anio_actual,
-      ancho: Math.max(70, formatUSD(d.cif_anio_actual).length * 8.5),
-    });
-  });
-  candidatos.sort((a, b) => a.x - b.x || b.valor - a.valor);
-
-  // Límites: además de no chocar con otra caja ya colocada, ninguna caja
-  // puede invadir la franja inferior donde Recharts dibuja los nombres
-  // de los meses (debajo de margin.bottom) ni el techo de la tarjeta.
-  const limiteSuperior = margin.top - 4;
-  const limiteInferior = altoSvg - margin.bottom;
-
-  const colocados: { left: number; right: number; top: number; bottom: number }[] = [];
-  function caja(c: Candidato, offset: number) {
-    // Mismo recorte que el render real (calcularXCaja): sin esto, dos
-    // puntos cercanos al borde derecho podrían recortarse a la MISMA
-    // posición final y superponerse aunque acá parecieran no chocar.
-    const left = calcularXCaja(c.x, c.ancho, gutterIzquierdo, gutterDerecho);
-    const top = c.y + offset;
-    return { left, right: left + c.ancho, top, bottom: top + 20 };
-  }
-  function fueraDeLimites(box: { top: number; bottom: number }) {
-    return box.top < limiteSuperior || box.bottom > limiteInferior;
-  }
-  function choca(box: { left: number; right: number; top: number; bottom: number }) {
-    return colocados.some((o) => box.left < o.right && o.left < box.right && box.top < o.bottom && o.top < box.bottom);
-  }
-
-  for (const c of candidatos) {
-    let offsetElegido = OFFSETS_CANDIDATOS[0];
-    let box = caja(c, offsetElegido);
-    if (choca(box) || fueraDeLimites(box)) {
-      let encontrado = false;
-      for (const offset of OFFSETS_CANDIDATOS.slice(1)) {
-        const candidata = caja(c, offset);
-        if (!choca(candidata) && !fueraDeLimites(candidata)) {
-          offsetElegido = offset;
-          box = candidata;
-          encontrado = true;
-          break;
-        }
-      }
-      // Si ninguna variante alcanza (caso raro), se deja la primera
-      // igual -- no hay más opciones posibles.
-      void encontrado;
-    }
-    colocados.push(box);
-    if (c.serie === "anterior") anterior[c.idx] = offsetElegido;
-    else actual[c.idx] = offsetElegido;
-  }
-  return { anterior, actual };
 }
 
 // --- Tabla CIF por mes (7 columnas) -- compartida entre "Ingresos por
@@ -464,47 +348,6 @@ function TablaCIFMes({
 const COLOR_ANIO_ANTERIOR_CIF = "#5B7FAE";
 const COLOR_ANIO_ACTUAL_CIF = "#43B0A6";
 
-function EtiquetaCajaCIF({
-  x,
-  y,
-  value,
-  color,
-  gutterIzquierdo,
-  gutterDerecho,
-  esClaro,
-  desplazamientoY = -32,
-}: LabelProps & {
-  color: string;
-  gutterIzquierdo?: number;
-  gutterDerecho?: number;
-  esClaro: boolean;
-  desplazamientoY?: number;
-}) {
-  if (typeof x !== "number" || typeof y !== "number" || typeof value !== "number") return null;
-  const texto = formatUSD(value);
-  const ancho = Math.max(70, texto.length * 8.5);
-  const xCaja = calcularXCaja(x, ancho, gutterIzquierdo, gutterDerecho);
-  const yCaja = y + desplazamientoY;
-  const yTexto = yCaja + 15;
-  return (
-    <g>
-      <rect
-        x={xCaja}
-        y={yCaja}
-        width={ancho}
-        height={20}
-        rx={2}
-        fill="white"
-        stroke={esClaro ? color : "none"}
-        strokeWidth={esClaro ? 1 : 0}
-      />
-      <text x={xCaja + ancho / 2} y={yTexto} textAnchor="middle" fontSize={12} fontWeight={700} fill={color}>
-        {texto}
-      </text>
-    </g>
-  );
-}
-
 // Con muchos meses (año completo, 12) en una gráfica angosta, los
 // nombres completos se encimarían en el eje X -- a partir de este
 // umbral se usan abreviaturas de 3 letras (MESES), igual que el resto
@@ -517,69 +360,46 @@ function abreviarMes(mes: string): string {
   return idx >= 0 ? MESES[idx] : mes;
 }
 
-function GraficoCIFLineas({
-  titulo,
-  datos,
-  anioAnterior,
-  anioActual,
-  dominioY,
-  ticksY,
+// --- Gráficas de líneas CIF (años comparados) -----------------------------
+//
+// Sin etiquetas de datos (pedido de la junta, 7-oct-2026): los valores salen
+// solo con el cursor (tooltip) o en el modo "Tabla". La gráfica de precio
+// (más abajo) conserva sus etiquetas.
+
+type SerieCIF = { clave: string; etiqueta: string; color: string };
+type FilaGraficoCIF = { mes: string } & Record<string, string | number | null>;
+
+function ContenidoLineasCIF({
+  filas,
+  series,
+  leyenda,
+  dominio,
+  ticks,
   proporcionAltoAncho,
-  anioAnteriorSinDatos = false,
+  altoExtraEncabezado = 0,
 }: {
-  titulo: string;
-  datos: PuntoCIFMes[];
-  anioAnterior: number;
-  anioActual: number;
-  // Sin dominio/ticks fijos: se recalculan de los propios datos (ver
-  // calcularDominioNice) -- usado por "Ingresos por importación
-  // comparativo", donde el usuario decidió apartarse de Power BI
-  // (arranca en $0 ahí) porque con datos lejos de 0 media gráfica queda
-  // vacía. La pantalla 1 sigue pasando un dominio fijo, ya aprobado --
-  // salvo que el año anterior no tenga datos (ver anioAnteriorSinDatos),
-  // caso en el que el dominio SIEMPRE se recalcula solo con el actual.
-  dominioY?: [number, number];
-  ticksY?: number[];
+  filas: FilaGraficoCIF[];
+  series: SerieCIF[];
+  leyenda: { etiqueta: string; color: string }[];
+  dominio: [number, number];
+  ticks: number[];
   proporcionAltoAncho?: number;
-  anioAnteriorSinDatos?: boolean;
+  altoExtraEncabezado?: number;
 }) {
-  const { tema } = useTheme();
-  const esClaro = tema === "Claro";
   const [refTarjeta, anchoTarjeta] = useAnchoElemento<HTMLDivElement>();
-  const { dominio, ticks } = anioAnteriorSinDatos
-    ? calcularDominioNice(datos.map((d) => d.cif_anio_actual))
-    : dominioY && ticksY
-      ? { dominio: dominioY, ticks: ticksY }
-      : calcularDominioNice(datos.flatMap((d) => [d.cif_anio_anterior ?? 0, d.cif_anio_actual]));
   const anchoEjeY = calcularAnchoEjeY(ticks.map((v) => formatUSD(v)));
-  // bottom:22 (antes 4) -- deja lugar reservado para los nombres de mes
-  // del eje X; sin esto, una etiqueta puesta "abajo" del punto más bajo
-  // podía terminar tapándolos (quedaban fuera del área que Recharts
-  // reserva para el eje, en la franja de overflow del SVG).
-  const margin = { top: 36, right: 16, bottom: 22, left: 4 };
+  const margin = { top: 16, right: 16, bottom: 22, left: 4 };
   const gutterIzquierdo = margin.left + anchoEjeY;
-  const gutterDerecho = anchoTarjeta ? anchoTarjeta - margin.right : undefined;
   const aspecto = proporcionAltoAncho
-    ? calcularAspectoSvg(anchoTarjeta, proporcionAltoAncho)
+    ? calcularAspectoSvg(anchoTarjeta, proporcionAltoAncho, altoExtraEncabezado)
     : 1300 / 680;
-  const altoSvg = anchoTarjeta ? anchoTarjeta / aspecto : 0;
-  const posiciones = calcularPosicionesEtiquetas(datos, dominio, anchoTarjeta, altoSvg, margin, gutterIzquierdo, gutterDerecho);
-  const { escalaX, escalaY } = crearEscalas(datos.length, dominio, anchoTarjeta, altoSvg, margin, gutterIzquierdo);
-  // Nombres de serie = medida TipoDinamicoCIF* del .pbix: "CIF US$ {año}".
-  const etiquetaAnterior = `CIF US$ ${anioAnterior}${anioAnteriorSinDatos ? " (sin datos)" : ""}`;
-  const etiquetaActual = `CIF US$ ${anioActual}`;
   return (
-    <div
-      ref={refTarjeta}
-      className="overflow-hidden rounded-tremor-default pt-2 ring-1 ring-line"
-      style={{ backgroundColor: FINANCIERO_SURFACE }}
-    >
-      <p className="text-center text-base font-bold text-ink">{titulo}</p>
+    <div ref={refTarjeta}>
       <ResponsiveContainer width="100%" aspect={aspecto}>
-        <LineChart data={datos} margin={margin}>
+        <LineChart data={filas} margin={margin}>
           <XAxis
             dataKey="mes"
-            tickFormatter={(v: string) => (datos.length > UMBRAL_MESES_ABREVIADOS ? abreviarMes(v) : v)}
+            tickFormatter={(v: string) => (filas.length > UMBRAL_MESES_ABREVIADOS ? abreviarMes(v) : v)}
             tick={{ fontSize: 13, fontWeight: 700, fill: "rgb(var(--color-ink))" }}
             axisLine={false}
             tickLine={false}
@@ -594,88 +414,279 @@ function GraficoCIFLineas({
             tickLine={false}
             width={anchoEjeY}
           />
-          <Tooltip
-            formatter={(v: number) => formatUSD(v)}
-            contentStyle={{ background: FINANCIERO_SURFACE, border: "1px solid rgb(var(--color-line))", borderRadius: 8 }}
-            labelStyle={{ color: "rgb(var(--color-ink))" }}
-          />
-          {!anioAnteriorSinDatos && (
+          <Tooltip {...tooltipFinanciero({ tipo: "lineas", formatter: (v) => formatUSD(v) })} />
+          {series.map((s) => (
             <Line
+              key={s.clave}
               type="linear"
-              dataKey="cif_anio_anterior"
-              name={etiquetaAnterior}
-              stroke={COLOR_ANIO_ANTERIOR_CIF}
+              dataKey={s.clave}
+              name={s.etiqueta}
+              stroke={s.color}
               strokeWidth={3}
-              dot={{ r: 5, fill: COLOR_ANIO_ANTERIOR_CIF }}
+              dot={{ r: 5, fill: s.color }}
+              activeDot={{ r: 7 }}
               isAnimationActive={false}
             />
-          )}
-          <Line
-            type="linear"
-            dataKey="cif_anio_actual"
-            name={etiquetaActual}
-            stroke={COLOR_ANIO_ACTUAL_CIF}
-            strokeWidth={3}
-            dot={{ r: 5, fill: COLOR_ANIO_ACTUAL_CIF }}
-            isAnimationActive={false}
-          />
-          {/* Capa de etiquetas dibujada AL FINAL (Customized siempre
-              renderiza por encima de todas las series) -- antes cada
-              caja era hija de su propia <Line>, así que una línea
-              dibujada DESPUÉS (más arriba en el orden del JSX) podía
-              tachar la etiqueta de la línea anterior al cruzarla
-              (confirmado: Comparativo 2026 Gremiagro, Julio,
-              "$3,871,197"). Las posiciones se recalculan con las MISMAS
-              escalas analíticas que ya usa calcularPosicionesEtiquetas,
-              no con props.x/y de Recharts (que ya no vienen por acá). */}
-          <Customized
-            component={() => (
-              <g>
-                {!anioAnteriorSinDatos &&
-                  datos.map((d, i) => {
-                    if (d.cif_anio_anterior === null) return null;
-                    return (
-                      <EtiquetaCajaCIF
-                        key={`ant-${i}`}
-                        x={escalaX(i)}
-                        y={escalaY(d.cif_anio_anterior)}
-                        value={d.cif_anio_anterior}
-                        color={COLOR_ANIO_ANTERIOR_CIF}
-                        gutterIzquierdo={gutterIzquierdo}
-                        gutterDerecho={gutterDerecho}
-                        esClaro={esClaro}
-                        desplazamientoY={posiciones.anterior[i]}
-                      />
-                    );
-                  })}
-                {datos.map((d, i) => (
-                  <EtiquetaCajaCIF
-                    key={`act-${i}`}
-                    x={escalaX(i)}
-                    y={escalaY(d.cif_anio_actual)}
-                    value={d.cif_anio_actual}
-                    color={COLOR_ANIO_ACTUAL_CIF}
-                    gutterIzquierdo={gutterIzquierdo}
-                    gutterDerecho={gutterDerecho}
-                    esClaro={esClaro}
-                    desplazamientoY={posiciones.actual[i]}
-                  />
-                ))}
-              </g>
-            )}
-          />
+          ))}
         </LineChart>
       </ResponsiveContainer>
-      <LeyendaCentrada
-        anchoTarjeta={anchoTarjeta}
-        gutterIzquierdo={gutterIzquierdo}
-        gutterDerecho={margin.right}
-        items={[
-          { etiqueta: etiquetaAnterior, color: COLOR_ANIO_ANTERIOR_CIF },
-          { etiqueta: etiquetaActual, color: COLOR_ANIO_ACTUAL_CIF },
-        ]}
-      />
+      <LeyendaCentrada anchoTarjeta={anchoTarjeta} gutterIzquierdo={gutterIzquierdo} gutterDerecho={margin.right} items={leyenda} />
     </div>
+  );
+}
+
+function GraficoLineasCIF({
+  titulo,
+  periodo,
+  filas,
+  series,
+  leyenda,
+  dominio,
+  ticks,
+  proporcionAltoAncho,
+  encabezadoExtra,
+  altoExtraEncabezado = 0,
+}: {
+  titulo: string;
+  /** Período elegido ("2026"), para el mensaje "Sin datos para ...". */
+  periodo: string;
+  filas: FilaGraficoCIF[];
+  /** Líneas que se dibujan (una por año). */
+  series: SerieCIF[];
+  /** Entradas de la leyenda (puede incluir un año sin datos que no se dibuja). */
+  leyenda: { etiqueta: string; color: string }[];
+  dominio: [number, number];
+  ticks: number[];
+  proporcionAltoAncho?: number;
+  /** Fila de botones de años (solo la gráfica de la 1ª pantalla): visible en Gráfico y en Tabla. */
+  encabezadoExtra?: ReactNode;
+  altoExtraEncabezado?: number;
+}) {
+  const sinDatos = textoSinDatos(
+    filas.flatMap((f) => series.map((s) => (typeof f[s.clave] === "number" ? (f[s.clave] as number) : null))),
+    periodo
+  );
+  return (
+    <TarjetaFinanciero
+      titulo={titulo}
+      sinDatos={sinDatos}
+      chart={
+        <>
+          {encabezadoExtra}
+          <ContenidoLineasCIF
+            filas={filas}
+            series={series}
+            leyenda={leyenda}
+            dominio={dominio}
+            ticks={ticks}
+            proporcionAltoAncho={proporcionAltoAncho}
+            altoExtraEncabezado={altoExtraEncabezado}
+          />
+        </>
+      }
+      table={
+        <>
+          {encabezadoExtra}
+          <TablaDatosGrafico
+            columnas={["Mes", ...series.map((s) => s.etiqueta)]}
+            filas={filas.map((f) => [
+              f.mes,
+              ...series.map((s) => (f[s.clave] === null || f[s.clave] === undefined ? "—" : formatUSD(Number(f[s.clave])))),
+            ])}
+          />
+        </>
+      }
+    />
+  );
+}
+
+// Comparativo por institución (2ª pantalla): año anterior vs. año actual, sin etiquetas.
+function GraficoCIFLineas({
+  titulo,
+  datos,
+  anioAnterior,
+  anioActual,
+  anioAnteriorSinDatos = false,
+}: {
+  titulo: string;
+  datos: PuntoCIFMes[];
+  anioAnterior: number;
+  anioActual: number;
+  anioAnteriorSinDatos?: boolean;
+}) {
+  const { dominio, ticks } = anioAnteriorSinDatos
+    ? calcularDominioNice(datos.map((d) => d.cif_anio_actual))
+    : calcularDominioNice(datos.flatMap((d) => [d.cif_anio_anterior ?? 0, d.cif_anio_actual]));
+  // Nombres de serie = medida TipoDinamicoCIF* del .pbix: "CIF US$ {año}".
+  const etiquetaAnterior = `CIF US$ ${anioAnterior}${anioAnteriorSinDatos ? " (sin datos)" : ""}`;
+  const etiquetaActual = `CIF US$ ${anioActual}`;
+  const series: SerieCIF[] = [
+    ...(anioAnteriorSinDatos ? [] : [{ clave: "anterior", etiqueta: etiquetaAnterior, color: COLOR_ANIO_ANTERIOR_CIF }]),
+    { clave: "actual", etiqueta: etiquetaActual, color: COLOR_ANIO_ACTUAL_CIF },
+  ];
+  const filas: FilaGraficoCIF[] = datos.map((d) => ({ mes: d.mes, anterior: d.cif_anio_anterior, actual: d.cif_anio_actual }));
+  return (
+    <GraficoLineasCIF
+      titulo={titulo}
+      periodo={String(anioActual)}
+      filas={filas}
+      series={series}
+      leyenda={[
+        { etiqueta: etiquetaAnterior, color: COLOR_ANIO_ANTERIOR_CIF },
+        { etiqueta: etiquetaActual, color: COLOR_ANIO_ACTUAL_CIF },
+      ]}
+      dominio={dominio}
+      ticks={ticks}
+    />
+  );
+}
+
+// Colores de los años EXTRA que se pueden agregar a la gráfica de la 1ª pantalla
+// (el año elegido y el anterior conservan los suyos): ámbar, violeta y coral, bien
+// distintos entre sí y de los dos azul/verde existentes, legibles en claro y oscuro.
+const COLORES_ANIOS_EXTRA_CIF = ["#E0A83A", "#A78BDA", "#E2705F"];
+const MAX_ANIOS_EXTRA_CIF = 3; // año elegido + anterior + 3 = 5 años como máximo
+
+// 1ª pantalla: por defecto año elegido + año anterior; botones dentro de la gráfica para
+// poner/quitar otros años con datos (los más recientes, hasta 5 en total). Los años extra se
+// piden con el mismo endpoint de siempre (un año a la vez, al activarlos). Al cambiar el
+// año del filtro, la gráfica vuelve al valor por defecto.
+function GraficoCIFAnios({
+  titulo,
+  datos,
+  anioAnterior,
+  anioActual,
+  aniosDisponibles,
+  anioAnteriorSinDatos,
+  proporcionAltoAncho,
+}: {
+  titulo: string;
+  datos: PuntoCIFMes[];
+  anioAnterior: number;
+  anioActual: number;
+  aniosDisponibles: number[];
+  anioAnteriorSinDatos: boolean;
+  proporcionAltoAncho: number;
+}) {
+  const candidatos = aniosDisponibles
+    .filter((a) => a !== anioActual && a !== anioAnterior)
+    .sort((a, b) => b - a)
+    .slice(0, MAX_ANIOS_EXTRA_CIF);
+  const [activos, setActivos] = useState<number[]>([]);
+  const [cache, setCache] = useState<Record<number, Record<string, number>>>({});
+  const [cargandoAnio, setCargandoAnio] = useState<number | null>(null);
+  const [errorAnio, setErrorAnio] = useState<string | null>(null);
+
+  useEffect(() => {
+    setActivos([]);
+    setErrorAnio(null);
+  }, [anioActual]);
+
+  const activosValidos = activos.filter((a) => candidatos.includes(a) && cache[a]);
+
+  async function alternar(anio: number) {
+    setErrorAnio(null);
+    if (activos.includes(anio)) {
+      setActivos((prev) => prev.filter((a) => a !== anio));
+      return;
+    }
+    if (!cache[anio]) {
+      setCargandoAnio(anio);
+      try {
+        const res = await obtenerIngresosImportacion(anio);
+        setCache((prev) => ({ ...prev, [anio]: Object.fromEntries(res.grafico_cif.map((p) => [p.mes, p.cif_anio_actual])) }));
+      } catch (err) {
+        setErrorAnio(mensajeError(err));
+        setCargandoAnio(null);
+        return;
+      }
+      setCargandoAnio(null);
+    }
+    setActivos((prev) => [...prev, anio]);
+  }
+
+  const colorExtra = (anio: number) => COLORES_ANIOS_EXTRA_CIF[candidatos.indexOf(anio) % COLORES_ANIOS_EXTRA_CIF.length];
+  const etiquetaAnio = (anio: number) => `CIF US$ ${anio}`;
+
+  // Años dibujados, de menor a mayor.
+  const series: (SerieCIF & { anio: number })[] = [
+    ...(anioAnteriorSinDatos ? [] : [{ anio: anioAnterior, clave: `a${anioAnterior}`, etiqueta: etiquetaAnio(anioAnterior), color: COLOR_ANIO_ANTERIOR_CIF }]),
+    { anio: anioActual, clave: `a${anioActual}`, etiqueta: etiquetaAnio(anioActual), color: COLOR_ANIO_ACTUAL_CIF },
+    ...activosValidos.map((a) => ({ anio: a, clave: `a${a}`, etiqueta: etiquetaAnio(a), color: colorExtra(a) })),
+  ].sort((x, y) => x.anio - y.anio);
+
+  const filas: FilaGraficoCIF[] = datos.map((d) => {
+    const fila: FilaGraficoCIF = { mes: d.mes, [`a${anioAnterior}`]: d.cif_anio_anterior, [`a${anioActual}`]: d.cif_anio_actual };
+    for (const a of activosValidos) fila[`a${a}`] = cache[a][d.mes] ?? null;
+    return fila;
+  });
+
+  // Sin años extra, el eje es el de siempre; con años extra se recalcula con todos los dibujados.
+  const { dominio, ticks } =
+    activosValidos.length === 0
+      ? anioAnteriorSinDatos
+        ? calcularDominioNice(datos.map((d) => d.cif_anio_actual))
+        : (() => {
+            const e = calcularEscalaEje(datos.flatMap((d) => [d.cif_anio_anterior, d.cif_anio_actual]));
+            return { dominio: e.dominio, ticks: e.ticks };
+          })()
+      : (() => {
+          const e = calcularEscalaEje(filas.flatMap((f) => series.map((s) => (typeof f[s.clave] === "number" ? (f[s.clave] as number) : null))));
+          return { dominio: e.dominio, ticks: e.ticks };
+        })();
+
+  const etiquetaAnteriorLeyenda = `${etiquetaAnio(anioAnterior)}${anioAnteriorSinDatos ? " (sin datos)" : ""}`;
+  const leyenda = [
+    { anio: anioAnterior, etiqueta: etiquetaAnteriorLeyenda, color: COLOR_ANIO_ANTERIOR_CIF },
+    { anio: anioActual, etiqueta: etiquetaAnio(anioActual), color: COLOR_ANIO_ACTUAL_CIF },
+    ...activosValidos.map((a) => ({ anio: a, etiqueta: etiquetaAnio(a), color: colorExtra(a) })),
+  ].sort((x, y) => x.anio - y.anio);
+
+  const botones =
+    candidatos.length > 0 ? (
+      <div className="flex flex-wrap items-center justify-center gap-2 px-3 pb-1 pt-1.5" data-testid="botones-anios-cif">
+        <span className="text-xs font-semibold text-ink-muted">Agregar año:</span>
+        {candidatos.map((a) => {
+          const activo = activosValidos.includes(a);
+          const color = colorExtra(a);
+          return (
+            <button
+              key={a}
+              type="button"
+              aria-pressed={activo}
+              disabled={cargandoAnio !== null}
+              onClick={() => alternar(a)}
+              className={`flex items-center gap-1.5 rounded-full px-3 py-0.5 text-sm font-bold transition-colors disabled:opacity-60 ${
+                activo ? "text-ink" : "text-ink-muted hover:text-ink"
+              }`}
+              style={{
+                border: `2px solid ${activo ? color : "rgb(var(--color-line-strong) / 0.7)"}`,
+                backgroundColor: activo ? `${color}33` : "transparent",
+              }}
+            >
+              <span aria-hidden="true" className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: color }} />
+              {cargandoAnio === a ? "Cargando…" : a}
+              {activo && <span aria-hidden="true">×</span>}
+            </button>
+          );
+        })}
+        {errorAnio && <span className="text-xs text-danger">{errorAnio}</span>}
+      </div>
+    ) : undefined;
+
+  return (
+    <GraficoLineasCIF
+      titulo={titulo}
+      periodo={String(anioActual)}
+      filas={filas}
+      series={series}
+      leyenda={leyenda}
+      dominio={dominio}
+      ticks={ticks}
+      proporcionAltoAncho={proporcionAltoAncho}
+      encabezadoExtra={botones}
+      altoExtraEncabezado={botones ? 36 : 0}
+    />
   );
 }
 
@@ -719,7 +730,7 @@ function EtiquetaCajaPrecio({
   );
 }
 
-function GraficoPrecioLineas({ titulo, datos }: { titulo: string; datos: PuntoPrecioMes[] }) {
+function ContenidoPrecioLineas({ datos }: { datos: PuntoPrecioMes[] }) {
   const { tema } = useTheme();
   const esClaro = tema === "Claro";
   const [refTarjeta, anchoTarjeta] = useAnchoElemento<HTMLDivElement>();
@@ -732,12 +743,7 @@ function GraficoPrecioLineas({ titulo, datos }: { titulo: string; datos: PuntoPr
   const escalaPrecio = calcularEscalaEje(datos.flatMap((d) => [d.agrequima, d.gremiagro, d.total]));
   const { escalaX, escalaY } = crearEscalas(datos.length, escalaPrecio.dominio, anchoTarjeta, altoSvg, margin, gutterIzquierdo);
   return (
-    <div
-      ref={refTarjeta}
-      className="overflow-hidden rounded-tremor-default pt-2 ring-1 ring-line"
-      style={{ backgroundColor: FINANCIERO_SURFACE }}
-    >
-      <p className="text-center text-base font-bold text-ink">{titulo}</p>
+    <div ref={refTarjeta}>
       <ResponsiveContainer width="100%" aspect={aspecto}>
         <LineChart data={datos} margin={margin}>
           <XAxis
@@ -757,16 +763,11 @@ function GraficoPrecioLineas({ titulo, datos }: { titulo: string; datos: PuntoPr
             tickLine={false}
             width={anchoEjeYPrecio}
           />
-          <Tooltip
-            formatter={(v: number) => formatUSD2(v)}
-            contentStyle={{ background: FINANCIERO_SURFACE, border: "1px solid rgb(var(--color-line))", borderRadius: 8 }}
-            labelStyle={{ color: "rgb(var(--color-ink))" }}
-          />
+          <Tooltip {...tooltipFinanciero({ tipo: "lineas", formatter: (v) => formatUSD2(v) })} />
           <Line type="linear" dataKey="agrequima" name="Agrequima" stroke={COLOR_PRECIO_AGREQUIMA} strokeWidth={3} dot={{ r: 4, fill: COLOR_PRECIO_AGREQUIMA }} isAnimationActive={false} />
           <Line type="linear" dataKey="gremiagro" name="Gremiagro" stroke={COLOR_PRECIO_GREMIAGRO} strokeWidth={3} dot={{ r: 4, fill: COLOR_PRECIO_GREMIAGRO }} isAnimationActive={false} />
           <Line type="linear" dataKey="total" name="Total" stroke={COLOR_PRECIO_TOTAL} strokeWidth={3} dot={{ r: 4, fill: COLOR_PRECIO_TOTAL }} isAnimationActive={false} />
-          {/* Capa de etiquetas al final -- ver el mismo comentario en
-              GraficoCIFLineas: así ninguna línea dibujada después tacha
+          {/* Capa de etiquetas al final: así ninguna línea dibujada después tacha
               la caja de una serie anterior. */}
           <Customized
             component={() => (
@@ -798,6 +799,22 @@ function GraficoPrecioLineas({ titulo, datos }: { titulo: string; datos: PuntoPr
         ))}
       </div>
     </div>
+  );
+}
+
+function GraficoPrecioLineas({ titulo, periodo, datos }: { titulo: string; periodo: string; datos: PuntoPrecioMes[] }) {
+  return (
+    <TarjetaFinanciero
+      titulo={titulo}
+      sinDatos={textoSinDatos(datos.flatMap((d) => [d.agrequima, d.gremiagro, d.total]), periodo)}
+      chart={<ContenidoPrecioLineas datos={datos} />}
+      table={
+        <TablaDatosGrafico
+          columnas={["Mes", "Agrequima", "Gremiagro", "Total"]}
+          filas={datos.map((d) => [d.mes, formatUSD2(d.agrequima), formatUSD2(d.gremiagro), formatUSD2(d.total)])}
+        />
+      }
+    />
   );
 }
 
@@ -859,7 +876,6 @@ function PaginaIngresosImportacion() {
     ? `Comparativo CIF US$ ${data.anio_anterior} vs. ${data.anio} Agrequima-Gremiagro`
     : "Ingresos por importación";
   const tituloGrafico = "Comparativo CIF US$ Importaciones Plaguicidas (Expresado en Miles de US$)";
-  const escalaCif = calcularEscalaEje((data?.grafico_cif ?? []).flatMap((d) => [d.cif_anio_anterior, d.cif_anio_actual]));
   const tituloPrecio = data
     ? `Comportamiento acumulado a ${MESES_LARGOS[data.ultimo_mes_con_datos - 1]} ${data.anio}, precio kilolitro en US$.`
     : "";
@@ -878,19 +894,18 @@ function PaginaIngresosImportacion() {
       {data && (
         <>
           <div className="mx-auto" style={{ width: ANCHO_GRAFICA_1, marginTop: GAP_TITULO_PRIMER_ELEMENTO }}>
-            <GraficoCIFLineas
+            <GraficoCIFAnios
               titulo={tituloGrafico}
               datos={data.grafico_cif}
               anioAnterior={data.anio_anterior}
               anioActual={data.anio}
-              dominioY={escalaCif.dominio}
-              ticksY={escalaCif.ticks}
+              aniosDisponibles={data.anios_disponibles}
               anioAnteriorSinDatos={data.anio_anterior_sin_datos}
               proporcionAltoAncho={PROPORCION_ALTO_ANCHO_IMPORTACION}
             />
           </div>
           <div className="mx-auto" style={{ width: ANCHO_GRAFICA_1, marginTop: GAP_GRAFICA1_GRAFICA2 }}>
-            <GraficoPrecioLineas titulo={tituloPrecio} datos={data.grafico_precio} />
+            <GraficoPrecioLineas titulo={tituloPrecio} periodo={`${MESES_LARGOS[data.ultimo_mes_con_datos - 1]} ${data.anio}`} datos={data.grafico_precio} />
           </div>
           <div className="mx-auto" style={{ width: ANCHO_TABLA_1, marginTop: GAP_GRAFICA2_TABLA }}>
             <TablaCIFMes filas={data.filas} filaTotal={data.fila_total} anioAnterior={data.anio_anterior} anioActual={data.anio} />
@@ -1212,71 +1227,26 @@ const PROPORCION_ALTO_ANCHO_BARRAS_4 = 0.5;
 const COLOR_CONTRIB_ANTERIOR = "#5B7FAE";
 const COLOR_CONTRIB_ACTUAL = "#43B0A6";
 
-function EtiquetaCajaContribucion({
-  x,
-  y,
-  value,
-  color,
-  esClaro,
-  gutterIzquierdo,
-  gutterDerecho,
-}: LabelProps & { color: string; esClaro: boolean; gutterIzquierdo?: number; gutterDerecho?: number }) {
-  if (typeof x !== "number" || typeof y !== "number" || typeof value !== "number") return null;
-  const texto = formatQ(value);
-  const ancho = Math.max(60, texto.length * 8.5);
-  const xCaja = calcularXCaja(x, ancho, gutterIzquierdo, gutterDerecho);
-  return (
-    <g>
-      <rect
-        x={xCaja}
-        y={y - 30}
-        width={ancho}
-        height={18}
-        rx={2}
-        fill="white"
-        stroke={esClaro ? color : "none"}
-        strokeWidth={esClaro ? 1 : 0}
-      />
-      <text x={xCaja + ancho / 2} y={y - 17} textAnchor="middle" fontSize={11} fontWeight={700} fill={color}>
-        {texto}
-      </text>
-    </g>
-  );
-}
-
-function GraficoContribucionLineas({
-  titulo,
+function ContenidoContribucionLineas({
   datos,
   anioAnterior,
   anioActual,
 }: {
-  titulo: string;
   datos: PuntoContribucionMes[];
   anioAnterior: number;
   anioActual: number;
 }) {
-  const { tema } = useTheme();
-  const esClaro = tema === "Claro";
   const hayPresupuesto = datos.some((d) => d.presupuesto !== 0);
   const etiquetaPresupuesto = `Presupuesto ${anioActual}${hayPresupuesto ? "" : " (sin datos)"}`;
   const [refTarjeta, anchoTarjeta] = useAnchoElemento<HTMLDivElement>();
   const margin = { top: 30, right: 24, bottom: 22, left: 16 };
   const anchoEjeYContrib = 80;
-  const gutterIzquierdo = margin.left + anchoEjeYContrib;
-  const gutterDerecho = anchoTarjeta ? anchoTarjeta - margin.right : undefined;
   const aspecto = calcularAspectoSvg(anchoTarjeta, PROPORCION_ALTO_ANCHO_LINEAS_4);
-  const altoSvg = anchoTarjeta ? anchoTarjeta / aspecto : 0;
-  // Dominio explícito (calcularDominioNice) en vez de domain={["auto",
-  // "auto"]}: la capa de etiquetas (Customized, ver GraficoCIFLineas)
-  // necesita conocer el dominio EXACTO que usa el eje para calcular la
-  // posición Y de cada caja -- con "auto" no hay forma de saber qué
-  // dominio resolvió Recharts internamente antes de renderizar.
+  // Dominio explícito (calcularDominioNice) en vez de domain={["auto", "auto"]}.
   const valoresDominio = datos.flatMap((d) => (hayPresupuesto ? [d.anio_anterior, d.anio_actual, d.presupuesto] : [d.anio_anterior, d.anio_actual]));
   const { dominio, ticks } = calcularDominioNice(valoresDominio);
-  const { escalaX, escalaY } = crearEscalas(datos.length, dominio, anchoTarjeta, altoSvg, margin, gutterIzquierdo);
   return (
-    <div ref={refTarjeta} className="overflow-hidden rounded-tremor-default pt-2 ring-1 ring-line" style={{ backgroundColor: FINANCIERO_SURFACE }}>
-      <p className="text-center text-base font-bold text-ink">{titulo}</p>
+    <div ref={refTarjeta}>
       <ResponsiveContainer width="100%" aspect={aspecto}>
         <LineChart data={datos} margin={margin}>
           <XAxis
@@ -1296,34 +1266,13 @@ function GraficoContribucionLineas({
             tickLine={false}
             width={anchoEjeYContrib}
           />
-          <Tooltip
-            formatter={(v: number) => formatQ(v)}
-            contentStyle={{ background: FINANCIERO_SURFACE, border: "1px solid rgb(var(--color-line))", borderRadius: 8 }}
-            labelStyle={{ color: "rgb(var(--color-ink))" }}
-          />
+          <Tooltip {...tooltipFinanciero({ tipo: "lineas", formatter: (v) => formatQ(v) })} />
           <Line type="linear" dataKey="anio_anterior" name={String(anioAnterior)} stroke={COLOR_CONTRIB_ANTERIOR} strokeWidth={3} dot={{ r: 4, fill: COLOR_CONTRIB_ANTERIOR }} isAnimationActive={false} />
           <Line type="linear" dataKey="anio_actual" name={String(anioActual)} stroke={COLOR_CONTRIB_ACTUAL} strokeWidth={3} dot={{ r: 4, fill: COLOR_CONTRIB_ACTUAL }} isAnimationActive={false} />
           {hayPresupuesto && (
             <Line type="linear" dataKey="presupuesto" name={etiquetaPresupuesto} stroke={COLOR_PRESUPUESTO} strokeWidth={3} dot={{ r: 4, fill: COLOR_PRESUPUESTO }} isAnimationActive={false} />
           )}
-          {/* Capa de etiquetas al final -- ver el mismo comentario en
-              GraficoCIFLineas. */}
-          <Customized
-            component={() => (
-              <g>
-                {datos.map((d, i) => (
-                  <EtiquetaCajaContribucion key={`ant-${i}`} x={escalaX(i)} y={escalaY(d.anio_anterior)} value={d.anio_anterior} color={COLOR_CONTRIB_ANTERIOR} esClaro={esClaro} gutterIzquierdo={gutterIzquierdo} gutterDerecho={gutterDerecho} />
-                ))}
-                {datos.map((d, i) => (
-                  <EtiquetaCajaContribucion key={`act-${i}`} x={escalaX(i)} y={escalaY(d.anio_actual)} value={d.anio_actual} color={COLOR_CONTRIB_ACTUAL} esClaro={esClaro} gutterIzquierdo={gutterIzquierdo} gutterDerecho={gutterDerecho} />
-                ))}
-                {hayPresupuesto &&
-                  datos.map((d, i) => (
-                    <EtiquetaCajaContribucion key={`pre-${i}`} x={escalaX(i)} y={escalaY(d.presupuesto)} value={d.presupuesto} color={COLOR_PRESUPUESTO} esClaro={esClaro} gutterIzquierdo={gutterIzquierdo} gutterDerecho={gutterDerecho} />
-                  ))}
-              </g>
-            )}
-          />
+          {/* Sin etiquetas de datos: los valores salen con el cursor (tooltip). */}
         </LineChart>
       </ResponsiveContainer>
       {/* Orden pedido: {Año-1}, {Año}, Presupuesto {Año} -- Presupuesto
@@ -1345,6 +1294,37 @@ function GraficoContribucionLineas({
   );
 }
 
+function GraficoContribucionLineas({
+  titulo,
+  periodo,
+  datos,
+  anioAnterior,
+  anioActual,
+}: {
+  titulo: string;
+  /** Período elegido ("Septiembre 2026"), para el mensaje "Sin datos para ...". */
+  periodo: string;
+  datos: PuntoContribucionMes[];
+  anioAnterior: number;
+  anioActual: number;
+}) {
+  const hayPresupuesto = datos.some((d) => d.presupuesto !== 0);
+  const etiquetaPresupuesto = `Presupuesto ${anioActual}${hayPresupuesto ? "" : " (sin datos)"}`;
+  return (
+    <TarjetaFinanciero
+      titulo={titulo}
+      sinDatos={textoSinDatos(datos.flatMap((d) => [d.anio_anterior, d.anio_actual, d.presupuesto]), periodo)}
+      chart={<ContenidoContribucionLineas datos={datos} anioAnterior={anioAnterior} anioActual={anioActual} />}
+      table={
+        <TablaDatosGrafico
+          columnas={["Mes", String(anioAnterior), String(anioActual), ...(hayPresupuesto ? [etiquetaPresupuesto] : [])]}
+          filas={datos.map((d) => [d.mes, formatQ(d.anio_anterior), formatQ(d.anio_actual), ...(hayPresupuesto ? [formatQ(d.presupuesto)] : [])])}
+        />
+      }
+    />
+  );
+}
+
 function ChipEjecucion({ porcentaje }: { porcentaje: number | null }) {
   return (
     <span className="rounded px-2 py-0.5 text-xs font-semibold" style={{ backgroundColor: FINANCIERO_SURFACE }}>
@@ -1353,13 +1333,11 @@ function ChipEjecucion({ porcentaje }: { porcentaje: number | null }) {
   );
 }
 
-function GraficoColumnasContribucion({
-  titulo,
+function ContenidoColumnasContribucion({
   presupuesto,
   realizado,
   porcentajeEjecucion,
 }: {
-  titulo: string;
   presupuesto: number;
   realizado: number;
   porcentajeEjecucion: number | null;
@@ -1368,10 +1346,7 @@ function GraficoColumnasContribucion({
   const [refTarjeta, anchoTarjeta] = useAnchoElemento<HTMLDivElement>();
   const barSize = anchoTarjeta ? Math.round(anchoTarjeta * 0.12) : undefined;
   // Eje Y calculado de los 2 valores que muestra, con margen sobre el más
-  // alto (la etiqueta de la barra más alta no debe quedar pegada contra el
-  // chip de % de ejecución -- caso real: Q4,011,995 con tope Q4,200,000,
-  // solo 4.5% de aire) y sin paso escrito a mano (antes saltos fijos de
-  // Q200,000).
+  // alto y sin paso escrito a mano.
   const escala = calcularEscalaEje([presupuesto, realizado]);
   const anchoEjeY = calcularAnchoEjeY(escala.ticks.map((v) => formatQ(v)));
   const hayPresupuesto = presupuesto !== 0;
@@ -1379,22 +1354,13 @@ function GraficoColumnasContribucion({
   const gutterDerecho = 16;
   const aspecto = calcularAspectoSvg(anchoTarjeta, PROPORCION_ALTO_ANCHO_BARRAS_4);
   return (
-    <div
-      ref={refTarjeta}
-      className="relative overflow-hidden rounded-tremor-default pt-2 ring-1 ring-line"
-      style={{ backgroundColor: FINANCIERO_SURFACE }}
-    >
-      <p className="px-2 text-center text-base font-bold text-ink">{titulo}</p>
-      {/* El chip va DEBAJO de la línea del título (no en la misma fila) --
-          el título centrado ocupa casi todo el ancho de la tarjeta, así
-          que un chip en la MISMA fila (arriba a la derecha) quedaba
-          encima del propio texto del título (confirmado con captura
-          real). */}
-      <div className="absolute right-2 top-9">
+    <div ref={refTarjeta}>
+      {/* Chip de % de ejecución (o "Sin presupuesto", UNA sola vez): arriba a la derecha de la gráfica. */}
+      <div className="flex justify-end">
         <ChipEjecucion porcentaje={porcentajeEjecucion} />
       </div>
       <ResponsiveContainer width="100%" aspect={aspecto}>
-        <BarChart data={fila} margin={{ top: 44, right: gutterDerecho, bottom: 4, left: 16 }} barGap={4}>
+        <BarChart data={fila} margin={{ top: 12, right: gutterDerecho, bottom: 4, left: 16 }} barGap={4}>
           <XAxis dataKey={() => ""} tick={false} axisLine={false} tickLine={false} />
           <YAxis
             type="number"
@@ -1406,17 +1372,16 @@ function GraficoColumnasContribucion({
             tickLine={false}
             width={anchoEjeY}
           />
-          <Tooltip formatter={(v: number) => formatQ(v)} contentStyle={{ background: FINANCIERO_SURFACE, border: "1px solid rgb(var(--color-line))", borderRadius: 8 }} />
-          <Bar dataKey="presupuesto" fill={hayPresupuesto ? COLOR_PRESUPUESTO : "transparent"} radius={[4, 4, 0, 0]} isAnimationActive={false} barSize={barSize}>
-            {hayPresupuesto ? (
-              <LabelList dataKey="presupuesto" content={(props) => <TextoValorBarra {...props} color="rgb(var(--color-ink))" />} />
-            ) : (
-              <LabelList dataKey="presupuesto" content={(props) => <TextoSinPresupuesto {...props} />} />
-            )}
-          </Bar>
-          <Bar dataKey="realizado" fill={COLOR_EJECUTADO} radius={[4, 4, 0, 0]} isAnimationActive={false} barSize={barSize}>
-            <LabelList dataKey="realizado" content={(props) => <TextoValorBarra {...props} color="rgb(var(--color-ink))" />} />
-          </Bar>
+          <Tooltip
+            {...tooltipFinanciero({
+              formatter: (v) => formatQ(v),
+              tituloDe: () => "",
+              nombreDe: (item) => (item.dataKey === "presupuesto" ? "Presupuesto" : "Realizado"),
+              colorDe: (item) => (item.dataKey === "presupuesto" ? COLOR_PRESUPUESTO : COLOR_EJECUTADO),
+            })}
+          />
+          <Bar dataKey="presupuesto" fill={hayPresupuesto ? COLOR_PRESUPUESTO : "transparent"} radius={[4, 4, 0, 0]} isAnimationActive={false} barSize={barSize} />
+          <Bar dataKey="realizado" fill={COLOR_EJECUTADO} radius={[4, 4, 0, 0]} isAnimationActive={false} barSize={barSize} />
         </BarChart>
       </ResponsiveContainer>
       <LeyendaCentrada
@@ -1432,42 +1397,37 @@ function GraficoColumnasContribucion({
   );
 }
 
-// Etiqueta de valor completo (Q535,038) encima de la barra, y "Sin
-// presupuesto" en su lugar cuando esa serie no tiene datos (la barra
-// queda con altura 0 pero el ESPACIO de su categoría se conserva).
-function TextoValorBarra({
-  x,
-  width,
-  y,
-  value,
-  color,
+function GraficoColumnasContribucion({
+  titulo,
+  periodo,
+  presupuesto,
+  realizado,
+  porcentajeEjecucion,
 }: {
-  x?: number | string;
-  width?: number | string;
-  y?: number | string;
-  value?: number | string;
-  color: string;
+  titulo: string;
+  /** Período elegido ("Septiembre 2026"), para el mensaje "Sin datos para ...". */
+  periodo: string;
+  presupuesto: number;
+  realizado: number;
+  porcentajeEjecucion: number | null;
 }) {
-  const xNum = Number(x);
-  const wNum = Number(width);
-  const yNum = Number(y);
-  const vNum = Number(value);
-  if (!Number.isFinite(xNum) || !Number.isFinite(wNum) || !Number.isFinite(yNum) || !Number.isFinite(vNum)) return null;
+  const hayPresupuesto = presupuesto !== 0;
   return (
-    <text x={xNum + wNum / 2} y={yNum - 6} textAnchor="middle" fontSize={14} fontWeight={700} fill={color}>
-      {formatQ(vNum)}
-    </text>
-  );
-}
-
-function TextoSinPresupuesto({ x, width }: { x?: number | string; width?: number | string }) {
-  const xNum = Number(x);
-  const wNum = Number(width);
-  if (!Number.isFinite(xNum) || !Number.isFinite(wNum)) return null;
-  return (
-    <text x={xNum + wNum / 2} y={34} textAnchor="middle" fontSize={12} fontWeight={700} fill="rgb(var(--color-ink-muted))">
-      Sin presupuesto
-    </text>
+    <TarjetaFinanciero
+      titulo={titulo}
+      sinDatos={textoSinDatos([presupuesto, realizado], periodo)}
+      chart={<ContenidoColumnasContribucion presupuesto={presupuesto} realizado={realizado} porcentajeEjecucion={porcentajeEjecucion} />}
+      table={
+        <TablaDatosGrafico
+          columnas={["Serie", "Valor"]}
+          filas={[
+            [hayPresupuesto ? "Presupuesto" : "Presupuesto (sin datos)", hayPresupuesto ? formatQ(presupuesto) : "—"],
+            ["Realizado", formatQ(realizado)],
+            ["% de ejecución", porcentajeEjecucion === null ? "Sin presupuesto" : `${porcentajeEjecucion.toFixed(2)}%`],
+          ]}
+        />
+      }
+    />
   );
 }
 
@@ -1552,6 +1512,7 @@ function PaginaContribucionMillar() {
           <div className="mx-auto" style={{ width: ANCHO_GRAFICA_4, marginTop: GAP_TITULO_PRIMER_ELEMENTO }}>
             <GraficoContribucionLineas
               titulo="Contribución por importaciones (4.5 por millar) (Expresado en miles de quetzales)"
+              periodo={`${MESES_LARGOS[data.mes - 1]} ${data.anio}`}
               datos={data.grafico}
               anioAnterior={data.anio - 1}
               anioActual={data.anio}
@@ -1562,6 +1523,7 @@ function PaginaContribucionMillar() {
             <div style={{ width: ANCHO_COLUMNAS_4, minWidth: 320 }}>
               <GraficoColumnasContribucion
                 titulo={`Ingresos Contribución 4.5 por millar del mes ${MESES_LARGOS[data.mes - 1]} Año ${data.anio}`}
+                periodo={`${MESES_LARGOS[data.mes - 1]} ${data.anio}`}
                 presupuesto={data.tarjeta_mes.presupuesto}
                 realizado={data.tarjeta_mes.realizado}
                 porcentajeEjecucion={data.tarjeta_mes.porcentaje_ejecucion}
@@ -1570,6 +1532,7 @@ function PaginaContribucionMillar() {
             <div style={{ width: ANCHO_COLUMNAS_4, minWidth: 320 }}>
               <GraficoColumnasContribucion
                 titulo={`Ingreso Contribución 4.5 por millar acumulado al ${ultimoDiaDelMes(data.anio, data.mes)} de ${MESES_LARGOS[data.mes - 1]} de ${data.anio}`}
+                periodo={`${MESES_LARGOS[data.mes - 1]} ${data.anio}`}
                 presupuesto={data.tarjeta_acumulada.presupuesto}
                 realizado={data.tarjeta_acumulada.realizado}
                 porcentajeEjecucion={data.tarjeta_acumulada.porcentaje_ejecucion}

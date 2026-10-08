@@ -1,7 +1,10 @@
 import { useEffect, useState } from "react";
+import type { ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Title } from "@tremor/react";
 import { Bar, BarChart, Cell, Legend, LabelList, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { TooltipFinanciero, tooltipFinanciero } from "../../components/charts/TooltipFinanciero";
+import { MensajeSinDatos, TablaDatosGrafico, TarjetaFinanciero, textoSinDatos } from "../../components/VistaGraficoTabla";
 import {
   obtenerConciliacionBancaria,
   obtenerCuotasAsociados,
@@ -347,20 +350,9 @@ function GraficoCuotaVsCancelado({ data }: { data: CuotasAsociadosResponse }) {
             stroke="#FFFFFF"
             tick={{ fill: "#FFFFFF" }}
           />
-          {/* Tooltip calcado EXACTO del patrón aprobado de Estados
-              Financieros (ver TresBarrasResultado.tsx): fondo
-              FINANCIERO_SURFACE (el mismo gris de las tarjetas/celdas,
-              NO rgb(var(--color-bg-surface)) -- esa es la variable
-              general de la app, que resuelve a slate-900/#0F172A en
-              oscuro, un azul marino inventado que nunca se usó en las
-              páginas aprobadas) + labelStyle/itemStyle en color ink. */}
-          <Tooltip
-            cursor={{ fill: "rgb(var(--color-ink-faint) / 0.08)" }}
-            formatter={(v: number) => formatQ(v)}
-            contentStyle={{ background: FINANCIERO_SURFACE, border: "1px solid rgb(var(--color-line))", borderRadius: 8 }}
-            labelStyle={{ color: "rgb(var(--color-ink))" }}
-            itemStyle={{ color: "rgb(var(--color-ink))" }}
-          />
+          {/* El tooltip de esta gráfica vive en la capa de ARRIBA (la de la
+              barrita de Cancelado, más abajo): si estuviera en esta capa,
+              la barrita superpuesta lo taparía al pasar el mouse. */}
           {/* Barra BASE coloreada POR TIPO con 40% de opacidad (60% de
               transparencia, FILL_OPACITY_BARRA_BASE) -- confirmado
               contra Layout.json que ESTA barra (la ancha) es la que
@@ -391,7 +383,7 @@ function GraficoCuotaVsCancelado({ data }: { data: CuotasAsociadosResponse }) {
           </Bar>
         </BarChart>
       </ResponsiveContainer>
-      <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
+      <div style={{ position: "absolute", inset: 0 }}>
         <ResponsiveContainer width="100%" height={ALTO_VISUAL_CUOTAS}>
           <BarChart data={filas} margin={margin}>
             <XAxis dataKey="tipo" height={ALTO_EJE_X} tick={false} axisLine={false} tickLine={false} />
@@ -404,6 +396,27 @@ function GraficoCuotaVsCancelado({ data }: { data: CuotasAsociadosResponse }) {
                 3 grupos -- confirmado contra Layout.json que lo que
                 varía por tipo es la barra ANCHA de abajo, no este
                 overlay angosto. */}
+            {/* Tooltip ÚNICO de la gráfica (cuota + cancelado del tipo): como esta capa
+                está encima de la de abajo y su tooltip es HTML con z-index alto, ninguna
+                barra ni marcador lo tapa. */}
+            <Tooltip
+              {...tooltipFinanciero({ tipo: "barras" })}
+              content={(p: { active?: boolean; payload?: { payload?: { tipo: string; cuota: number; cancelado: number; color: string } }[] }) => {
+                const fila = p.payload?.[0]?.payload;
+                if (!p.active || !fila) return null;
+                return (
+                  <TooltipFinanciero
+                    active
+                    label={`Tipo ${fila.tipo}`}
+                    payload={[
+                      { name: "Cuota del año", value: fila.cuota, color: fila.color },
+                      { name: "Cancelado", value: fila.cancelado, color: COLOR_TEAL },
+                    ]}
+                    formatter={(v) => formatQ(v)}
+                  />
+                );
+              }}
+            />
             <Bar dataKey="cancelado" name="Cancelado" fill={COLOR_TEAL} barSize={8} isAnimationActive={false}>
               <LabelList dataKey="cancelado" position="top" formatter={(v: number) => formatQ(v)} fontSize={9} fontWeight={700} fill="rgb(var(--color-ink))" />
             </Bar>
@@ -503,10 +516,12 @@ function DonutCuotasPorTipo({ data }: { data: CuotasAsociadosResponse }) {
             itemStyle en ink, sin `cursor` (las donas no lo necesitan,
             es un concepto de gráficas cartesianas/de barras). */}
         <Tooltip
-          formatter={(v: number) => formatQ(v)}
-          contentStyle={{ background: FINANCIERO_SURFACE, border: "1px solid rgb(var(--color-line))", borderRadius: 8 }}
-          labelStyle={{ color: "rgb(var(--color-ink))" }}
-          itemStyle={{ color: "rgb(var(--color-ink))" }}
+          {...tooltipFinanciero({
+            tipo: "dona",
+            formatter: (v) => formatQ(v),
+            tituloDe: () => "",
+            colorDe: (item) => item.payload?.color as string | undefined,
+          })}
         />
       </PieChart>
     </ResponsiveContainer>
@@ -543,10 +558,12 @@ function DonutRecuperacion({ data }: { data: CuotasAsociadosResponse }) {
           formatter={(value: string) => <span style={{ color: "rgb(var(--color-ink))" }}>{value}</span>}
         />
         <Tooltip
-          formatter={(v: number) => formatQ(v)}
-          contentStyle={{ background: FINANCIERO_SURFACE, border: "1px solid rgb(var(--color-line))", borderRadius: 8 }}
-          labelStyle={{ color: "rgb(var(--color-ink))" }}
-          itemStyle={{ color: "rgb(var(--color-ink))" }}
+          {...tooltipFinanciero({
+            tipo: "dona",
+            formatter: (v) => formatQ(v),
+            tituloDe: () => "",
+            colorDe: (item) => item.payload?.color as string | undefined,
+          })}
         />
       </PieChart>
     </ResponsiveContainer>
@@ -579,6 +596,13 @@ export function DashboardOtrosInformesPage() {
   }
 
   return <PaginaCuotasAsociados />;
+}
+
+// Si el período elegido no tiene cuotas (todo en cero), en vez de ejes/dona vacíos se muestra
+// "Sin datos para <período>". Solo cambia la gráfica; la tabla de cada ChartCard queda igual.
+function cuotasOSinDatos(valores: ReadonlyArray<number | null | undefined>, periodo: string, grafico: ReactNode): ReactNode {
+  const texto = textoSinDatos(valores, periodo);
+  return texto ? <MensajeSinDatos texto={texto} /> : grafico;
 }
 
 function PaginaCuotasAsociados() {
@@ -732,7 +756,7 @@ function PaginaCuotasAsociados() {
               tituloChico
               estiloTarjeta={{ backgroundColor: FINANCIERO_SURFACE }}
               title="Cuota del año vs Cancelado"
-              chart={<GraficoCuotaVsCancelado data={data} />}
+              chart={cuotasOSinDatos(data.tipos.flatMap((t) => [t.total_cuota, t.total_cancelado]), `${MESES_LARGOS[data.mes - 1]} ${data.anio}`, <GraficoCuotaVsCancelado data={data} />)}
               table={
                 <table className="w-full text-xs">
                   <thead>
@@ -760,7 +784,7 @@ function PaginaCuotasAsociados() {
               tituloChico
               estiloTarjeta={{ backgroundColor: FINANCIERO_SURFACE }}
               title="Cuotas por Tipo"
-              chart={<DonutCuotasPorTipo data={data} />}
+              chart={cuotasOSinDatos(data.tipos.flatMap((t) => [t.total_cuota, t.total_cancelado]), `${MESES_LARGOS[data.mes - 1]} ${data.anio}`, <DonutCuotasPorTipo data={data} />)}
               table={
                 <table className="w-full text-xs">
                   <tbody>
@@ -780,7 +804,7 @@ function PaginaCuotasAsociados() {
               tituloChico
               estiloTarjeta={{ backgroundColor: FINANCIERO_SURFACE }}
               title={`Recuperación Cuota Asociados Año ${data.anio}`}
-              chart={<DonutRecuperacion data={data} />}
+              chart={cuotasOSinDatos([data.kpis.cancelado, data.kpis.por_cobrar], `${MESES_LARGOS[data.mes - 1]} ${data.anio}`, <DonutRecuperacion data={data} />)}
               table={
                 <table className="w-full text-xs">
                   <tbody>
@@ -1187,11 +1211,11 @@ export function GraficoColumnasGrupoEjecucion({
           width={Math.max(60, 12 + Math.max(...escalaTicks.map((v) => formatQ(v).length)) * 6)}
         />
         <Tooltip
-          cursor={{ fill: "rgb(var(--color-ink-faint) / 0.08)" }}
-          formatter={(v: number) => formatQ(v)}
-          contentStyle={{ background: FINANCIERO_SURFACE, border: "1px solid rgb(var(--color-line))", borderRadius: 8 }}
-          labelStyle={{ color: "rgb(var(--color-ink))" }}
-          itemStyle={{ color: "rgb(var(--color-ink))" }}
+          {...tooltipFinanciero({
+            formatter: (v) => formatQ(v),
+            tituloDe: () => "",
+            nombreDe: (item) => (item.dataKey === "presupuesto" ? "Presupuesto" : "Ejecutado"),
+          })}
         />
         {/* formatter fuerza el MISMO color de texto en las 2 entradas --
             sin esto, Recharts pinta "Presupuesto" con un gris apagado
@@ -1229,6 +1253,42 @@ export function GraficoColumnasGrupoEjecucion({
         </Bar>
       </BarChart>
     </ResponsiveContainer>
+  );
+}
+
+// Tarjeta de una de las 3 gráficas (Administración/Operación/Consolidado): ChartCard del
+// Financiero, igual que Estado y Balance. Sin título (el reporte original no lo lleva; el
+// grupo va en los chips de arriba).
+function TarjetaGraficoEjecucion({
+  tarjeta,
+  escala,
+  periodo,
+}: {
+  tarjeta: TarjetaResumenGasto;
+  escala: { min: number; max: number; ticks: number[] };
+  /** Período elegido ("Septiembre 2026"), para el mensaje "Sin datos para ...". */
+  periodo: string;
+}) {
+  return (
+    <TarjetaFinanciero
+      titulo=""
+      sinDatos={textoSinDatos([tarjeta.presupuesto, tarjeta.ejecutado], periodo)}
+      chart={
+        <GraficoColumnasGrupoEjecucion
+          presupuesto={tarjeta.presupuesto}
+          ejecutado={tarjeta.ejecutado}
+          escalaMin={escala.min}
+          escalaMax={escala.max}
+          escalaTicks={escala.ticks}
+        />
+      }
+      table={
+        <TablaDatosGrafico
+          columnas={["Grupo", "Presupuesto", "Ejecutado"]}
+          filas={[[tarjeta.grupo, formatQ(tarjeta.presupuesto), formatQ(tarjeta.ejecutado)]]}
+        />
+      }
+    />
   );
 }
 
@@ -1400,15 +1460,7 @@ function PaginaEjecucionGastos({ acumulado }: { acumulado: boolean }) {
             {data.tarjetas.map((t) => (
               <div key={t.grupo}>
                 <ChipsResumenGrupo tarjeta={t} />
-                <div className="overflow-hidden rounded-tremor-default ring-1 ring-line" style={{ backgroundColor: FINANCIERO_SURFACE }}>
-                  <GraficoColumnasGrupoEjecucion
-                    presupuesto={t.presupuesto}
-                    ejecutado={t.ejecutado}
-                    escalaMin={escalaEjeY.min}
-                    escalaMax={escalaEjeY.max}
-                    escalaTicks={escalaEjeY.ticks}
-                  />
-                </div>
+                <TarjetaGraficoEjecucion tarjeta={t} escala={escalaEjeY} periodo={`${MESES_LARGOS[data.mes - 1]} ${data.anio}`} />
               </div>
             ))}
           </div>
@@ -1660,11 +1712,11 @@ function GraficoFlujoCaja({ barras }: { barras: { etiqueta: string; valor: numbe
           width={anchoEjeY}
         />
         <Tooltip
-          cursor={{ fill: "rgb(var(--color-ink-faint) / 0.08)" }}
-          formatter={(v: number) => formatQ(v)}
-          contentStyle={{ background: FINANCIERO_SURFACE, border: "1px solid rgb(var(--color-line))", borderRadius: 8 }}
-          labelStyle={{ color: "rgb(var(--color-ink))" }}
-          itemStyle={{ color: "rgb(var(--color-ink))" }}
+          {...tooltipFinanciero({
+            formatter: (v) => formatQ(v),
+            nombreDe: () => "",
+            colorDe: (item) => item.payload?.color as string | undefined,
+          })}
         />
         <Bar dataKey="valor" radius={[4, 4, 0, 0]} isAnimationActive={false} maxBarSize={140}>
           {barras.map((b) => (
@@ -1682,6 +1734,26 @@ function GraficoFlujoCaja({ barras }: { barras: { etiqueta: string; valor: numbe
         </Bar>
       </BarChart>
     </ResponsiveContainer>
+  );
+}
+
+function TarjetaGraficoFlujoCaja({
+  fechaTitulo,
+  periodo,
+  barras,
+}: {
+  fechaTitulo: string;
+  /** Período elegido ("Septiembre 2026"), para el mensaje "Sin datos para ...". */
+  periodo: string;
+  barras: { etiqueta: string; valor: number; color: string }[];
+}) {
+  return (
+    <TarjetaFinanciero
+      titulo={`Disponibilidad Al ${fechaTitulo}`}
+      sinDatos={textoSinDatos(barras.map((b) => b.valor), periodo)}
+      chart={<GraficoFlujoCaja barras={barras} />}
+      table={<TablaDatosGrafico columnas={["Concepto", "Valor"]} filas={barras.map((b) => [b.etiqueta, formatQ(b.valor)])} />}
+    />
   );
 }
 
@@ -1800,16 +1872,7 @@ function PaginaFlujoCaja() {
                 centrado, negrita, 16px) -- calcado del .pbix real, donde
                 el título es parte del propio visual; antes vivía afuera,
                 arriba de la tarjeta. */}
-            <div className="overflow-hidden rounded-tremor-default pt-2 ring-1 ring-line" style={{ backgroundColor: FINANCIERO_SURFACE }}>
-              {/* El padding-top va en la TARJETA, no en el <p>: el
-                  padding de un elemento no mueve su propio borde
-                  superior, así que ponerlo en el <p> no separaba (según
-                  getBoundingClientRect) el borde del título del borde
-                  de la tarjeta, aunque el texto se viera visualmente
-                  separado. */}
-              <p className="text-center text-base font-bold text-ink">Disponibilidad Al {fechaTitulo}</p>
-              <GraficoFlujoCaja barras={data.grafica} />
-            </div>
+            <TarjetaGraficoFlujoCaja fechaTitulo={fechaTitulo} periodo={`${MESES_LARGOS[data.mes - 1]} ${data.anio}`} barras={data.grafica} />
           </div>
         </>
       )}

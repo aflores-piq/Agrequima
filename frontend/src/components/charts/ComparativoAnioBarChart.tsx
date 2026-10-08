@@ -9,9 +9,9 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { tooltipFinanciero } from "./TooltipFinanciero";
 import { DOMINIO_AUTO_SIN_RECORTAR_NEGATIVOS } from "../../utils/escalaEje";
 import { formatQ } from "../../utils/format";
-import { FINANCIERO_SURFACE } from "../TablaGrupoExpandible";
 
 // Colores reales leídos de las capturas del reporte viejo (no los 3
 // colores por categoría que se habían pedido en texto -- un gráfico de
@@ -57,13 +57,7 @@ export function ComparativoAnioBarChart({
           tickLine={false}
           width={95}
         />
-        <Tooltip
-          cursor={{ fill: "rgb(var(--color-ink-faint) / 0.08)" }}
-          contentStyle={{ background: FINANCIERO_SURFACE, border: "1px solid rgb(var(--color-line))", borderRadius: 8 }}
-          labelStyle={{ color: "rgb(var(--color-ink))" }}
-          itemStyle={{ color: "rgb(var(--color-ink))" }}
-          formatter={(value: number) => formatQ(value)}
-        />
+        <Tooltip {...tooltipFinanciero({ formatter: (value) => formatQ(value) })} />
         <Legend wrapperStyle={{ fontSize: 12, color: "rgb(var(--color-ink))" }} />
         <Bar dataKey={etiquetaAnioAnterior} name={etiquetaAnioAnterior} fill={COLOR_ANIO_ANTERIOR} radius={[3, 3, 0, 0]}>
           <LabelList dataKey={etiquetaAnioAnterior} position="top" formatter={(v: number) => formatQ(v)} fill="rgb(var(--color-ink))" fontSize={13} fontWeight={600} />
