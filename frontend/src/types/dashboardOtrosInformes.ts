@@ -120,11 +120,30 @@ export interface BancoConciliacion {
   filas: FilaConciliacionBanco[];
 }
 
+export interface InversionConciliacion {
+  banco: string;
+  color: string;
+  descripcion: string;
+  valor: number;
+}
+
+export interface FilaResumenBanco {
+  banco: string;
+  color: string;
+  total_banco: number | null;
+  total_contabilidad: number | null;
+}
+
 export interface ConciliacionBancariaResponse {
   anio: number;
   mes: number;
   periodos_disponibles: PeriodoDisponibleGastos[];
   bancos: BancoConciliacion[];
+  inversiones: InversionConciliacion[];
+  total_inversiones: number;
+  resumen_bancos: FilaResumenBanco[];
+  total_resumen_banco: number | null;
+  total_resumen_contabilidad: number | null;
 }
 
 // --- Flujo de caja ---------------------------------------------------------
@@ -154,10 +173,32 @@ export interface BarraFlujoCaja {
   color: string;
 }
 
+export interface ItemResumenFlujo {
+  nombre: string;
+  valor: number;
+}
+
+export interface InversionResumenFlujo {
+  banco: string;
+  descripcion: string;
+  valor: number;
+}
+
+// Resumen expandible: caja, bancos (detalle por banco), inversiones (detalle por inversión), total.
+export interface ResumenFlujoCaja {
+  caja: number;
+  bancos_total: number;
+  bancos: ItemResumenFlujo[];
+  inversiones_total: number;
+  inversiones: InversionResumenFlujo[];
+  total: number;
+}
+
 export interface FlujoCajaResponse {
   anio: number;
   mes: number;
   periodos_disponibles: PeriodoDisponibleGastos[];
   filas: FilaFlujoCaja[];
   grafica: BarraFlujoCaja[];
+  resumen: ResumenFlujoCaja | null;
 }

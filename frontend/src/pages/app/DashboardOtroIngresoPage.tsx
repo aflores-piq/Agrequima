@@ -381,13 +381,13 @@ function TablaOtrosIngresos({
           <tr>
             <th className="px-2 py-2" style={claseBordeHeader} />
             {filas.map((f) => (
-              <th key={f.concepto} className="px-1 py-2 text-center text-xs font-bold leading-tight text-ink" style={claseBordeHeader} title={f.concepto}>
+              <th key={f.concepto} className="px-1 py-2 text-center text-[13px] font-bold leading-tight text-ink" style={claseBordeHeader} title={f.concepto}>
                 {encabezadoConcepto(f.concepto).map((linea, i) => (
                   <div key={i}>{linea}</div>
                 ))}
               </th>
             ))}
-            <th className="px-2 py-2 text-center text-xs font-bold text-ink" style={claseBordeHeader}>
+            <th className="px-2 py-2 text-center text-[13px] font-bold text-ink" style={claseBordeHeader}>
               Total
             </th>
           </tr>
@@ -475,13 +475,13 @@ function TablaResumenIngresos({ resumen }: { resumen: ResumenIngresos }) {
       <table className="w-full text-sm" style={{ borderCollapse: "collapse" }}>
         <thead>
           <tr>
-            <th className="px-3 py-2 text-left text-xs font-bold text-ink" style={bordeHeader}>
+            <th className="px-3 py-2 text-left text-sm font-bold text-ink" style={bordeHeader}>
               Total ingresos acumulado a {MESES_LARGOS[resumen.mes_corte - 1]} {resumen.anio}
             </th>
-            <th className="px-3 py-2 text-right text-xs font-bold text-ink" style={bordeHeader}>
+            <th className="px-3 py-2 text-right text-sm font-bold text-ink" style={bordeHeader}>
               Monto
             </th>
-            <th className="px-3 py-2 text-right text-xs font-bold text-ink" style={bordeHeader}>
+            <th className="px-3 py-2 text-right text-sm font-bold text-ink" style={bordeHeader}>
               % del total
             </th>
           </tr>

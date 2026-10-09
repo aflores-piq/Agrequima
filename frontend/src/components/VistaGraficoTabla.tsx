@@ -95,7 +95,7 @@ export function TablaDatosGrafico({
           <thead>
             <tr className="border-b border-line">
               {columnas.map((c, i) => (
-                <th key={c + i} className={`px-2 py-1.5 font-normal text-ink-muted ${alinear(i) === "right" ? "text-right" : "text-left"}`}>
+                <th key={c + i} className={`px-2 py-1.5 font-bold text-ink-muted ${alinear(i) === "right" ? "text-right" : "text-left"}`}>
                   {c}
                 </th>
               ))}

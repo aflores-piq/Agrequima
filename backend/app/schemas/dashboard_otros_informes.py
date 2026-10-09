@@ -153,11 +153,34 @@ class BancoConciliacion(BaseModel):
     filas: list[FilaConciliacionBanco]
 
 
+class InversionConciliacion(BaseModel):
+    """Una cuenta de inversión (cod_n5 110103...), SIN sumar con otras del mismo banco."""
+
+    banco: str  # nombre del banco como en CatalogoBancos (o el texto de la cuenta si no está)
+    color: str
+    descripcion: str  # nombre de la cuenta
+    valor: float  # saldo al cierre del mes elegido (mismo cálculo que Flujo de caja)
+
+
+class FilaResumenBanco(BaseModel):
+    banco: str
+    color: str
+    total_banco: float | None  # Saldo Banco (cuenta monetaria) + sus inversiones
+    total_contabilidad: float | None  # Saldo Contabilidad + sus inversiones
+
+
 class ConciliacionBancariaResponse(BaseModel):
     anio: int
     mes: int
     periodos_disponibles: list[PeriodoDisponibleGastos]
     bancos: list[BancoConciliacion]
+    # Sección "Inversiones": una fila por cada inversión.
+    inversiones: list[InversionConciliacion] = []
+    total_inversiones: float = 0.0
+    # Sección "Resumen por banco": una fila por banco y la fila de total general.
+    resumen_bancos: list[FilaResumenBanco] = []
+    total_resumen_banco: float | None = None
+    total_resumen_contabilidad: float | None = None
 
 
 # --- Flujo de caja ---------------------------------------------------------
@@ -176,9 +199,35 @@ class BarraFlujoCaja(BaseModel):
     color: str
 
 
+class ItemResumenFlujo(BaseModel):
+    nombre: str
+    valor: float
+
+
+class InversionResumenFlujo(BaseModel):
+    banco: str
+    descripcion: str
+    valor: float
+
+
+class ResumenFlujoCaja(BaseModel):
+    """Resumen expandible: caja y caja chica, bancos (con el detalle de cada banco),
+    inversiones (con el detalle de cada inversión) y total. `total` es el mismo valor de la
+    barra "Total disponibilidad" de la gráfica; caja + bancos = barra "Monetarios, Ahorro";
+    inversiones = barra "Inversiones"."""
+
+    caja: float
+    bancos_total: float
+    bancos: list[ItemResumenFlujo]
+    inversiones_total: float
+    inversiones: list[InversionResumenFlujo]
+    total: float
+
+
 class FlujoCajaResponse(BaseModel):
     anio: int
     mes: int
     periodos_disponibles: list[PeriodoDisponibleGastos]
     filas: list[FilaFlujoCaja]
     grafica: list[BarraFlujoCaja]
+    resumen: ResumenFlujoCaja | None = None

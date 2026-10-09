@@ -30,6 +30,7 @@ import { calcularEscalaEje } from "../../utils/escalaEje";
 import { formatPercent, formatQ, formatQ2, MESES_LARGOS, pctSeguro } from "../../utils/format";
 import { lineasTituloFlujoCaja, tituloCuotaAsociados, ultimoDiaDelMes } from "../../utils/titulosFinanciero";
 import type {
+  ResumenFlujoCaja,
   BancoConciliacion,
   ConciliacionBancariaResponse,
   CuotasAsociadosResponse,
@@ -217,28 +218,28 @@ function TablaCuotasTipo({ tipo }: { tipo: TipoCuotaAsociados }) {
                 queda SIEMPRE fija al final, fuera del orden. */}
             <tr style={{ backgroundColor: VERDE_ENCABEZADO }}>
               <EncabezadoOrdenable
-                className="truncate px-2 py-1 text-left font-semibold text-white"
+                className="truncate px-2 py-1 text-left font-bold text-white"
                 flecha={flechaColumna("nombre")}
                 onClick={() => alClickEncabezado("nombre")}
               >
                 Nombre
               </EncabezadoOrdenable>
               <EncabezadoOrdenable
-                className="px-2 py-1 text-right font-semibold text-white"
+                className="px-2 py-1 text-right font-bold text-white"
                 flecha={flechaColumna("cuota")}
                 onClick={() => alClickEncabezado("cuota")}
               >
                 Cuota
               </EncabezadoOrdenable>
               <EncabezadoOrdenable
-                className="px-2 py-1 text-right font-semibold text-white"
+                className="px-2 py-1 text-right font-bold text-white"
                 flecha={flechaColumna("cancelado")}
                 onClick={() => alClickEncabezado("cancelado")}
               >
                 Cancelado
               </EncabezadoOrdenable>
               <EncabezadoOrdenable
-                className="px-2 py-1 text-right font-semibold text-white"
+                className="px-2 py-1 text-right font-bold text-white"
                 flecha={flechaColumna("saldo")}
                 onClick={() => alClickEncabezado("saldo")}
               >
@@ -761,9 +762,9 @@ function PaginaCuotasAsociados() {
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="border-b border-line">
-                      <th className="px-2 py-1 text-left text-ink-muted">Tipo</th>
-                      <th className="px-2 py-1 text-right text-ink-muted">Cuota del año</th>
-                      <th className="px-2 py-1 text-right text-ink-muted">Cancelado</th>
+                      <th className="px-2 py-1 text-left font-bold text-ink-muted">Tipo</th>
+                      <th className="px-2 py-1 text-right font-bold text-ink-muted">Cuota del año</th>
+                      <th className="px-2 py-1 text-right font-bold text-ink-muted">Cancelado</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -959,7 +960,6 @@ function FilaRelacionPorcentual({
 }
 
 function TablaEjecucionGastos({ data, variante }: { data: EjecucionGastosResponse; variante: "mensual" | "acumulado" }) {
-  const esAcumulado = variante === "acumulado";
   const { filas, alClickEncabezado, flechaColumna } = useTablaOrdenable(data.categorias, COLUMNAS_ORDENABLES_GASTOS);
   // pivotTable real: values/columnHeaders/rowHeaders.fontSize=14D en las
   // 2 páginas -- antes esta tabla usaba 11px (un valor propio de una
@@ -969,12 +969,9 @@ function TablaEjecucionGastos({ data, variante }: { data: EjecucionGastosRespons
   // columnHeaders real: alignment='Center' en las 2 páginas -- decisión
   // propia de esta ronda (no del .pbix): encabezado alineado con su
   // columna (texto a la izquierda, números a la derecha), como en el
-  // resto del módulo, en vez del centrado real. bold: la página mensual
-  // lo desactiva explícitamente (bold=false); la página acumulado NO
-  // trae esa propiedad, así que queda con el bold por default del widget
-  // pivotTable de Power BI -- son 2 configs distintas, confirmado
-  // comparando ambos pivotTable.config (esto sí se conserva).
-  const negritaHeader = esAcumulado ? "font-semibold" : "font-normal";
+  // resto del módulo, en vez del centrado real. Negrita en ambas variantes
+  // (pedido del jefe: los encabezados de todas las tablas de Financiero van en negrita).
+  const negritaHeader = "font-bold";
   const claseHeaderTexto = `px-2 py-1.5 text-left text-white ${negritaHeader}`;
   const claseHeaderNumero = `px-2 py-1.5 text-right text-white ${negritaHeader}`;
   return (
@@ -1561,6 +1558,41 @@ function FilaConciliacion({ descripcion, saldoBanco, saldoContabilidad, negrita 
   );
 }
 
+// Encabezado verde de las 3 secciones: las MISMAS 3 columnas (y paddings) que las filas de los bloques de banco,
+// así todos los montos de la pantalla quedan en la misma vertical.
+function EncabezadoConciliacion({
+  primera,
+  segunda = "Saldo Banco",
+  tercera = "Saldo Contabilidad",
+}: {
+  primera: string;
+  segunda?: string;
+  tercera?: string;
+}) {
+  return (
+    <div
+      className="grid items-center px-3 py-1.5 text-sm font-bold text-white"
+      style={{ backgroundColor: VERDE_ENCABEZADO, gridTemplateColumns: ANCHOS_COLUMNA_CONCILIACION, borderLeft: "5px solid transparent" }}
+    >
+      <div>{primera}</div>
+      <div className="pr-3 text-right">{segunda}</div>
+      <div className="text-right">{tercera}</div>
+    </div>
+  );
+}
+
+// "BAC - FONDO DE INVERSIÓN" -> "Fondo de inversión": sin repetir el banco, que ya va delante.
+function descripcionInversion(descripcion: string): string {
+  const resto = descripcion.includes(" - ") ? descripcion.split(" - ").slice(1).join(" - ") : descripcion;
+  const texto = resto.trim().toLowerCase();
+  return texto.charAt(0).toUpperCase() + texto.slice(1);
+}
+
+// Encabezado de cada sección de la Conciliación (centrado, igual que los demás títulos de bloque).
+function TituloSeccionConciliacion({ texto }: { texto: string }) {
+  return <p className="pb-2 pt-4 text-center text-base font-bold text-ink">{texto}</p>;
+}
+
 function BloqueBanco({ banco }: { banco: BancoConciliacion }) {
   return (
     // Borde izquierdo de 5px del color del banco en toda la tarjeta; el
@@ -1658,18 +1690,48 @@ function PaginaConciliacionBancaria() {
           className="mx-auto overflow-hidden rounded-tremor-default"
           style={{ width: "54.3%", marginTop: GAP_TITULO_PRIMER_ELEMENTO }}
         >
-          <div
-            className="grid items-center px-3 py-1.5 text-sm font-semibold text-white"
-            style={{ backgroundColor: VERDE_ENCABEZADO, gridTemplateColumns: ANCHOS_COLUMNA_CONCILIACION }}
-          >
-            <div>Banco</div>
-            <div className="pr-3 text-right">Saldo Banco</div>
-            <div className="text-right">Saldo Contabilidad</div>
-          </div>
+          <TituloSeccionConciliacion texto="Cuentas monetarias" />
+          <EncabezadoConciliacion primera="Banco" />
           <div className="pt-2">
             {data.bancos.map((banco) => (
               <BloqueBanco key={banco.nombre} banco={banco} />
             ))}
+          </div>
+
+          <TituloSeccionConciliacion texto="Inversiones" />
+          <EncabezadoConciliacion primera="Banco – Descripción" />
+          <div className="mt-2 overflow-hidden rounded" style={{ backgroundColor: FINANCIERO_SURFACE }}>
+            {data.inversiones.map((inv, i) => (
+              <div key={`${inv.banco}-${inv.descripcion}-${i}`} style={{ borderLeft: `5px solid ${colorBordeBanco(inv.color)}` }}>
+                <FilaConciliacion
+                  descripcion={`${inv.banco} – ${descripcionInversion(inv.descripcion)}`}
+                  saldoBanco={inv.valor}
+                  saldoContabilidad={inv.valor}
+                  negrita={false}
+                />
+              </div>
+            ))}
+            <div className="border-t border-line" style={{ borderLeft: "5px solid transparent" }}>
+              <FilaConciliacion descripcion="Total inversiones" saldoBanco={data.total_inversiones} saldoContabilidad={data.total_inversiones} negrita />
+            </div>
+          </div>
+
+          <TituloSeccionConciliacion texto="Resumen por banco" />
+          <EncabezadoConciliacion primera="Banco" segunda="Total banco" tercera="Total contabilidad" />
+          <div className="mt-2 overflow-hidden rounded" style={{ backgroundColor: FINANCIERO_SURFACE }}>
+            {data.resumen_bancos.map((fila) => (
+              <div key={fila.banco} style={{ borderLeft: `5px solid ${colorBordeBanco(fila.color)}` }}>
+                <FilaConciliacion descripcion={fila.banco} saldoBanco={fila.total_banco} saldoContabilidad={fila.total_contabilidad} negrita={false} />
+              </div>
+            ))}
+            <div className="border-t border-line" style={{ borderLeft: "5px solid transparent" }}>
+              <FilaConciliacion
+                descripcion="Total"
+                saldoBanco={data.total_resumen_banco}
+                saldoContabilidad={data.total_resumen_contabilidad}
+                negrita
+              />
+            </div>
           </div>
         </div>
       )}
@@ -1687,54 +1749,114 @@ function PaginaConciliacionBancaria() {
 // como en Ejecución Gastos): Monetarios/Ahorro, Inversiones, Total
 // disponibilidad -- colores COLOR_TURQUESA/COLOR_GRIS_AZULADO/COLOR_TEAL
 // (ya definidos arriba, reusados tal cual en vez de inventar hex nuevos).
-// Posiciones de columna calcadas del spec Deneb real: el detalle
-// (xDetalle) arranca en el 30% del ancho de la tabla -- ya calcado vía
-// el padding-left de la sangría en FilaFlujoCajaVista. "Saldos" termina
-// (alineado a la derecha) en el 72%, "Disponibilidad" en el 94% (NO en
-// el borde -- queda un margen real del 6% a la derecha en el visual
-// real, no un padding inventado) -- 48%+24%=72%, 72%+22%=94%, +6% de
-// columna vacía al final para llegar a 100%.
-const ANCHOS_COLUMNA_FLUJO = "48% 24% 22% 6%";
+// Tabla única y desplegable: UNA columna de texto (izquierda, misma sangría en todas las filas principales) y UNA
+// columna de montos a la derecha (la misma vertical para filas principales y desplegadas).
 const ANCHO_FLUJO_CAJA = "61.8%";
-const _TIPOS_TITULO_FLUJO = new Set(["TITULO_BANCOS", "TITULO_CHEQUES"]);
-const _TIPOS_NEGRITA_FLUJO = new Set([
-  "TOTAL_BANCOS",
-  "TOTAL_CHEQUES",
-  "DISPONIBILIDAD",
-  "INVERSION",
-  "TOTAL_FINAL",
-]);
-const _TIPOS_LINEA_FLUJO = new Set(["TOTAL_BANCOS", "TOTAL_CHEQUES"]);
-// CAJA/BANCO/CHEQUE son el detalle con sangría (xDetalle del spec Deneb
-// real, ≈30% del ancho total de la fila); los títulos de sección y las
-// filas de total van al margen izquierdo, sin sangría.
-const _TIPOS_DETALLE_FLUJO = new Set(["CAJA", "BANCO", "CHEQUE"]);
+const COLUMNAS_FLUJO = "1fr 170px";
 
-function FilaFlujoCajaVista({ fila, fechaTitulo }: { fila: FilaFlujoCaja; fechaTitulo: string }) {
-  if (_TIPOS_TITULO_FLUJO.has(fila.tipo)) {
-    return <div className="px-3 pb-1 pt-3 text-sm font-semibold text-ink">{fila.descripcion}</div>;
-  }
-  const esFinal = fila.tipo === "TOTAL_FINAL";
-  const descripcion = esFinal ? `${fila.descripcion} Al ${fechaTitulo}` : fila.descripcion;
+// Botón ⊞ / ⊟ de las filas desplegables (el mismo de las tablas expandibles del Financiero).
+function BotonDesplegarFlujo({ abierto, etiqueta, onClick }: { abierto: boolean; etiqueta: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="mr-1.5 inline-flex h-4 w-4 items-center justify-center text-xs text-ink-muted"
+      aria-expanded={abierto}
+      aria-label={`${abierto ? "Contraer" : "Expandir"} ${etiqueta}`}
+    >
+      {abierto ? "⊟" : "⊞"}
+    </button>
+  );
+}
+
+function FilaFlujo({
+  etiqueta,
+  monto,
+  negrita = false,
+  desplegable,
+  detalle = false,
+  fondoVerde = false,
+}: {
+  etiqueta: string;
+  monto: number;
+  negrita?: boolean;
+  /** Fila principal con ⊞; las demás filas principales llevan un espacio del mismo ancho para quedar alineadas. */
+  desplegable?: { abierto: boolean; onAlternar: () => void };
+  /** Fila que sale al desplegar: sangría pequeña a la izquierda, mismo monto en la misma columna. */
+  detalle?: boolean;
+  fondoVerde?: boolean;
+}) {
   return (
     <div
-      className={`grid items-center px-3 py-1 text-sm ${_TIPOS_NEGRITA_FLUJO.has(fila.tipo) ? "font-bold" : ""} ${
-        _TIPOS_LINEA_FLUJO.has(fila.tipo) ? "border-b border-line" : ""
-      }`}
+      className={`grid items-center px-3 py-1 text-sm ${negrita ? "font-bold" : ""}`}
       style={{
-        gridTemplateColumns: ANCHOS_COLUMNA_FLUJO,
-        backgroundColor: esFinal ? VERDE_ENCABEZADO : undefined,
-        color: esFinal ? "#fff" : "rgb(var(--color-ink))",
+        gridTemplateColumns: COLUMNAS_FLUJO,
+        backgroundColor: fondoVerde ? VERDE_ENCABEZADO : undefined,
+        color: fondoVerde ? "#fff" : "rgb(var(--color-ink))",
       }}
     >
-      {/* paddingLeft en % es relativo al ancho de ESTA celda (48% de la
-          fila) -- 62.5% de 48% ≈ 30% del ancho total de la fila, calcado
-          de xDetalle = width*0.30 del spec Deneb real. */}
-      <div style={_TIPOS_DETALLE_FLUJO.has(fila.tipo) ? { paddingLeft: "62.5%" } : undefined}>{descripcion}</div>
-      <div className="pr-3 text-right">{fila.saldos === null ? "" : formatQ(fila.saldos)}</div>
-      <div className="text-right">{fila.disponibilidad === null ? "" : formatQ(fila.disponibilidad)}</div>
-      <div />
+      <div style={detalle ? { paddingLeft: 38 } : undefined}>
+        {!detalle &&
+          (desplegable ? (
+            <BotonDesplegarFlujo abierto={desplegable.abierto} etiqueta={etiqueta} onClick={desplegable.onAlternar} />
+          ) : (
+            <span aria-hidden="true" className="mr-1.5 inline-block h-4 w-4" />
+          ))}
+        {etiqueta}
+      </div>
+      <div className="text-right">{formatQ(monto)}</div>
     </div>
+  );
+}
+
+// La tabla de Flujo de caja, desplegable y arrancando colapsada: Caja y caja chica, Bancos ⊞ (cada banco),
+// Cheques en circulación ⊞ (cada banco), Disponibilidad, Inversiones ⊞ (CADA inversión por separado, con su
+// banco) y Total disponibilidad. Los montos son los de siempre (los de la gráfica de abajo).
+function TablaFlujoCajaDesplegable({ filas, resumen }: { filas: FilaFlujoCaja[]; resumen: ResumenFlujoCaja | null }) {
+  const [abiertos, setAbiertos] = useState<Set<string>>(new Set());
+  const alternar = (clave: string) =>
+    setAbiertos((previo) => {
+      const siguiente = new Set(previo);
+      if (siguiente.has(clave)) siguiente.delete(clave);
+      else siguiente.add(clave);
+      return siguiente;
+    });
+  const grupo = (clave: string) => ({ abierto: abiertos.has(clave), onAlternar: () => alternar(clave) });
+  const de = (tipo: string) => filas.filter((f) => f.tipo === tipo);
+  const valor = (f: FilaFlujoCaja | undefined) => f?.saldos ?? f?.disponibilidad ?? 0;
+  const bancos = de("BANCO");
+  const cheques = de("CHEQUE");
+  const inversionesFilas = de("INVERSION");
+  const inversiones =
+    resumen && resumen.inversiones.length === inversionesFilas.length
+      ? resumen.inversiones.map((i) => ({ etiqueta: `${i.banco} – ${i.descripcion}`, valor: i.valor }))
+      : inversionesFilas.map((f) => ({ etiqueta: f.descripcion, valor: f.disponibilidad ?? 0 }));
+  const suma = (lista: { valor: number }[]) => lista.reduce((t, x) => t + x.valor, 0);
+  const bancosDetalle = bancos.map((f) => ({ etiqueta: f.descripcion, valor: f.saldos ?? 0 }));
+  const chequesDetalle = cheques.map((f) => ({ etiqueta: f.descripcion, valor: f.saldos ?? 0 }));
+  const totalFinal = de("TOTAL_FINAL")[0];
+  return (
+    <>
+      <div
+        className="grid items-center px-3 py-1.5 text-sm font-bold text-ink"
+        style={{ gridTemplateColumns: COLUMNAS_FLUJO, borderBottom: "1px solid rgb(var(--color-line))" }}
+      >
+        <div>Concepto</div>
+        <div className="text-right">Monto</div>
+      </div>
+      <FilaFlujo etiqueta="Caja y caja chica" monto={valor(de("CAJA")[0])} />
+      <FilaFlujo etiqueta="Bancos" monto={suma(bancosDetalle)} desplegable={grupo("bancos")} />
+      {abiertos.has("bancos") && bancosDetalle.map((d) => <FilaFlujo key={d.etiqueta} etiqueta={d.etiqueta} monto={d.valor} detalle />)}
+      <FilaFlujo etiqueta="(−) Cheques en circulación" monto={suma(chequesDetalle)} desplegable={grupo("cheques")} />
+      {abiertos.has("cheques") && chequesDetalle.map((d) => <FilaFlujo key={d.etiqueta} etiqueta={d.etiqueta} monto={d.valor} detalle />)}
+      <div className="border-t border-line">
+        <FilaFlujo etiqueta="Disponibilidad en depósitos monetarios y caja" monto={de("DISPONIBILIDAD")[0]?.disponibilidad ?? 0} negrita />
+      </div>
+      <FilaFlujo etiqueta="Inversiones" monto={suma(inversiones)} desplegable={grupo("inversiones")} />
+      {abiertos.has("inversiones") &&
+        inversiones.map((d, i) => <FilaFlujo key={`${d.etiqueta}-${i}`} etiqueta={d.etiqueta} monto={d.valor} detalle />)}
+      <FilaFlujo etiqueta="Total disponibilidad" monto={totalFinal?.disponibilidad ?? 0} negrita fondoVerde />
+    </>
   );
 }
 
@@ -1896,23 +2018,7 @@ function PaginaFlujoCaja() {
               })()}
             </div>
             <div style={{ backgroundColor: FINANCIERO_SURFACE }}>
-              {/* Orden real (Power BI/spec Deneb): primero el título de
-                  sección ("Disponibilidad en bancos"), DESPUÉS los
-                  encabezados de columna -- antes los encabezados iban
-                  arriba de todo, antes del título. */}
-              <FilaFlujoCajaVista fila={data.filas[0]} fechaTitulo={fechaTitulo} />
-              <div
-                className="grid items-center px-3 py-1 text-xs font-semibold text-ink"
-                style={{ gridTemplateColumns: ANCHOS_COLUMNA_FLUJO }}
-              >
-                <div />
-                <div className="pr-3 text-right">Saldos</div>
-                <div className="text-right">Disponibilidad</div>
-                <div />
-              </div>
-              {data.filas.slice(1).map((f, i) => (
-                <FilaFlujoCajaVista key={i} fila={f} fechaTitulo={fechaTitulo} />
-              ))}
+              <TablaFlujoCajaDesplegable filas={data.filas} resumen={data.resumen} />
             </div>
           </div>
 

@@ -74,14 +74,20 @@ from app.schemas.dashboard_otros_informes import (
     FilaFlujoCaja,
     FilaGastoCategoria,
     FilaPresupuesto,
+    FilaResumenBanco,
     FlujoCajaResponse,
+    InversionConciliacion,
+    InversionResumenFlujo,
+    ItemResumenFlujo,
     KpisCuotasAsociados,
     PeriodoDisponibleGastos,
+    ResumenFlujoCaja,
     TarjetaResumenGasto,
     TipoCuotaAsociados,
 )
 from app.services.agrupador_cuentas import cargar_mapas_agrupador, grupo_de_cuenta
 from app.services.catalogo_bancos import (
+    COLOR_BANCO_POR_DEFECTO,
     BancoResuelto,
     ResolutorBancos,
     cargar_catalogo_bancos,
@@ -831,6 +837,7 @@ def obtener_conciliacion_bancaria(db: Session, anio: int | None, mes: int | None
     documentos = _documentos_circulacion_por_banco(db, anio_resuelto, mes_resuelto, resolutor)
 
     bancos: list[BancoConciliacion] = []
+    totales_por_banco: dict[str, tuple[float | None, float | None]] = {}  # clave -> (Saldo Banco, Saldo Contabilidad)
     for banco_resuelto in bancos_resueltos:
         clave = banco_resuelto.clave
         datos = saldos_por_banco.get(clave)
@@ -861,12 +868,61 @@ def obtener_conciliacion_bancaria(db: Session, anio: int | None, mes: int | None
             ),
             FilaConciliacionBanco(descripcion="Totales", saldo_banco=total_banco, saldo_contabilidad=final, negrita=True),
         ]
+        totales_por_banco[clave] = (total_banco, final)
         bancos.append(
             BancoConciliacion(nombre=banco_resuelto.nombre_conciliacion, color=banco_resuelto.color, filas=filas)
         )
 
+    # --- Sección "Inversiones": una fila por CADA cuenta 110103 (no se suman), con su banco ---
+    detalle_inversiones = _inversiones_detalle(db, anio_resuelto, mes_resuelto)
+    claves_monetarias = {b.clave for b in bancos_resueltos}
+    inversiones_con_banco = sorted(
+        ((_banco_de_inversion(nombre, resolutor), nombre, saldo, orden) for orden, (_, nombre, saldo) in enumerate(detalle_inversiones)),
+        key=lambda t: (t[0].orden_conciliacion, t[3]),
+    )
+    inversiones = [
+        InversionConciliacion(banco=banco.nombre_conciliacion, color=banco.color, descripcion=nombre, valor=saldo)
+        for banco, nombre, saldo, _ in inversiones_con_banco
+    ]
+    total_inversiones = sum(saldo for _, _, saldo, _ in inversiones_con_banco)
+
+    # --- Sección "Resumen por banco": monetario + inversiones del banco (bancos sin inversiones repiten
+    # su total). Un banco que solo tiene inversiones (sin cuenta monetaria en los datos) aparece igual. ---
+    inversion_por_banco: dict[str, float] = {}
+    bancos_del_resumen: dict[str, BancoResuelto] = {b.clave: b for b in bancos_resueltos}
+    for banco, _nombre, saldo, _ in inversiones_con_banco:
+        inversion_por_banco[banco.clave] = inversion_por_banco.get(banco.clave, 0.0) + saldo
+        bancos_del_resumen.setdefault(banco.clave, banco)
+
+    def _con_inversion(base: float | None, clave: str) -> float | None:
+        if base is None and clave not in inversion_por_banco:
+            return None
+        return (base or 0.0) + inversion_por_banco.get(clave, 0.0)
+
+    resumen_bancos: list[FilaResumenBanco] = []
+    for banco in sorted(bancos_del_resumen.values(), key=lambda b: b.orden_conciliacion):
+        total_banco_base, total_contabilidad_base = totales_por_banco.get(banco.clave, (None, None))
+        resumen_bancos.append(
+            FilaResumenBanco(
+                banco=banco.nombre_conciliacion,
+                color=banco.color,
+                total_banco=_con_inversion(total_banco_base, banco.clave),
+                total_contabilidad=_con_inversion(total_contabilidad_base, banco.clave),
+            )
+        )
+    valores_banco = [f.total_banco for f in resumen_bancos if f.total_banco is not None]
+    valores_contabilidad = [f.total_contabilidad for f in resumen_bancos if f.total_contabilidad is not None]
+
     return ConciliacionBancariaResponse(
-        anio=anio_resuelto, mes=mes_resuelto, periodos_disponibles=periodos, bancos=bancos
+        anio=anio_resuelto,
+        mes=mes_resuelto,
+        periodos_disponibles=periodos,
+        bancos=bancos,
+        inversiones=inversiones,
+        total_inversiones=total_inversiones,
+        resumen_bancos=resumen_bancos,
+        total_resumen_banco=sum(valores_banco) if valores_banco else None,
+        total_resumen_contabilidad=sum(valores_contabilidad) if valores_contabilidad else None,
     )
 
 
@@ -888,12 +944,12 @@ def _etiqueta_inversion_plazo(nom_n5, codigo: str) -> str:
     return f"(+) Inversiones Plazo Fijo {entidad}"
 
 
-def _inversiones_plazo(db: Session, anio: int, mes: int) -> list[tuple[str, float]]:
-    """(etiqueta, saldo) de CADA cuenta de BalanceGeneral cuyo cod_n5
-    empiece con 110103, ordenadas por cuenta. La lista sale de todos los
-    datos (una cuenta sin movimiento en el período se muestra en Q0, como
-    antes las dos fijas); el saldo es el acumulado DENTRO DEL AÑO
-    (Sal_Ano = :anio AND Sal_Mes <= :mes), la misma semántica de siempre."""
+def _inversiones_detalle(db: Session, anio: int, mes: int) -> list[tuple[str, str, float]]:
+    """(código de cuenta, nombre de la cuenta, saldo) de CADA cuenta de BalanceGeneral cuyo cod_n5
+    empiece con 110103, ordenadas por cuenta. La lista sale de todos los datos (una cuenta sin
+    movimiento en el período se muestra en Q0); el saldo es el acumulado DENTRO DEL AÑO
+    (Sal_Ano = :anio AND Sal_Mes <= :mes), la misma semántica de siempre. Lo usan Flujo de caja
+    (_inversiones_plazo) y Conciliación de bancos (sección Inversiones), así los dos dan lo mismo."""
     filas = db.execute(
         text(
             """
@@ -918,9 +974,44 @@ def _inversiones_plazo(db: Session, anio: int, mes: int) -> list[tuple[str, floa
         if sal_ano == anio and sal_mes <= mes and saldo is not None:
             cuenta["saldo"] += saldo if isinstance(saldo, Decimal) else Decimal(str(saldo))
     return [
-        (_etiqueta_inversion_plazo(cuentas[codigo]["nombre"], codigo), _num(cuentas[codigo]["saldo"]))
+        (codigo, limpiar_texto(cuentas[codigo]["nombre"]) or codigo, _num(cuentas[codigo]["saldo"]))
         for codigo in sorted(cuentas)
     ]
+
+
+def _inversiones_plazo(db: Session, anio: int, mes: int) -> list[tuple[str, float]]:
+    """(etiqueta, saldo) de cada inversión, para la tabla de Flujo de caja (mismos textos y
+    valores de siempre; ver _inversiones_detalle)."""
+    return [
+        (_etiqueta_inversion_plazo(nombre, codigo), saldo) for codigo, nombre, saldo in _inversiones_detalle(db, anio, mes)
+    ]
+
+
+def _banco_de_inversion(nombre_cuenta: str, resolutor: ResolutorBancos) -> BancoResuelto:
+    """Banco al que pertenece una inversión, deducido del nombre de la cuenta (la entidad es lo que
+    va antes del primer " - ", igual que la etiqueta de Flujo) y buscado en CatalogoBancos por
+    código, alias o nombre de pantalla: "BAC - FONDO DE INVERSIÓN" -> BAC. Si no está en el
+    catálogo se muestra con el texto de la cuenta y color gris (como cualquier banco nuevo)."""
+    entidad = limpiar_texto(re.split(r"\s+[-–—]\s+", limpiar_texto(nombre_cuenta), maxsplit=1)[0])
+    catalogado = resolutor.buscar_por_nombre(entidad)
+    if catalogado is not None:
+        clave, visible = catalogado.clave, catalogado.ban_codigo
+    else:
+        clave, visible = (resolutor.clave(entidad) or ""), entidad
+    resueltos = resolutor.resolver({clave: visible}) if clave else []
+    if resueltos:
+        return resueltos[0]
+    nombre = entidad or "Sin banco"
+    return BancoResuelto(
+        clave=clave,
+        codigo=nombre,
+        nombre_conciliacion=nombre,
+        nombre_flujo=nombre,
+        color=COLOR_BANCO_POR_DEFECTO,
+        orden_conciliacion=(1, 0, clave),
+        orden_flujo=(1, 0, clave),
+        en_catalogo=False,
+    )
 
 
 def obtener_flujo_caja(db: Session, anio: int | None, mes: int | None) -> FlujoCajaResponse:
@@ -950,10 +1041,12 @@ def obtener_flujo_caja(db: Session, anio: int | None, mes: int | None) -> FlujoC
         FilaFlujoCaja(tipo="CAJA", descripcion="Caja y Caja chica", saldos=caja, disponibilidad=None),
     ]
     total_bancos = caja
+    bancos_resumen: list[ItemResumenFlujo] = []
     for banco in bancos_resueltos:
         datos = saldos_por_banco.get(banco.clave)
         final = datos[3] if datos else 0.0
         total_bancos += final
+        bancos_resumen.append(ItemResumenFlujo(nombre=banco.nombre_flujo, valor=final))
         filas.append(FilaFlujoCaja(tipo="BANCO", descripcion=banco.nombre_flujo, saldos=final, disponibilidad=None))
     # Sin la palabra "Total" -- en Power BI/el spec Deneb la fila de
     # total no lleva descripción, solo los montos.
@@ -1006,6 +1099,21 @@ def obtener_flujo_caja(db: Session, anio: int | None, mes: int | None) -> FlujoC
         BarraFlujoCaja(etiqueta="Total disponibilidad", valor=total_final, color="#2C786C"),
     ]
 
+    # Resumen expandible (caja / bancos / inversiones / total): usa los MISMOS valores de la tabla y la
+    # gráfica de arriba (total_bancos incluye la caja; total_final es "Total disponibilidad").
+    inversiones_resumen = [
+        InversionResumenFlujo(banco=_banco_de_inversion(nombre, resolutor).nombre_flujo, descripcion=nombre, valor=saldo)
+        for _, nombre, saldo in _inversiones_detalle(db, anio_resuelto, mes_resuelto)
+    ]
+    resumen = ResumenFlujoCaja(
+        caja=caja,
+        bancos_total=total_bancos - caja,
+        bancos=bancos_resumen,
+        inversiones_total=total_inversiones,
+        inversiones=inversiones_resumen,
+        total=total_final,
+    )
+
     return FlujoCajaResponse(
-        anio=anio_resuelto, mes=mes_resuelto, periodos_disponibles=periodos, filas=filas, grafica=grafica
+        anio=anio_resuelto, mes=mes_resuelto, periodos_disponibles=periodos, filas=filas, grafica=grafica, resumen=resumen
     )

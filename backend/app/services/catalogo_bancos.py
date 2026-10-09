@@ -157,6 +157,26 @@ class ResolutorBancos:
             return None
         return self._alias.get(clave, clave)
 
+    def buscar_por_nombre(self, texto) -> "BancoCatalogo | None":
+        """Banco del catálogo al que corresponde un TEXTO libre (p. ej. la entidad de
+        "BAC - FONDO DE INVERSIÓN"): se compara, normalizado, contra el código, el alias y
+        los nombres de cada pantalla del catálogo. None si no coincide con ninguno."""
+        clave = normalizar_codigo_banco(texto)
+        if not clave:
+            return None
+        banco = self._por_clave.get(self._alias.get(clave, clave))
+        if banco is not None:
+            return banco
+        for banco in self._por_clave.values():
+            if clave in {
+                banco.clave,
+                banco.clave_alias,
+                normalizar_codigo_banco(banco.nombre_conciliacion),
+                normalizar_codigo_banco(banco.nombre_flujo),
+            }:
+                return banco
+        return None
+
     def activo(self, clave: str) -> bool:
         banco = self._por_clave.get(clave)
         return banco.activo if banco is not None else True

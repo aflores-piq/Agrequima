@@ -295,3 +295,59 @@ def test_cuenta_110103_nueva_aparece_como_inversion_y_suma_al_total_de_flujo(cli
     # el mes anterior al primer movimiento: la cuenta sigue en la lista, en Q0
     antes = client.get(f"/api/dashboard/financiero/flujo-caja?anio={ANIO}&mes=9", headers=admin_headers).json()["filas"]
     assert next(f for f in antes if f["descripcion"] == "(+) Inversiones Plazo Fijo Zz Test")["disponibilidad"] == 0
+
+
+def _cargar_inversion_nueva(banco_texto: str = "ZZ BANCO TEST"):
+    with engine.begin() as conn:
+        conn.execute(
+            text("INSERT INTO dbo.BalanceGeneral (emp_nit, Cod_n1, Nom_n1, cod_n5, nom_n5, Sal_Ano, Sal_Mes, Debitos, Creditos, Saldo, Inicial) "
+                 "VALUES ('ZZ', '1101', 'CAJA Y BANCOS', :c, :n, :a, :m, 0, 0, 750000, 0)"),
+            {"c": CUENTA_PLAZO, "n": f"{banco_texto} - FONDO DE INVERSIÓN", "a": ANIO, "m": MES},
+        )
+
+
+def test_conciliacion_inversiones_y_resumen_por_banco_aparecen_solos(client, admin_headers):
+    """Una cuenta 110103 nueva sale en la sección "Inversiones" con su banco, el total de inversiones
+    es el MISMO de Flujo de caja y el "Resumen por banco" suma monetario + inversiones del banco."""
+    _cargar_banco_nuevo()
+    _cargar_inversion_nueva()
+    c = client.get(URL_CONCILIACION, headers=admin_headers)
+    assert c.status_code == 200, c.text
+    cuerpo = c.json()
+    inv = [i for i in cuerpo["inversiones"] if i["banco"] == BANCO]
+    assert len(inv) == 1 and inv[0]["valor"] == pytest.approx(750000) and inv[0]["color"] == COLOR_BANCO_POR_DEFECTO
+    assert inv[0]["descripcion"] == f"{BANCO} - FONDO DE INVERSIÓN"
+    resumen = next(f for f in cuerpo["resumen_bancos"] if f["banco"] == BANCO)
+    totales = _filas_por_descripcion(next(b for b in cuerpo["bancos"] if b["nombre"] == BANCO))["Totales"]
+    assert resumen["total_banco"] == pytest.approx(totales["saldo_banco"] + 750000)
+    assert resumen["total_contabilidad"] == pytest.approx(totales["saldo_contabilidad"] + 750000)
+    # total de inversiones de Conciliación = total de inversiones de Flujo
+    flujo = client.get(URL_FLUJO, headers=admin_headers).json()
+    assert cuerpo["total_inversiones"] == pytest.approx(sum(i["valor"] for i in cuerpo["inversiones"]))
+    assert cuerpo["total_inversiones"] == pytest.approx(flujo["resumen"]["inversiones_total"])
+    assert cuerpo["total_inversiones"] == pytest.approx(next(b for b in flujo["grafica"] if b["etiqueta"] == "Inversiones")["valor"])
+    # total general del resumen = suma de sus filas
+    assert cuerpo["total_resumen_banco"] == pytest.approx(sum(f["total_banco"] or 0 for f in cuerpo["resumen_bancos"]))
+
+
+def test_inversion_de_banco_desconocido_aparece_en_conciliacion_y_flujo(client, admin_headers):
+    _cargar_inversion_nueva("ZZ SOLO INVERSION")
+    cuerpo = client.get(URL_CONCILIACION, headers=admin_headers).json()
+    assert any(i["banco"] == "ZZ SOLO INVERSION" for i in cuerpo["inversiones"])
+    fila = next(f for f in cuerpo["resumen_bancos"] if f["banco"] == "ZZ SOLO INVERSION")
+    assert fila["total_banco"] == pytest.approx(750000) and fila["total_contabilidad"] == pytest.approx(750000)
+    flujo = client.get(URL_FLUJO, headers=admin_headers).json()
+    assert any(i["banco"] == "ZZ SOLO INVERSION" for i in flujo["resumen"]["inversiones"])
+
+
+def test_resumen_de_flujo_coincide_con_la_grafica(client, admin_headers):
+    _cargar_banco_nuevo()
+    _cargar_inversion_nueva()
+    cuerpo = client.get(URL_FLUJO, headers=admin_headers).json()
+    r, grafica = cuerpo["resumen"], {b["etiqueta"]: b["valor"] for b in cuerpo["grafica"]}
+    assert r["total"] == pytest.approx(grafica["Total disponibilidad"])
+    assert r["caja"] + r["bancos_total"] == pytest.approx(grafica["Monetarios, Ahorro"])
+    assert r["inversiones_total"] == pytest.approx(grafica["Inversiones"])
+    assert r["bancos_total"] == pytest.approx(sum(b["valor"] for b in r["bancos"]))
+    assert r["inversiones_total"] == pytest.approx(sum(i["valor"] for i in r["inversiones"]))
+    assert any(b["nombre"] == BANCO and b["valor"] == 1300 for b in r["bancos"])

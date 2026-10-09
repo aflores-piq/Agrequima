@@ -148,7 +148,7 @@ export function TablaGrupoExpandible({
           <thead>
             <tr style={{ backgroundColor: VERDE_ENCABEZADO }}>
               <EncabezadoOrdenable
-                className="break-words px-3 py-2 text-left font-semibold text-white"
+                className="break-words px-3 py-2 text-left font-bold text-white"
                 flecha={flechaColumna("__nombre")}
                 onClick={() => alClickEncabezado("__nombre")}
               >
@@ -157,7 +157,7 @@ export function TablaGrupoExpandible({
               {columnas.map((c, i) => (
                 <EncabezadoOrdenable
                   key={c}
-                  className="px-3 py-2 text-right font-semibold text-white"
+                  className="px-3 py-2 text-right font-bold text-white"
                   flecha={flechaColumna(`__col${i}`)}
                   onClick={() => alClickEncabezado(`__col${i}`)}
                 >

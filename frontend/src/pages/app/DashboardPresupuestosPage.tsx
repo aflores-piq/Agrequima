@@ -222,8 +222,8 @@ function TablaPresupuesto({
   // Encabezado alineado con su columna (texto a la izquierda, números a
   // la derecha, mismo padding que las celdas) -- antes todos centrados,
   // desalineados de los valores reales debajo.
-  const claseHeaderTexto = "px-2 py-1.5 text-left text-white font-normal";
-  const claseHeaderNumero = "px-2 py-1.5 text-right text-white font-normal";
+  const claseHeaderTexto = "px-2 py-1.5 text-left text-white font-bold";
+  const claseHeaderNumero = "px-2 py-1.5 text-right text-white font-bold";
   return (
     <div className="overflow-hidden rounded-tremor-default ring-1 ring-line">
       <table className="w-full text-sm">
@@ -622,8 +622,8 @@ const COLUMNAS_ORDENABLES_COMPARATIVO: ColumnaOrdenable<FilaComparativoEjecutado
 
 function TablaComparativo({ data }: { data: ComparativoEjecutadoResponse }) {
   const { filas, alClickEncabezado, flechaColumna } = useTablaOrdenable(data.filas, COLUMNAS_ORDENABLES_COMPARATIVO);
-  const claseHeaderTexto = "px-2 py-1.5 text-left text-white font-normal";
-  const claseHeaderNumero = "px-2 py-1.5 text-right text-white font-normal";
+  const claseHeaderTexto = "px-2 py-1.5 text-left text-white font-bold";
+  const claseHeaderNumero = "px-2 py-1.5 text-right text-white font-bold";
   return (
     <div className="overflow-hidden rounded-tremor-default ring-1 ring-line">
       <table className="w-full text-sm">
