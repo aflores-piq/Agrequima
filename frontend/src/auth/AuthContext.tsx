@@ -7,6 +7,7 @@ import {
   guardarSesion,
   leerSesion,
   marcarAvisoLegalAceptado,
+  reiniciarAvisoLegal,
 } from "../api/client";
 import type { Sesion } from "../api/client";
 import { useTheme } from "../theme/ThemeContext";
@@ -37,18 +38,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const iniciarSesion = useCallback(
     async (nombreUsuario: string, password: string) => {
-      const { access_token, tema, aviso_legal_aceptado } = await loginRequest(nombreUsuario, password);
+      const { access_token, tema } = await loginRequest(nombreUsuario, password);
       guardarSesion(access_token);
       setSesion(leerSesion());
       // Tema guardado en dbo.Usuarios se aplica de inmediato al iniciar
       // sesión, sin depender de lo último cacheado en este navegador.
       aplicarPreferencia(tema);
-      if (aviso_legal_aceptado) {
-        marcarAvisoLegalAceptado();
-        setAvisoLegalPendiente(false);
-      } else {
-        setAvisoLegalPendiente(true);
-      }
+      // El aviso legal se pide en CADA inicio de sesión (a todos los usuarios), aunque ya lo
+      // hayan aceptado antes: cada aceptación queda registrada en el servidor.
+      reiniciarAvisoLegal();
+      setAvisoLegalPendiente(true);
     },
     [aplicarPreferencia]
   );

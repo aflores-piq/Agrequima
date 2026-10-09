@@ -16,6 +16,23 @@ class FilaOtroIngreso(BaseModel):
     porcentaje_ejecucion: float  # 0.0 si presupuesto_anio es 0
 
 
+class FilaResumenIngresos(BaseModel):
+    concepto: str
+    monto: float
+    porcentaje: float  # % del total de ingresos; 0.0 si el total es 0
+
+
+class ResumenIngresos(BaseModel):
+    """Cuadro "Total ingresos": cuotas de asociados + cuotas 4.5 por millar (mismos
+    montos que el Estado de ingresos y desembolsos) + otros ingresos (total de esta
+    pantalla), todos ACUMULADOS del año hasta `mes_corte`."""
+
+    anio: int
+    mes_corte: int
+    filas: list[FilaResumenIngresos]
+    total: FilaResumenIngresos
+
+
 class OtroIngresoResponse(BaseModel):
     anio: int
     anio_anterior: int
@@ -25,3 +42,5 @@ class OtroIngresoResponse(BaseModel):
     # listados van al final en orden alfabético.
     filas: list[FilaOtroIngreso]
     total: FilaOtroIngreso
+    # None si el año no tiene datos en dbo.OtroIngreso.
+    resumen_ingresos: ResumenIngresos | None = None

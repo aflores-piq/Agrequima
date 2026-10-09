@@ -923,6 +923,41 @@ const COLUMNAS_ORDENABLES_GASTOS: ColumnaOrdenable<FilaGastoCategoria>[] = [
   { clave: "consolidado", tipo: "numero", valor: (f) => (f.consolidado === 0 ? null : f.consolidado) },
 ];
 
+// "X %" con un decimal; "—" si el divisor es 0.
+function porcentajeDelTotal(parte: number, total: number): string {
+  return total === 0 ? "—" : `${((parte / total) * 100).toFixed(1)} %`;
+}
+
+// Filas "Relación porcentual de gastos – presupuesto / ejecutado" debajo de la fila verde de total:
+// qué parte del consolidado ocupa cada grupo, en las MISMAS columnas de la tabla (Administración,
+// Operación, Consolidado; las de "Peso en %" quedan vacías). Mismas celdas, tipografía, color y
+// alineación que las demás filas; el porcentaje va en negrita.
+function FilaRelacionPorcentual({
+  rotulo,
+  idPrueba,
+  administracion,
+  operacion,
+  consolidado,
+}: {
+  rotulo: string;
+  idPrueba: string;
+  administracion: number;
+  operacion: number;
+  consolidado: number;
+}) {
+  const claseCelda = "whitespace-nowrap px-2 py-1 text-right font-bold";
+  return (
+    <tr className="text-ink" data-testid={idPrueba}>
+      <td className="whitespace-normal break-words px-2 py-1">{rotulo}</td>
+      <td className={claseCelda}>{porcentajeDelTotal(administracion, consolidado)}</td>
+      <td />
+      <td className={claseCelda}>{porcentajeDelTotal(operacion, consolidado)}</td>
+      <td />
+      <td className={claseCelda}>{porcentajeDelTotal(consolidado, consolidado)}</td>
+    </tr>
+  );
+}
+
 function TablaEjecucionGastos({ data, variante }: { data: EjecucionGastosResponse; variante: "mensual" | "acumulado" }) {
   const esAcumulado = variante === "acumulado";
   const { filas, alClickEncabezado, flechaColumna } = useTablaOrdenable(data.categorias, COLUMNAS_ORDENABLES_GASTOS);
@@ -984,6 +1019,20 @@ function TablaEjecucionGastos({ data, variante }: { data: EjecucionGastosRespons
             <FilaTabla key={f.categoria} fila={f} ocultarCeros ajustarTexto />
           ))}
           <FilaTabla fila={data.fila_total_ejecutado} negrita ocultarCeros fondoTotal ajustarTexto />
+          <FilaRelacionPorcentual
+            rotulo="Relación porcentual de gastos – presupuesto"
+            idPrueba="relacion-presupuesto"
+            administracion={data.fila_presupuesto.administracion}
+            operacion={data.fila_presupuesto.operacion}
+            consolidado={data.fila_presupuesto.consolidado}
+          />
+          <FilaRelacionPorcentual
+            rotulo="Relación porcentual de gastos – ejecutado"
+            idPrueba="relacion-ejecutado"
+            administracion={data.fila_total_ejecutado.administracion}
+            operacion={data.fila_total_ejecutado.operacion}
+            consolidado={data.fila_total_ejecutado.consolidado}
+          />
         </tbody>
       </table>
     </div>

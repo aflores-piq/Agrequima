@@ -145,15 +145,11 @@ def test_cambiar_mi_password_requiere_autenticacion(client):
     assert r.status_code == 401
 
 
-def test_aviso_legal_pendiente_y_se_acepta_una_sola_vez(client, usuario_headers):
-    """El aviso legal se pide una sola vez por usuario: login debe
-    reportar aviso_legal_aceptado=False hasta que se llama a POST
-    /auth/aviso-legal, y de ahí en adelante los logins siguientes ya
-    reportan True (sin volver a mostrar el aviso). La fecha la pone el
-    SERVIDOR (func.getdate()) y no se pisa en una segunda aceptación."""
-    # Estado inicial conocido: no aceptado (por si una corrida anterior
-    # de este mismo test lo dejó aceptado -- test_usuario es compartido
-    # vía el fixture usuario_headers, de alcance de sesión).
+def test_aviso_legal_se_pide_en_cada_login_y_cada_aceptacion_queda_registrada(client, usuario_headers):
+    """El aviso legal se pide en CADA inicio de sesión: login siempre reporta
+    aviso_legal_aceptado=False, aunque el usuario ya lo haya aceptado antes. Cada llamada a
+    POST /auth/aviso-legal deja una fila en dbo.AvisoLegalAceptaciones (usuario y hora de
+    Guatemala, calculada por el servidor); dbo.Usuarios conserva solo la PRIMERA fecha."""
     with engine.begin() as conn:
         conn.execute(
             text(
@@ -161,6 +157,9 @@ def test_aviso_legal_pendiente_y_se_acepta_una_sola_vez(client, usuario_headers)
                 "WHERE NombreUsuario = 'test_usuario'"
             )
         )
+        antes = conn.execute(
+            text("SELECT COUNT(*) FROM dbo.AvisoLegalAceptaciones WHERE NombreUsuario = 'test_usuario'")
+        ).scalar()
 
     r_login = client.post(
         "/api/auth/login", json={"nombre_usuario": "test_usuario", "password": CONTRASENA_PRUEBA}
@@ -174,18 +173,33 @@ def test_aviso_legal_pendiente_y_se_acepta_una_sola_vez(client, usuario_headers)
     assert body["aceptado"] is True
     assert body["fecha_aceptacion"] is not None
 
+    # Un segundo login, aunque ya aceptó, vuelve a pedir el aviso...
     r_login_2 = client.post(
         "/api/auth/login", json={"nombre_usuario": "test_usuario", "password": CONTRASENA_PRUEBA}
     )
     assert r_login_2.status_code == 200, r_login_2.text
-    assert r_login_2.json()["aviso_legal_aceptado"] is True
+    assert r_login_2.json()["aviso_legal_aceptado"] is False
 
-    # Idempotente: aceptar de nuevo no debe pisar la fecha original (esa
-    # fecha es el respaldo real de CUÁNDO aceptó, no debe "refrescarse"
-    # en cada acceso posterior).
+    # ...y su aceptación deja una SEGUNDA fila en el registro.
     r_aceptar_2 = client.post("/api/auth/aviso-legal", headers=usuario_headers)
     assert r_aceptar_2.status_code == 200, r_aceptar_2.text
-    assert r_aceptar_2.json()["fecha_aceptacion"] == body["fecha_aceptacion"]
+
+    with engine.begin() as conn:
+        filas = conn.execute(
+            text(
+                "SELECT NombreUsuario, FechaHoraGuatemala, FechaHoraUtc FROM dbo.AvisoLegalAceptaciones "
+                "WHERE NombreUsuario = 'test_usuario' ORDER BY AceptacionId"
+            )
+        ).all()
+        primera_fecha = conn.execute(
+            text("SELECT AvisoLegalFechaAceptacion FROM dbo.Usuarios WHERE NombreUsuario = 'test_usuario'")
+        ).scalar()
+    assert len(filas) == antes + 2
+    # Hora de Guatemala = UTC - 6 horas (con margen de unos segundos).
+    ultima = filas[-1]
+    diferencia = (ultima.FechaHoraUtc - ultima.FechaHoraGuatemala).total_seconds()
+    assert 6 * 3600 - 5 <= diferencia <= 6 * 3600 + 5
+    assert primera_fecha is not None
 
     # Deja al usuario de prueba en su estado por defecto para no afectar
     # otros tests que reutilicen este mismo fixture.

@@ -7,8 +7,8 @@ import { mensajeError } from "../api/client";
  * iniciar sesión (ver RequireRole, que lo muestra en vez de las rutas
  * protegidas mientras avisoLegalPendiente sea true), bloqueando el
  * acceso al dashboard hasta que se hace clic en el botón. Se muestra
- * una sola vez por usuario -- ver AuthContext.aceptarAvisoLegal() y
- * dbo.Usuarios.AvisoLegalAceptado. Texto exacto pedido por el cliente,
+ * en CADA inicio de sesión, para todos los usuarios -- ver AuthContext.aceptarAvisoLegal()
+ * y dbo.AvisoLegalAceptaciones (una fila por aceptación). Texto exacto pedido por el cliente,
  * sin resumir ni parafrasear. */
 export function AvisoLegalOverlay() {
   const { aceptarAvisoLegal, cerrarSesion } = useAuth();

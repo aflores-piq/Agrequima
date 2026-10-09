@@ -9,6 +9,21 @@ export interface FilaOtroIngreso {
   porcentaje_ejecucion: number;
 }
 
+export interface FilaResumenIngresos {
+  concepto: string;
+  monto: number;
+  porcentaje: number;
+}
+
+// Cuadro "Total ingresos" (cuotas de asociados + 4.5 por millar + otros ingresos),
+// acumulado del año hasta `mes_corte`.
+export interface ResumenIngresos {
+  anio: number;
+  mes_corte: number;
+  filas: FilaResumenIngresos[];
+  total: FilaResumenIngresos;
+}
+
 export interface OtroIngresoResponse {
   anio: number;
   anio_anterior: number;
@@ -16,4 +31,5 @@ export interface OtroIngresoResponse {
   anios_disponibles: number[];
   filas: FilaOtroIngreso[];
   total: FilaOtroIngreso;
+  resumen_ingresos: ResumenIngresos | null;
 }

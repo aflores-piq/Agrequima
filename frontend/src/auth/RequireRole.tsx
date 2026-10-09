@@ -24,8 +24,8 @@ export function RequireRole({ roles, children }: { roles: string[]; children: Re
   }
 
   // Bloquea CUALQUIER ruta protegida (dashboards y /admin por igual)
-  // hasta que el usuario acepta el aviso legal -- una sola vez por
-  // usuario, ver AvisoLegalOverlay/AuthContext.
+  // hasta que el usuario acepta el aviso legal -- en cada inicio de
+  // sesión, ver AvisoLegalOverlay/AuthContext.
   if (avisoLegalPendiente) {
     return <AvisoLegalOverlay />;
   }

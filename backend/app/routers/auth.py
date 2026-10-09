@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy.sql import func
@@ -5,7 +7,7 @@ from sqlalchemy.sql import func
 from app.core.db import get_db
 from app.core.deps import UsuarioToken, get_current_user
 from app.core.security import create_access_token, hash_password, verify_password
-from app.models.usuario import Rol, Usuario
+from app.models.usuario import AvisoLegalAceptacion, Rol, Usuario
 from app.schemas.auth import (
     ActualizarPreferenciasRequest,
     AvisoLegalResponse,
@@ -16,6 +18,15 @@ from app.schemas.auth import (
 )
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+# Guatemala está en UTC-6 todo el año (no usa horario de verano).
+ZONA_GUATEMALA = timezone(timedelta(hours=-6))
+
+
+def ahora_guatemala() -> datetime:
+    """Fecha y hora actual de Guatemala (sin zona, para guardar como DATETIME2), tomada del
+    reloj del servidor en UTC: no depende de la zona horaria del equipo ni del navegador."""
+    return datetime.now(timezone.utc).astimezone(ZONA_GUATEMALA).replace(tzinfo=None, microsecond=0)
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -59,7 +70,10 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse
         acceso_importaciones=usuario.AccesoImportaciones,
         acceso_financiero=usuario.AccesoFinanciero,
         acceso_indicadores=usuario.AccesoIndicadores,
-        aviso_legal_aceptado=usuario.AvisoLegalAceptado,
+        # El aviso legal se pide en CADA inicio de sesión: siempre False acá (el frontend lo muestra
+        # y, al aceptar, POST /auth/aviso-legal deja un registro nuevo). La primera aceptación sigue
+        # en dbo.Usuarios; el historial completo está en dbo.AvisoLegalAceptaciones.
+        aviso_legal_aceptado=False,
     )
 
 
@@ -113,20 +127,24 @@ def aceptar_aviso_legal(
     db: Session = Depends(get_db),
     usuario_token: UsuarioToken = Depends(get_current_user),
 ) -> AvisoLegalResponse:
-    """Marca el aviso legal como aceptado para el usuario autenticado,
-    una sola vez (idempotente: si ya estaba aceptado, no pisa la fecha
-    original). FechaAceptacion usa la hora del SERVIDOR (func.getdate()),
-    nunca una fecha que mande el navegador, para que quede como respaldo
-    confiable ante un reclamo."""
+    """Registra una aceptación del aviso legal del usuario autenticado. Se llama en CADA inicio
+    de sesión: cada llamada agrega una fila a dbo.AvisoLegalAceptaciones con el usuario y la
+    fecha/hora de Guatemala (la calcula el servidor, nunca el navegador, para que sirva de
+    respaldo confiable ante un reclamo). La primera aceptación además queda en
+    dbo.Usuarios (AvisoLegalAceptado / AvisoLegalFechaAceptacion), sin pisar esa fecha."""
     usuario = db.query(Usuario).filter(Usuario.UsuarioId == usuario_token.usuario_id).first()
     if usuario is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado")
+    ahora = ahora_guatemala()
+    db.add(
+        AvisoLegalAceptacion(
+            UsuarioId=usuario.UsuarioId,
+            NombreUsuario=usuario.NombreUsuario,
+            FechaHoraGuatemala=ahora,
+        )
+    )
     if not usuario.AvisoLegalAceptado:
         usuario.AvisoLegalAceptado = True
         usuario.AvisoLegalFechaAceptacion = func.getdate()
-        db.commit()
-        db.refresh(usuario)
-    return AvisoLegalResponse(
-        aceptado=usuario.AvisoLegalAceptado,
-        fecha_aceptacion=usuario.AvisoLegalFechaAceptacion,
-    )
+    db.commit()
+    return AvisoLegalResponse(aceptado=True, fecha_aceptacion=ahora)

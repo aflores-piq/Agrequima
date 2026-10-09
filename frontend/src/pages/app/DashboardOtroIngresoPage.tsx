@@ -7,8 +7,8 @@ import { FilterYear } from "../../components/filters/PowerBiFilter";
 import { useFinancieroFilterOtrosIngresos } from "../../financiero/FinancieroFilterContext";
 import { FINANCIERO_SURFACE, GAP_TITULO_PRIMER_ELEMENTO } from "../../components/TablaGrupoExpandible";
 import { DOMINIO_AUTO_SIN_RECORTAR_NEGATIVOS, calcularEscalaEje } from "../../utils/escalaEje";
-import { formatPercentEntero, formatQ } from "../../utils/format";
-import type { FilaOtroIngreso, OtroIngresoResponse } from "../../types/dashboardOtroIngreso";
+import { formatQ, formatPercentEntero, MESES_LARGOS } from "../../utils/format";
+import type { FilaOtroIngreso, OtroIngresoResponse, ResumenIngresos } from "../../types/dashboardOtroIngreso";
 import { tooltipFinanciero } from "../../components/charts/TooltipFinanciero";
 import { TablaDatosGrafico, TarjetaFinanciero, textoSinDatos } from "../../components/VistaGraficoTabla";
 
@@ -451,6 +451,64 @@ function TablaOtrosIngresos({
   );
 }
 
+// --- 4. Cuadro "Total ingresos" ---------------------------------------
+
+// Composición del total de ingresos del año: cuotas de asociados + cuotas 4.5 por millar
+// (mismos montos que el Estado de ingresos y desembolsos, "Acumulado Año") + otros ingresos
+// (total de esta pantalla), todo al último mes con datos de Otros ingresos. Mismo estilo que la
+// tabla de abajo (fondo, borde y líneas verticales).
+function formatPorcentaje1(valor: number, total: number): string {
+  return total === 0 ? "—" : `${valor.toFixed(1)} %`;
+}
+
+function TablaResumenIngresos({ resumen }: { resumen: ResumenIngresos }) {
+  const claseCelda = "px-3 py-2 text-sm text-ink";
+  const bordeVertical = { borderLeft: `1px solid ${BORDE_CELDA}`, borderRight: `1px solid ${BORDE_CELDA}` };
+  const bordeHeader = { ...bordeVertical, borderBottom: `1px solid ${BORDE_CELDA}` };
+  const filas = [...resumen.filas, resumen.total];
+  return (
+    <div
+      className="mx-auto overflow-x-auto rounded-tremor-default"
+      style={{ backgroundColor: FINANCIERO_SURFACE, border: `1px solid ${BORDE_CELDA}`, maxWidth: 640 }}
+      data-testid="resumen-ingresos"
+    >
+      <table className="w-full text-sm" style={{ borderCollapse: "collapse" }}>
+        <thead>
+          <tr>
+            <th className="px-3 py-2 text-left text-xs font-bold text-ink" style={bordeHeader}>
+              Total ingresos acumulado a {MESES_LARGOS[resumen.mes_corte - 1]} {resumen.anio}
+            </th>
+            <th className="px-3 py-2 text-right text-xs font-bold text-ink" style={bordeHeader}>
+              Monto
+            </th>
+            <th className="px-3 py-2 text-right text-xs font-bold text-ink" style={bordeHeader}>
+              % del total
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {filas.map((f, i) => {
+            const esTotal = i === filas.length - 1;
+            return (
+              <tr key={f.concepto} className={esTotal ? "font-bold" : undefined}>
+                <td className={claseCelda} style={bordeVertical}>
+                  {f.concepto}
+                </td>
+                <td className={`${claseCelda} text-right`} style={bordeVertical}>
+                  {formatQ(f.monto)}
+                </td>
+                <td className={`${claseCelda} text-right`} style={bordeVertical}>
+                  {formatPorcentaje1(f.porcentaje, resumen.total.monto)}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 // --- Página -----------------------------------------------------------
 
 export function DashboardOtroIngresoPage() {
@@ -521,6 +579,11 @@ export function DashboardOtroIngresoPage() {
               anioAnteriorSinDatos={data.anio_anterior_sin_datos}
             />
           </div>
+          {data.resumen_ingresos && (
+            <div className="mx-auto" style={{ width: ANCHO_TABLA, marginTop: GAP_ENTRE_GRAFICAS }}>
+              <TablaResumenIngresos resumen={data.resumen_ingresos} />
+            </div>
+          )}
           <div className="mx-auto" style={{ width: ANCHO_TABLA, marginTop: GAP_ENTRE_GRAFICAS }}>
             <TablaOtrosIngresos
               filas={data.filas}

@@ -52,7 +52,9 @@ TOTAL: Q2,048,918 / Q1,930,450 / Q1,285,097 / 67%
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app.schemas.dashboard_otro_ingreso import FilaOtroIngreso, OtroIngresoResponse
+from app.schemas.dashboard_otro_ingreso import FilaOtroIngreso, FilaResumenIngresos, OtroIngresoResponse, ResumenIngresos
+from app.services.agrupador_cuentas import cargar_mapas_agrupador
+from app.services.dashboard_financiero import _detalle_grupo_mensual, _periodo_anterior
 
 
 def _num(valor) -> float:
@@ -120,6 +122,53 @@ def _porcentaje_ejecucion(ejecutado: float, presupuesto: float) -> float:
     return (ejecutado / presupuesto * 100) if presupuesto else 0.0
 
 
+def _mes_corte(db: Session, anio: int) -> int | None:
+    """Último mes con datos "Ejecutado" del año en dbo.OtroIngreso: el mismo mes del que
+    salen los totales de esta pantalla (valores acumulados al último mes con datos)."""
+    mes = db.execute(
+        text("SELECT MAX(Mes) FROM dbo.OtroIngreso WHERE Anio = :anio AND Tipo = 'Ejecutado'"),
+        {"anio": anio},
+    ).scalar()
+    return int(mes) if mes is not None else None
+
+
+def _normalizar(nombre: str) -> str:
+    return " ".join((nombre or "").lower().split())
+
+
+def _resumen_ingresos(db: Session, anio: int, otros_ingresos: float) -> ResumenIngresos | None:
+    """Cuadro de composición del total de ingresos del año, al mismo corte que los totales
+    de la pantalla. Cuotas de asociados y 4.5 por millar salen de la MISMA función que arma
+    el Estado de ingresos y desembolsos (columna "Acumulado Año" del grupo de ingresos), así
+    que los montos son idénticos a los de esa pantalla para ese mes."""
+    mes = _mes_corte(db, anio)
+    if mes is None:
+        return None
+    anio_ant, mes_ant = _periodo_anterior(anio, mes)
+    mapas_ingresos, _ = cargar_mapas_agrupador(db, "Ingresos")
+    detalle, _total = _detalle_grupo_mensual(
+        db, anio, mes, anio_ant, mes_ant, "Creditos", "Creditos", "Creditos - Debitos", mapas_ingresos, "4"
+    )
+    por_grupo = {_normalizar(f.grupo): f.acumulado_anio for f in detalle}
+    cuotas_asociados = por_grupo.get("cuotas asociados", 0.0)
+    cuotas_millar = por_grupo.get("cuotas 4.5 por millar", 0.0)
+    total = cuotas_asociados + cuotas_millar + otros_ingresos
+
+    def fila(concepto: str, monto: float) -> FilaResumenIngresos:
+        return FilaResumenIngresos(concepto=concepto, monto=monto, porcentaje=(monto / total * 100) if total else 0.0)
+
+    return ResumenIngresos(
+        anio=anio,
+        mes_corte=mes,
+        filas=[
+            fila("Cuotas de asociados", cuotas_asociados),
+            fila("Cuotas 4.5 por millar", cuotas_millar),
+            fila("Otros ingresos", otros_ingresos),
+        ],
+        total=fila("Total ingresos", total),
+    )
+
+
 def obtener_otro_ingreso(db: Session, anio: int | None) -> OtroIngresoResponse:
     anios_disponibles = _anios_disponibles(db)
     anio_resuelto = anio if anio is not None else (anios_disponibles[-1] if anios_disponibles else 0)
@@ -164,4 +213,5 @@ def obtener_otro_ingreso(db: Session, anio: int | None) -> OtroIngresoResponse:
         anios_disponibles=anios_disponibles,
         filas=filas,
         total=total,
+        resumen_ingresos=_resumen_ingresos(db, anio_resuelto, total_ej) if anio_resuelto else None,
     )

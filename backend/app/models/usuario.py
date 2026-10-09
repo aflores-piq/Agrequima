@@ -36,3 +36,19 @@ class Usuario(Base):
     # ante un reclamo.
     AvisoLegalAceptado = Column(Boolean, nullable=False, default=False)
     AvisoLegalFechaAceptacion = Column(DateTime)
+
+
+class AvisoLegalAceptacion(Base):
+    """Una fila por CADA aceptación del aviso legal (se pide en cada inicio de sesión):
+    usuario y fecha/hora en hora de Guatemala. dbo.Usuarios.AvisoLegalFechaAceptacion
+    solo conserva la primera aceptación; esta tabla es el registro completo
+    (script 22_aviso_legal_registro_aceptaciones.sql)."""
+
+    __tablename__ = "AvisoLegalAceptaciones"
+
+    AceptacionId = Column(Integer, primary_key=True)
+    UsuarioId = Column(Integer, ForeignKey("Usuarios.UsuarioId"), nullable=False)
+    NombreUsuario = Column(String(100), nullable=False)
+    # Hora de Guatemala (UTC-6, sin horario de verano), calculada por la aplicación.
+    FechaHoraGuatemala = Column(DateTime, nullable=False)
+    FechaHoraUtc = Column(DateTime, server_default=func.sysutcdatetime())
