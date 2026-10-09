@@ -1702,7 +1702,7 @@ function PaginaConciliacionBancaria() {
           <EncabezadoConciliacion primera="Banco – Descripción" />
           <div className="mt-2 overflow-hidden rounded" style={{ backgroundColor: FINANCIERO_SURFACE }}>
             {data.inversiones.map((inv, i) => (
-              <div key={`${inv.banco}-${inv.descripcion}-${i}`} style={{ borderLeft: `5px solid ${colorBordeBanco(inv.color)}` }}>
+              <div key={`${inv.banco}-${inv.descripcion}-${i}`} style={{ borderLeft: "5px solid transparent" }}>
                 <FilaConciliacion
                   descripcion={`${inv.banco} – ${descripcionInversion(inv.descripcion)}`}
                   saldoBanco={inv.valor}
@@ -1720,7 +1720,7 @@ function PaginaConciliacionBancaria() {
           <EncabezadoConciliacion primera="Banco" segunda="Total banco" tercera="Total contabilidad" />
           <div className="mt-2 overflow-hidden rounded" style={{ backgroundColor: FINANCIERO_SURFACE }}>
             {data.resumen_bancos.map((fila) => (
-              <div key={fila.banco} style={{ borderLeft: `5px solid ${colorBordeBanco(fila.color)}` }}>
+              <div key={fila.banco} style={{ borderLeft: "5px solid transparent" }}>
                 <FilaConciliacion descripcion={fila.banco} saldoBanco={fila.total_banco} saldoContabilidad={fila.total_contabilidad} negrita={false} />
               </div>
             ))}
@@ -1829,7 +1829,7 @@ function TablaFlujoCajaDesplegable({ filas, resumen }: { filas: FilaFlujoCaja[];
   const inversionesFilas = de("INVERSION");
   const inversiones =
     resumen && resumen.inversiones.length === inversionesFilas.length
-      ? resumen.inversiones.map((i) => ({ etiqueta: `${i.banco} – ${i.descripcion}`, valor: i.valor }))
+      ? resumen.inversiones.map((i) => ({ etiqueta: `${i.banco} – ${descripcionInversion(i.descripcion)}`, valor: i.valor }))
       : inversionesFilas.map((f) => ({ etiqueta: f.descripcion, valor: f.disponibilidad ?? 0 }));
   const suma = (lista: { valor: number }[]) => lista.reduce((t, x) => t + x.valor, 0);
   const bancosDetalle = bancos.map((f) => ({ etiqueta: f.descripcion, valor: f.saldos ?? 0 }));

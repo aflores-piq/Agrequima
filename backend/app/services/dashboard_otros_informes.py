@@ -1102,7 +1102,7 @@ def obtener_flujo_caja(db: Session, anio: int | None, mes: int | None) -> FlujoC
     # Resumen expandible (caja / bancos / inversiones / total): usa los MISMOS valores de la tabla y la
     # gráfica de arriba (total_bancos incluye la caja; total_final es "Total disponibilidad").
     inversiones_resumen = [
-        InversionResumenFlujo(banco=_banco_de_inversion(nombre, resolutor).nombre_flujo, descripcion=nombre, valor=saldo)
+        InversionResumenFlujo(banco=_banco_de_inversion(nombre, resolutor).nombre_conciliacion, descripcion=nombre, valor=saldo)
         for _, nombre, saldo in _inversiones_detalle(db, anio_resuelto, mes_resuelto)
     ]
     resumen = ResumenFlujoCaja(
