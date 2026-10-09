@@ -1333,6 +1333,65 @@ function ChipEjecucion({ porcentaje }: { porcentaje: number | null }) {
   );
 }
 
+// Texto sobre el color de cada barra (COLOR_PRESUPUESTO es oscuro, COLOR_EJECUTADO claro).
+const COLOR_TEXTO_SOBRE_PRESUPUESTO = "#FFFFFF";
+const COLOR_TEXTO_SOBRE_REALIZADO = "#1F2933";
+
+/** Etiquetas de cada barra de Contribución 4.5: el valor (Q544,718) ARRIBA
+ * de la barra y el porcentaje DENTRO, centrado, y a la MISMA altura en las
+ * dos barras: la mitad de la barra más baja (así ambos quedan dentro de su
+ * barra y alineados entre sí). Presupuesto = 100%; Realizado = realizado ÷
+ * presupuesto. Sin presupuesto (o sin realizado) no se muestra ese
+ * porcentaje. */
+function EtiquetaBarraContribucion({
+  x,
+  y,
+  width,
+  height,
+  tipo,
+  presupuesto,
+  realizado,
+}: LabelProps & { tipo: "presupuesto" | "realizado"; presupuesto: number; realizado: number }) {
+  if (typeof x !== "number" || typeof y !== "number" || typeof width !== "number" || typeof height !== "number") {
+    return null;
+  }
+  const hayPresupuesto = presupuesto > 0;
+  const valor = tipo === "presupuesto" ? presupuesto : realizado;
+  const mostrarValor = tipo === "realizado" || hayPresupuesto;
+  const mostrarPorcentaje = hayPresupuesto && valor > 0;
+  const cx = x + width / 2;
+  let porcentaje: ReactNode = null;
+  if (mostrarPorcentaje) {
+    const texto = tipo === "presupuesto" ? "100%" : `${((realizado / presupuesto) * 100).toFixed(2)}%`;
+    // Mitad de la barra más baja entre las que muestran porcentaje.
+    const valorReferencia = realizado > 0 ? Math.min(presupuesto, realizado) : presupuesto;
+    const yMedio = y + height - ((valorReferencia / valor) * height) / 2;
+    porcentaje = (
+      <text
+        x={cx}
+        y={yMedio}
+        textAnchor="middle"
+        dominantBaseline="central"
+        fontSize={12}
+        fontWeight={700}
+        fill={tipo === "presupuesto" ? COLOR_TEXTO_SOBRE_PRESUPUESTO : COLOR_TEXTO_SOBRE_REALIZADO}
+      >
+        {texto}
+      </text>
+    );
+  }
+  return (
+    <g>
+      {mostrarValor && (
+        <text x={cx} y={y - 6} textAnchor="middle" fontSize={11} fontWeight={700} style={{ fill: "rgb(var(--color-ink))" }}>
+          {formatQ(valor)}
+        </text>
+      )}
+      {porcentaje}
+    </g>
+  );
+}
+
 function ContenidoColumnasContribucion({
   presupuesto,
   realizado,
@@ -1355,10 +1414,12 @@ function ContenidoColumnasContribucion({
   const aspecto = calcularAspectoSvg(anchoTarjeta, PROPORCION_ALTO_ANCHO_BARRAS_4);
   return (
     <div ref={refTarjeta}>
-      {/* Chip de % de ejecución (o "Sin presupuesto", UNA sola vez): arriba a la derecha de la gráfica. */}
-      <div className="flex justify-end">
-        <ChipEjecucion porcentaje={porcentajeEjecucion} />
-      </div>
+      {/* El % ahora va dentro de las barras; arriba a la derecha solo queda "Sin presupuesto". */}
+      {porcentajeEjecucion === null && (
+        <div className="flex justify-end">
+          <ChipEjecucion porcentaje={null} />
+        </div>
+      )}
       <ResponsiveContainer width="100%" aspect={aspecto}>
         <BarChart data={fila} margin={{ top: 12, right: gutterDerecho, bottom: 4, left: 16 }} barGap={4}>
           <XAxis dataKey={() => ""} tick={false} axisLine={false} tickLine={false} />
@@ -1380,8 +1441,22 @@ function ContenidoColumnasContribucion({
               colorDe: (item) => (item.dataKey === "presupuesto" ? COLOR_PRESUPUESTO : COLOR_EJECUTADO),
             })}
           />
-          <Bar dataKey="presupuesto" fill={hayPresupuesto ? COLOR_PRESUPUESTO : "transparent"} radius={[4, 4, 0, 0]} isAnimationActive={false} barSize={barSize} />
-          <Bar dataKey="realizado" fill={COLOR_EJECUTADO} radius={[4, 4, 0, 0]} isAnimationActive={false} barSize={barSize} />
+          <Bar
+            dataKey="presupuesto"
+            fill={hayPresupuesto ? COLOR_PRESUPUESTO : "transparent"}
+            radius={[4, 4, 0, 0]}
+            isAnimationActive={false}
+            barSize={barSize}
+            label={(props: LabelProps) => <EtiquetaBarraContribucion {...props} tipo="presupuesto" presupuesto={presupuesto} realizado={realizado} />}
+          />
+          <Bar
+            dataKey="realizado"
+            fill={COLOR_EJECUTADO}
+            radius={[4, 4, 0, 0]}
+            isAnimationActive={false}
+            barSize={barSize}
+            label={(props: LabelProps) => <EtiquetaBarraContribucion {...props} tipo="realizado" presupuesto={presupuesto} realizado={realizado} />}
+          />
         </BarChart>
       </ResponsiveContainer>
       <LeyendaCentrada
