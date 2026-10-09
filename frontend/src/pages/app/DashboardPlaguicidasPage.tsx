@@ -14,7 +14,7 @@ import { ComparativeBarChart } from "../../components/charts/ComparativeBarChart
 import { MultiAnnualLineChart } from "../../components/charts/MultiAnnualLineChart";
 import { RankingBarChart } from "../../components/charts/RankingBarChart";
 import { RankingBarChartKilolitros } from "../../components/charts/RankingBarChartKilolitros";
-import { formatNumber, formatNumeroAbrev, formatQAbrev, formatUSDAbrev, MESES, MESES_LARGOS } from "../../utils/format";
+import { formatNumber, formatNumeroAbrev, formatQAbrev, formatUSDAbrev, MESES, MESES_LARGOS, periodoMesesGrafica, periodoMesesPagina } from "../../utils/format";
 import { claseBadgeCategoria, dashboardAccent } from "../../theme/colors";
 import type {
   DashboardPlaguicidasResponse,
@@ -45,7 +45,9 @@ export function DashboardPlaguicidasPage() {
   const [opciones, setOpciones] = useState<OpcionesFiltroPlaguicidas | null>(null);
 
   const [anio, setAnio] = useState("");
+  // `mes` es el "Hasta"; `mesDesde` el "Desde" (por defecto Enero).
   const [mes, setMes] = useState("");
+  const [mesDesde, setMesDesde] = useState("1");
   const [origen, setOrigen] = useState<string[]>([]);
   const [aplicacion, setAplicacion] = useState<string[]>([]);
   const [ingredienteAct, setIngredienteAct] = useState<string[]>([]);
@@ -73,6 +75,7 @@ export function DashboardPlaguicidasPage() {
     obtenerDashboardPlaguicidas({
       anio: anio ? Number(anio) : undefined,
       mes: mes ? Number(mes) : undefined,
+      mesDesde: Number(mesDesde),
       origen,
       aplicacion,
       ingredienteAct,
@@ -93,8 +96,10 @@ export function DashboardPlaguicidasPage() {
         if (!anio) setAnio(String(res.anio_actual));
         if (!mes) setMes(String(res.mes_seleccionado));
         // Si al cambiar de año el mes ya elegido queda fuera del rango
-        // con datos del nuevo año, lo ajustamos al último disponible.
-        else if (Number(mes) > res.mes_maximo) setMes(String(res.mes_maximo));
+        // con datos del nuevo año, lo ajustamos al último disponible
+        // (sin quedar nunca por debajo del Desde elegido).
+        else if (Number(mes) > Math.max(res.mes_maximo, Number(mesDesde)))
+          setMes(String(Math.max(res.mes_maximo, Number(mesDesde))));
       })
       .catch((err) => {
         if (!cancelado) setError(mensajeError(err));
@@ -106,7 +111,7 @@ export function DashboardPlaguicidasPage() {
       cancelado = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [anio, mes, origen, aplicacion, ingredienteAct, producto]);
+  }, [anio, mes, mesDesde, origen, aplicacion, ingredienteAct, producto]);
 
   function cargarMasFilasDetalle() {
     setCargandoMasFilas(true);
@@ -114,6 +119,7 @@ export function DashboardPlaguicidasPage() {
     obtenerDashboardPlaguicidas({
       anio: anio ? Number(anio) : undefined,
       mes: mes ? Number(mes) : undefined,
+      mesDesde: Number(mesDesde),
       origen,
       aplicacion,
       ingredienteAct,
@@ -129,7 +135,23 @@ export function DashboardPlaguicidasPage() {
       .finally(() => setCargandoMasFilas(false));
   }
 
+  // Un Desde posterior al Hasta (o un Hasta anterior al Desde) nunca es un
+  // estado válido: se corrige solo, sin mensajes.
+  function cambiarMesDesde(v: string) {
+    setMesDesde(v);
+    if (mes && Number(v) > Number(mes)) setMes(v);
+  }
+
+  function cambiarMesHasta(v: string) {
+    setMes(v);
+    if (Number(v) < Number(mesDesde)) setMesDesde(v);
+  }
+
   function limpiarFiltros() {
+    // Desde vuelve a Enero y Hasta a su valor por defecto (el backend lo
+    // resuelve al recargar con `mes` vacío).
+    setMesDesde("1");
+    setMes("");
     setOrigen([]);
     setAplicacion([]);
     setIngredienteAct([]);
@@ -146,6 +168,7 @@ export function DashboardPlaguicidasPage() {
   const filtrosExport = {
     anio: anio ? Number(anio) : undefined,
     mes: mes ? Number(mes) : undefined,
+    mes_desde: Number(mesDesde),
     origen: origen.length ? origen : undefined,
     ingrediente_act: ingredienteAct.length ? ingredienteAct : undefined,
     aplicacion: aplicacion.length ? aplicacion : undefined,
@@ -168,8 +191,8 @@ export function DashboardPlaguicidasPage() {
     })) ?? [];
 
   const serieMultianual = data?.comparativo_acumulado_multianual ?? [];
-  const dataComparacionMultianual = (serieMultianual[0]?.puntos ?? []).map((_, i) => {
-    const fila: Record<string, string | number> = { mes: MESES[i] };
+  const dataComparacionMultianual = (serieMultianual[0]?.puntos ?? []).map((punto, i) => {
+    const fila: Record<string, string | number> = { mes: MESES[punto.mes - 1] };
     for (const serie of serieMultianual) {
       fila[String(serie.anio)] = serie.puntos[i]?.cif_usd_acumulado ?? 0;
     }
@@ -182,24 +205,29 @@ export function DashboardPlaguicidasPage() {
         <Title className="text-ink">Dashboard de Plaguicidas</Title>
         {data && (
           <Text className="text-ink-muted">
-            {anioActual} + {MESES_LARGOS[data.mes_seleccionado - 1]} · Comparado contra {anioAnterior}
+            {anioActual} + {periodoMesesPagina(data.mes_desde, data.mes_seleccionado)} · Comparado contra {anioAnterior}
           </Text>
         )}
       </div>
 
       <div className="rounded-tremor-default bg-surface p-4 ring-1 ring-line">
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-          <FilterYearMonth
-            anio={anio}
-            mes={mes}
-            onChangeAnio={setAnio}
-            onChangeMes={setMes}
-            aniosOpciones={(opciones?.anios ?? []).map((a) => String(a))}
-            mesesOpciones={MESES_LARGOS.slice(0, data?.mes_maximo ?? 12).map((nombre, i) => ({
-              value: String(i + 1),
-              label: nombre,
-            }))}
-          />
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-[290px_repeat(4,minmax(0,1fr))]">
+          <div className="col-span-2 lg:col-span-1">
+            <FilterYearMonth
+              anio={anio}
+              mes={mes}
+              mesDesde={mesDesde}
+              onChangeAnio={setAnio}
+              onChangeMes={cambiarMesHasta}
+              onChangeMesDesde={cambiarMesDesde}
+              mesesDesdeOpciones={MESES_LARGOS.map((nombre, i) => ({ value: String(i + 1), label: nombre }))}
+              aniosOpciones={(opciones?.anios ?? []).map((a) => String(a))}
+              mesesOpciones={MESES_LARGOS.slice(0, Math.max(data?.mes_maximo ?? 12, Number(mesDesde))).map((nombre, i) => ({
+                value: String(i + 1),
+                label: nombre,
+              }))}
+            />
+          </div>
           <FilterMultiCombobox
             label="Ingrediente activo"
             values={ingredienteAct}
@@ -261,7 +289,7 @@ export function DashboardPlaguicidasPage() {
           <ChartCard
             theme="plaguicidas"
             title="Comparativo acumulado de CIF USD por mes"
-            subtitle={`${anioActual} vs. ${anioAnterior}, hasta ${MESES_LARGOS[data.mes_seleccionado - 1]}`}
+            subtitle={`${anioActual} vs. ${anioAnterior}, ${periodoMesesGrafica(data.mes_desde, data.mes_seleccionado)}`}
             exportar={
               <BotonExportarExcel
                 theme="plaguicidas"
@@ -295,7 +323,7 @@ export function DashboardPlaguicidasPage() {
           <ChartCard
             theme="plaguicidas"
             title="Comparación mensual de CIF"
-            subtitle={`${anioActual} vs. ${anioAnterior}, hasta ${MESES_LARGOS[data.mes_seleccionado - 1]}`}
+            subtitle={`${anioActual} vs. ${anioAnterior}, ${periodoMesesGrafica(data.mes_desde, data.mes_seleccionado)}`}
             exportar={
               <BotonExportarExcel
                 theme="plaguicidas"
@@ -329,7 +357,7 @@ export function DashboardPlaguicidasPage() {
           <ChartCard
             theme="plaguicidas"
             title="Comparativo acumulado de CIF USD por año"
-            subtitle={`Últimos ${serieMultianual.length} año(s) con datos, hasta ${MESES_LARGOS[data.mes_seleccionado - 1]}`}
+            subtitle={`Últimos ${serieMultianual.length} año(s) con datos, ${periodoMesesGrafica(data.mes_desde, data.mes_seleccionado)}`}
             exportar={
               <BotonExportarExcel
                 theme="plaguicidas"

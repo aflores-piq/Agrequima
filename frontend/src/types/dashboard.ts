@@ -104,6 +104,7 @@ export interface DashboardPlaguicidasResponse {
   anio_anterior: number;
   mes_seleccionado: number;
   mes_maximo: number;
+  mes_desde: number;
   kpis: KpisPlaguicidas;
   comparacion_acumulada_mensual: ComparacionAcumuladaMensual[];
   comparacion_mensual: ComparacionMensual[];
@@ -157,6 +158,7 @@ export interface DashboardNutrientesResponse {
   anio_anterior: number;
   mes_seleccionado: number;
   mes_maximo: number;
+  mes_desde: number;
   kpis: KpisNutrientes;
   comparacion_acumulada_mensual: ComparacionAcumuladaMensual[];
   comparacion_mensual: ComparacionMensual[];
@@ -172,6 +174,7 @@ export interface DashboardNutrientesResponse {
 export interface DashboardFiltrosPlaguicidas {
   anio?: number;
   mes?: number;
+  mesDesde?: number;
   origen?: string[];
   ingredienteAct?: string[];
   aplicacion?: string[];
@@ -183,6 +186,7 @@ export interface DashboardFiltrosPlaguicidas {
 export interface DashboardFiltrosNutrientes {
   anio?: number;
   mes?: number;
+  mesDesde?: number;
   nombreComercial?: string[];
   nombreComercialRaw?: string[];
   origen?: string[];

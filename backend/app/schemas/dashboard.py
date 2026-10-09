@@ -115,6 +115,7 @@ class DashboardPlaguicidasResponse(BaseModel):
     anio_anterior: int
     mes_seleccionado: int
     mes_maximo: int
+    mes_desde: int = 1
     kpis: KpisPlaguicidas
     comparacion_acumulada_mensual: list[ComparacionAcumuladaMensual]
     comparacion_mensual: list[ComparacionMensual]
@@ -171,6 +172,7 @@ class DashboardNutrientesResponse(BaseModel):
     anio_anterior: int
     mes_seleccionado: int
     mes_maximo: int
+    mes_desde: int = 1
     kpis: KpisNutrientes
     comparacion_acumulada_mensual: list[ComparacionAcumuladaMensual]
     comparacion_mensual: list[ComparacionMensual]

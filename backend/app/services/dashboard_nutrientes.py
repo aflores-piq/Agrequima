@@ -33,7 +33,13 @@ from app.schemas.dashboard import (
     ResumenItem,
 )
 from app.services.clasificacion import normalizar_aduana
-from app.services.df_utils import series_multianual_desde_df, sin_nan
+from app.services.df_utils import (
+    filtrar_rango_meses,
+    meses_del_rango,
+    normalizar_rango_meses,
+    series_multianual_desde_df,
+    sin_nan,
+)
 
 _TOP_N_FORMULAS = 20
 _TOP_N_ADUANAS = 12
@@ -191,8 +197,9 @@ class ContextoNutrientes:
     db: Session
     anio_actual: int
     anio_anterior: int
-    mes_seleccionado: int
+    mes_seleccionado: int  # "Hasta"
     mes_maximo: int
+    mes_desde: int  # "Desde" (1 = enero, el acumulado de siempre)
     base_actual: Query
     base_anterior: Query
     cif_total: float
@@ -207,11 +214,12 @@ def construir_contexto_nutrientes(
     origen: list[str] | None,
     componente: list[str] | None,
     nombre_comercial_raw: list[str] | None,
+    mes_desde: int | None = None,
 ) -> ContextoNutrientes:
     anio_actual = anio or _anio_default(db)
     anio_anterior = anio_actual - 1
     mes_maximo = _mes_maximo_disponible(db, anio_actual)
-    mes_seleccionado = mes or mes_maximo
+    mes_desde, mes_seleccionado = normalizar_rango_meses(mes_desde, mes or mes_maximo)
 
     mes_expr = extract("month", NutrienteActivo.FechaEmision)
 
@@ -231,9 +239,9 @@ def construir_contexto_nutrientes(
         query = _aplicar_filtros(
             query, nombre_comercial, nombre_comercial_raw, origen, componente,
         )
-        # El selector "hasta el mes" acota TODO el dashboard a
-        # Enero..mes_seleccionado, en ambos años que se comparan.
-        return query.filter(mes_expr <= mes_seleccionado)
+        # Los selectores "Desde"/"Hasta" acotan TODO el dashboard a
+        # mes_desde..mes_seleccionado, en ambos años que se comparan.
+        return filtrar_rango_meses(query, mes_expr, mes_desde, mes_seleccionado)
 
     base_actual = _base(anio_actual)
     base_anterior = _base(anio_anterior)
@@ -245,6 +253,7 @@ def construir_contexto_nutrientes(
         anio_anterior=anio_anterior,
         mes_seleccionado=mes_seleccionado,
         mes_maximo=mes_maximo,
+        mes_desde=mes_desde,
         base_actual=base_actual,
         base_anterior=base_anterior,
         cif_total=cif_total,
@@ -279,7 +288,7 @@ def df_acumulado_mensual(ctx: ContextoNutrientes) -> pd.DataFrame:
     acumulado_actual = 0.0
     acumulado_anterior = 0.0
     filas = []
-    for m in range(1, ctx.mes_seleccionado + 1):
+    for m in meses_del_rango(ctx.mes_desde, ctx.mes_seleccionado):
         acumulado_actual += float(totales_actual.get(m) or 0)
         acumulado_anterior += float(totales_anterior.get(m) or 0)
         filas.append((m, acumulado_actual, acumulado_anterior))
@@ -292,7 +301,7 @@ def df_comparativo_mensual(ctx: ContextoNutrientes) -> pd.DataFrame:
     totales_anterior = _totales_por_mes(ctx.base_anterior)
     filas = [
         (m, float(totales_actual.get(m) or 0), float(totales_anterior.get(m) or 0))
-        for m in range(1, ctx.mes_seleccionado + 1)
+        for m in meses_del_rango(ctx.mes_desde, ctx.mes_seleccionado)
     ]
     return pd.DataFrame(filas, columns=["mes", "cif_usd_actual", "cif_usd_anterior"])
 
@@ -313,7 +322,7 @@ def df_acumulado_multianual(ctx: ContextoNutrientes) -> pd.DataFrame:
         if not totales:
             continue
         acumulado = 0.0
-        for m in range(1, ctx.mes_seleccionado + 1):
+        for m in meses_del_rango(ctx.mes_desde, ctx.mes_seleccionado):
             acumulado += float(totales.get(m) or 0)
             filas.append((anio, m, acumulado))
     return pd.DataFrame(filas, columns=["anio", "mes", "cif_usd_acumulado"])
@@ -504,9 +513,10 @@ def obtener_dashboard_nutrientes(
     pagina: int,
     tamano_pagina: int,
     nombre_comercial_raw: list[str] | None = None,
+    mes_desde: int | None = None,
 ) -> DashboardNutrientesResponse:
     ctx = construir_contexto_nutrientes(
-        db, anio, mes, nombre_comercial, origen, componente, nombre_comercial_raw
+        db, anio, mes, nombre_comercial, origen, componente, nombre_comercial_raw, mes_desde
     )
 
     kpis = _kpis_nutrientes(ctx)
@@ -560,6 +570,7 @@ def obtener_dashboard_nutrientes(
         anio_anterior=ctx.anio_anterior,
         mes_seleccionado=ctx.mes_seleccionado,
         mes_maximo=ctx.mes_maximo,
+        mes_desde=ctx.mes_desde,
         kpis=kpis,
         comparacion_acumulada_mensual=comparacion_acumulada_mensual,
         comparacion_mensual=comparacion_mensual,

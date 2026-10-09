@@ -25,6 +25,7 @@ export async function obtenerDashboardPlaguicidas(
     params: {
       anio: filtros.anio,
       mes: filtros.mes,
+      mes_desde: filtros.mesDesde,
       origen: filtros.origen?.length ? filtros.origen : undefined,
       ingrediente_act: filtros.ingredienteAct?.length ? filtros.ingredienteAct : undefined,
       aplicacion: filtros.aplicacion?.length ? filtros.aplicacion : undefined,
@@ -43,6 +44,7 @@ export async function obtenerDashboardNutrientes(
     params: {
       anio: filtros.anio,
       mes: filtros.mes,
+      mes_desde: filtros.mesDesde,
       nombre_comercial: filtros.nombreComercial?.length ? filtros.nombreComercial : undefined,
       nombre_comercial_raw: filtros.nombreComercialRaw?.length ? filtros.nombreComercialRaw : undefined,
       origen: filtros.origen?.length ? filtros.origen : undefined,

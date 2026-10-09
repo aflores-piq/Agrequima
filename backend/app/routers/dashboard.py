@@ -68,6 +68,7 @@ router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 def dashboard_plaguicidas(
     anio: int | None = None,
     mes: int | None = Query(None, ge=1, le=12, description="'Hasta el mes'; por defecto el último con datos"),
+    mes_desde: int | None = Query(None, ge=1, le=12, description="'Desde el mes'; por defecto 1 (enero)"),
     origen: list[str] | None = Query(None),
     ingrediente_act: list[str] | None = Query(None),
     aplicacion: list[str] | None = Query(None),
@@ -79,7 +80,7 @@ def dashboard_plaguicidas(
     _acceso: UsuarioToken = Depends(require_acceso_importaciones),
 ) -> DashboardPlaguicidasResponse:
     return obtener_dashboard_plaguicidas(
-        db, anio, mes, origen, ingrediente_act, aplicacion, producto, pagina, tamano_pagina
+        db, anio, mes, origen, ingrediente_act, aplicacion, producto, pagina, tamano_pagina, mes_desde
     )
 
 
@@ -96,6 +97,7 @@ def opciones_dashboard_plaguicidas(
 def dashboard_nutrientes(
     anio: int | None = None,
     mes: int | None = Query(None, ge=1, le=12, description="'Hasta el mes'; por defecto el último con datos"),
+    mes_desde: int | None = Query(None, ge=1, le=12, description="'Desde el mes'; por defecto 1 (enero)"),
     nombre_comercial: list[str] | None = Query(None),
     origen: list[str] | None = Query(None),
     componente: list[str] | None = Query(None),
@@ -107,7 +109,7 @@ def dashboard_nutrientes(
     _acceso: UsuarioToken = Depends(require_acceso_importaciones),
 ) -> DashboardNutrientesResponse:
     return obtener_dashboard_nutrientes(
-        db, anio, mes, nombre_comercial, origen, componente, pagina, tamano_pagina, nombre_comercial_raw
+        db, anio, mes, nombre_comercial, origen, componente, pagina, tamano_pagina, nombre_comercial_raw, mes_desde
     )
 
 
@@ -284,6 +286,7 @@ def exportar_plaguicidas_elemento(
     elemento: str,
     anio: int | None = None,
     mes: int | None = Query(None, ge=1, le=12),
+    mes_desde: int | None = Query(None, ge=1, le=12, description="'Desde el mes'; por defecto 1 (enero)"),
     origen: list[str] | None = Query(None),
     ingrediente_act: list[str] | None = Query(None),
     aplicacion: list[str] | None = Query(None),
@@ -295,7 +298,7 @@ def exportar_plaguicidas_elemento(
     registro = export_service.PLAGUICIDAS_ELEMENTOS.get(elemento)
     if registro is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Elemento de exportación desconocido: {elemento}")
-    ctx = construir_contexto_plaguicidas(db, anio, mes, origen, ingrediente_act, aplicacion, producto)
+    ctx = construir_contexto_plaguicidas(db, anio, mes, origen, ingrediente_act, aplicacion, producto, mes_desde)
     contenido = export_service.generar_excel_elemento(ctx, registro)
     nombre_archivo = f"plaguicidas_{elemento.replace('-', '_')}_{ctx.anio_actual}.xlsx"
     return _respuesta_xlsx(contenido, nombre_archivo)
@@ -305,6 +308,7 @@ def exportar_plaguicidas_elemento(
 def exportar_plaguicidas_todo(
     anio: int | None = None,
     mes: int | None = Query(None, ge=1, le=12),
+    mes_desde: int | None = Query(None, ge=1, le=12, description="'Desde el mes'; por defecto 1 (enero)"),
     origen: list[str] | None = Query(None),
     ingrediente_act: list[str] | None = Query(None),
     aplicacion: list[str] | None = Query(None),
@@ -313,7 +317,7 @@ def exportar_plaguicidas_todo(
     _usuario: UsuarioToken = Depends(require_export_permission),
     _acceso: UsuarioToken = Depends(require_acceso_importaciones),
 ) -> Response:
-    ctx = construir_contexto_plaguicidas(db, anio, mes, origen, ingrediente_act, aplicacion, producto)
+    ctx = construir_contexto_plaguicidas(db, anio, mes, origen, ingrediente_act, aplicacion, producto, mes_desde)
     contenido = export_service.generar_excel_todo(ctx, export_service.PLAGUICIDAS_ELEMENTOS)
     nombre_archivo = f"plaguicidas_completo_{ctx.anio_actual}.xlsx"
     return _respuesta_xlsx(contenido, nombre_archivo)
@@ -324,6 +328,7 @@ def exportar_nutrientes_elemento(
     elemento: str,
     anio: int | None = None,
     mes: int | None = Query(None, ge=1, le=12),
+    mes_desde: int | None = Query(None, ge=1, le=12, description="'Desde el mes'; por defecto 1 (enero)"),
     nombre_comercial: list[str] | None = Query(None),
     origen: list[str] | None = Query(None),
     componente: list[str] | None = Query(None),
@@ -335,7 +340,9 @@ def exportar_nutrientes_elemento(
     registro = export_service.NUTRIENTES_ELEMENTOS.get(elemento)
     if registro is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Elemento de exportación desconocido: {elemento}")
-    ctx = construir_contexto_nutrientes(db, anio, mes, nombre_comercial, origen, componente, nombre_comercial_raw)
+    ctx = construir_contexto_nutrientes(
+        db, anio, mes, nombre_comercial, origen, componente, nombre_comercial_raw, mes_desde
+    )
     contenido = export_service.generar_excel_elemento(ctx, registro)
     nombre_archivo = f"nutrientes_{elemento.replace('-', '_')}_{ctx.anio_actual}.xlsx"
     return _respuesta_xlsx(contenido, nombre_archivo)
@@ -345,6 +352,7 @@ def exportar_nutrientes_elemento(
 def exportar_nutrientes_todo(
     anio: int | None = None,
     mes: int | None = Query(None, ge=1, le=12),
+    mes_desde: int | None = Query(None, ge=1, le=12, description="'Desde el mes'; por defecto 1 (enero)"),
     nombre_comercial: list[str] | None = Query(None),
     origen: list[str] | None = Query(None),
     componente: list[str] | None = Query(None),
@@ -353,7 +361,9 @@ def exportar_nutrientes_todo(
     _usuario: UsuarioToken = Depends(require_export_permission),
     _acceso: UsuarioToken = Depends(require_acceso_importaciones),
 ) -> Response:
-    ctx = construir_contexto_nutrientes(db, anio, mes, nombre_comercial, origen, componente, nombre_comercial_raw)
+    ctx = construir_contexto_nutrientes(
+        db, anio, mes, nombre_comercial, origen, componente, nombre_comercial_raw, mes_desde
+    )
     contenido = export_service.generar_excel_todo(ctx, export_service.NUTRIENTES_ELEMENTOS)
     nombre_archivo = f"nutrientes_completo_{ctx.anio_actual}.xlsx"
     return _respuesta_xlsx(contenido, nombre_archivo)

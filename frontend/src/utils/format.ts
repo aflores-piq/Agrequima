@@ -136,3 +136,20 @@ export const MESES_LARGOS = [
   "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
   "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
 ];
+
+/** Texto del periodo en el subtítulo de la página ("2026 + <periodo> · …").
+ * Con Desde=Enero es solo el mes final (como siempre); con otro Desde, el
+ * rango ("Abril – Junio") o, si Desde=Hasta, ese único mes. */
+export function periodoMesesPagina(mesDesde: number, mesHasta: number): string {
+  if (mesDesde <= 1 || mesDesde === mesHasta) return MESES_LARGOS[mesHasta - 1];
+  return `${MESES_LARGOS[mesDesde - 1]} – ${MESES_LARGOS[mesHasta - 1]}`;
+}
+
+/** Texto del periodo en el subtítulo de las gráficas. Con Desde=Enero es
+ * "hasta <mes>" (como siempre); con otro Desde, "de Abril a Junio" o, si
+ * Desde=Hasta, solo ese mes. */
+export function periodoMesesGrafica(mesDesde: number, mesHasta: number): string {
+  if (mesDesde <= 1) return `hasta ${MESES_LARGOS[mesHasta - 1]}`;
+  if (mesDesde === mesHasta) return MESES_LARGOS[mesHasta - 1];
+  return `de ${MESES_LARGOS[mesDesde - 1]} a ${MESES_LARGOS[mesHasta - 1]}`;
+}

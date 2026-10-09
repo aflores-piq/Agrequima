@@ -81,7 +81,7 @@ export function MultiAnnualLineChart({
 
   const totalMeses = series[0]?.puntos.length ?? 0;
   const data = Array.from({ length: totalMeses }, (_, i) => {
-    const fila: Record<string, string | number | null> = { mes: MESES[i] };
+    const fila: Record<string, string | number | null> = { mes: MESES[(series[0].puntos[i]?.mes ?? i + 1) - 1] };
     for (const serie of series) {
       fila[String(serie.anio)] = serie.puntos[i]?.cif_usd_acumulado ?? null;
     }

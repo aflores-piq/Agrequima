@@ -78,7 +78,14 @@ function Chevron() {
 /** Año y "hasta el mes" como UN solo filtro visual (igual que "2026 +
  * Julio" en Power BI): una sola cabecera y una sola caja con borde, con
  * dos <select> anidados adentro en vez de dos cajas independientes una
- * junto a la otra. */
+ * junto a la otra.
+ *
+ * Si se pasa `onChangeMesDesde` (solo Plaguicidas y Nutrientes) la caja
+ * pasa a tener TRES selectores -- Año, Desde y Hasta -- cada uno con su
+ * rótulo encima, en la misma fila de cabecera de siempre (misma altura
+ * que la versión de dos selectores). `mes` es el "Hasta". Sin esa prop el
+ * componente se ve y se comporta exactamente igual que antes
+ * (Financiero y demás pantallas). */
 export function FilterYearMonth({
   label = "Año",
   anio,
@@ -87,6 +94,9 @@ export function FilterYearMonth({
   onChangeMes,
   aniosOpciones,
   mesesOpciones,
+  mesDesde,
+  onChangeMesDesde,
+  mesesDesdeOpciones,
   theme = "teal",
   anchoFijo = false,
 }: {
@@ -97,10 +107,47 @@ export function FilterYearMonth({
   onChangeMes: (v: string) => void;
   aniosOpciones: string[];
   mesesOpciones: { value: string; label: string }[];
+  mesDesde?: string;
+  onChangeMesDesde?: (v: string) => void;
+  mesesDesdeOpciones?: { value: string; label: string }[];
   theme?: FilterTheme;
   anchoFijo?: boolean;
 }) {
   const { wrapper, header } = TEMAS[theme];
+  if (onChangeMesDesde) {
+    const rotulo = header.replace("px-2", "px-0.5");
+    const columnas = [
+      { rotulo: label, ancho: "flex-[0.8]", valor: anio, cambiar: onChangeAnio, opciones: aniosOpciones.map((a) => ({ value: a, label: a })) },
+      { rotulo: "Desde", ancho: "flex-[1.1]", valor: mesDesde ?? "1", cambiar: onChangeMesDesde, opciones: mesesDesdeOpciones ?? mesesOpciones },
+      { rotulo: "Hasta", ancho: "flex-[1.1]", valor: mes, cambiar: onChangeMes, opciones: mesesOpciones },
+    ];
+    return (
+      <div className={anchoFijo ? `${wrapper} ${ANCHO_CAJA_FILTRO}` : wrapper}>
+        <div className="flex gap-1 px-1.5">
+          {columnas.map((c) => (
+            <div key={c.rotulo} className={`min-w-0 ${c.ancho}`}>
+              <div className={rotulo}>{c.rotulo}</div>
+              <div className="relative pb-1.5">
+                <select
+                  value={c.valor}
+                  onChange={(e: ChangeEvent<HTMLSelectElement>) => c.cambiar(e.target.value)}
+                  className={CONTROL_CLASS}
+                  aria-label={c.rotulo}
+                >
+                  {c.opciones.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+                <Chevron />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
   return (
     <div className={anchoFijo ? `${wrapper} ${ANCHO_CAJA_FILTRO}` : wrapper}>
       <div className={header}>{label}</div>
