@@ -4,6 +4,7 @@ import { RequireRole, RequireModulo, destinoPorRol } from "./auth/RequireRole";
 import { ThemeProvider } from "./theme/ThemeContext";
 import { LoginPage } from "./pages/LoginPage";
 import { AppLayout } from "./pages/app/AppLayout";
+import { InicioPage } from "./pages/app/InicioPage";
 import { DashboardPlaguicidasPage } from "./pages/app/DashboardPlaguicidasPage";
 import { DashboardNutrientesPage } from "./pages/app/DashboardNutrientesPage";
 import { DashboardFinancieroPage } from "./pages/app/DashboardFinancieroPage";
@@ -19,6 +20,7 @@ import { CargaOtroIngresoPage } from "./pages/admin/CargaOtroIngresoPage";
 import { NomenclaturaPlaguicidasPage } from "./pages/admin/NomenclaturaPlaguicidasPage";
 import { AgrupadorNutrientesPage } from "./pages/admin/AgrupadorNutrientesPage";
 import { UsuariosPage } from "./pages/admin/UsuariosPage";
+import { BitacoraIngresosPage } from "./pages/admin/BitacoraIngresosPage";
 
 function InicioRedirect() {
   const { sesion } = useAuth();
@@ -30,20 +32,6 @@ function AdminIndexRedirect() {
   const { sesion } = useAuth();
   const destino = sesion?.rol === "Administrador de Usuarios" ? "usuarios" : "cargas/plaguicidas";
   return <Navigate to={destino} replace />;
-}
-
-/** Destino de /app (index): el primer módulo al que el usuario SÍ tiene
- * acceso -- antes era un <Navigate to="plaguicidas"> fijo, que para un
- * usuario sin Importaciones entraba en loop con RequireModulo (rebota a
- * /app, que vuelve a mandarlo a plaguicidas, que vuelve a rebotar...).
- * Si no tiene acceso a NINGÚN módulo, se queda en una pantalla neutra
- * (no nombra ningún módulo, no es un rebote hacia una ruta que lo
- * volvería a mandar aquí). */
-function AppIndexRedirect() {
-  const { sesion } = useAuth();
-  if (sesion?.accesoImportaciones) return <Navigate to="plaguicidas" replace />;
-  if (sesion?.accesoFinanciero) return <Navigate to="financiero" replace />;
-  return <p className="p-6 text-sm text-ink-muted">No tiene acceso a ningún módulo.</p>;
 }
 
 export default function App() {
@@ -62,7 +50,7 @@ export default function App() {
               </RequireRole>
             }
           >
-            <Route index element={<AppIndexRedirect />} />
+            <Route index element={<InicioPage />} />
             <Route
               path="plaguicidas"
               element={
@@ -182,6 +170,7 @@ export default function App() {
               }
             />
             <Route path="usuarios" element={<UsuariosPage />} />
+            <Route path="bitacora-ingresos" element={<BitacoraIngresosPage />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />

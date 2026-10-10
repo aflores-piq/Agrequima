@@ -5,6 +5,7 @@ export interface UsuarioOut {
   nombre_usuario: string;
   nombre_completo: string | null;
   email: string | null;
+  empresa: string | null;
   rol: Rol;
   activo: boolean;
   puede_exportar: boolean;
@@ -20,6 +21,7 @@ export interface UsuarioCreate {
   password: string;
   nombre_completo?: string;
   email?: string;
+  empresa?: string;
   rol: Rol;
   puede_exportar?: boolean;
   acceso_importaciones?: boolean;
@@ -29,6 +31,7 @@ export interface UsuarioCreate {
 
 export interface UsuarioUpdate {
   rol?: Rol;
+  empresa?: string;
   activo?: boolean;
   puede_exportar?: boolean;
   acceso_importaciones?: boolean;

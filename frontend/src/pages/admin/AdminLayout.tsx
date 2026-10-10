@@ -19,7 +19,10 @@ const ITEMS_FINANCIERO = [
 // Nomenclatura, ni por menú ni (ver App.tsx) por URL directa. Sí tiene
 // acceso a los dashboards (/app), igual que un Usuario — ver el enlace
 // "Ver dashboards →" más abajo, sin condición de rol.
-const ITEMS_ADMINISTRADOR_USUARIOS = [{ to: "/admin/usuarios", label: "Usuarios" }];
+const ITEMS_ADMINISTRADOR_USUARIOS = [
+  { to: "/admin/usuarios", label: "Usuarios" },
+  { to: "/admin/bitacora-ingresos", label: "Bitácora de ingresos" },
+];
 
 export function AdminLayout() {
   const { sesion } = useAuth();
@@ -34,6 +37,7 @@ export function AdminLayout() {
         ...(sesion?.accesoImportaciones ? ITEMS_IMPORTACIONES : []),
         ...(sesion?.accesoFinanciero ? ITEMS_FINANCIERO : []),
         { to: "/admin/usuarios", label: "Usuarios" },
+        { to: "/admin/bitacora-ingresos", label: "Bitácora de ingresos" },
       ];
 
   return (

@@ -28,6 +28,8 @@ class Usuario(Base):
     AccesoImportaciones = Column(Boolean, nullable=False, default=True)
     AccesoFinanciero = Column(Boolean, nullable=False, default=False)
     AccesoIndicadores = Column(Boolean, nullable=False, default=False)
+    # Empresa a la que pertenece el usuario (texto libre, sin catálogo; script 23).
+    Empresa = Column(String(150))
     # Aviso legal y condiciones de uso -- se pide una sola vez por
     # usuario, al primer login (ver LoginPage.tsx / endpoint
     # /auth/aceptar-aviso-legal). FechaAceptacion se llena con la hora

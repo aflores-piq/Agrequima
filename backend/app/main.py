@@ -7,11 +7,13 @@ from fastapi.responses import FileResponse
 
 from app.core.config import CORS_ORIGINS, FRONTEND_DIST_PATH
 from app.routers import (
+    admin_bitacora,
     admin_cargas,
     admin_nomenclatura,
     admin_usuarios,
     auth,
     dashboard,
+    sistema,
 )
 
 logging.basicConfig(
@@ -41,6 +43,8 @@ app.include_router(auth.router, prefix="/api")
 app.include_router(admin_cargas.router, prefix="/api")
 app.include_router(admin_nomenclatura.router, prefix="/api")
 app.include_router(admin_usuarios.router, prefix="/api")
+app.include_router(admin_bitacora.router, prefix="/api")
+app.include_router(sistema.router, prefix="/api")
 app.include_router(dashboard.router, prefix="/api")
 
 

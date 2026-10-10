@@ -153,3 +153,21 @@ export function periodoMesesGrafica(mesDesde: number, mesHasta: number): string 
   if (mesDesde === mesHasta) return MESES_LARGOS[mesHasta - 1];
   return `de ${MESES_LARGOS[mesDesde - 1]} a ${MESES_LARGOS[mesHasta - 1]}`;
 }
+
+/** Fecha y hora registradas en hora de Guatemala ("2026-10-09T14:05:00", sin zona) como
+ * "09/10/2026 02:05 p. m." -- se lee el texto tal cual, sin convertir de zona horaria. */
+export function formatFechaHoraGuatemala(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/.exec(iso);
+  if (!m) return iso;
+  const hora24 = Number(m[4]);
+  const hora12 = String(hora24 % 12 || 12).padStart(2, "0");
+  return `${m[3]}/${m[2]}/${m[1]} ${hora12}:${m[5]} ${hora24 < 12 ? "a. m." : "p. m."}`;
+}
+
+/** Igual que formatFechaHoraGuatemala pero para la portada: "09/10/2026, 2:05 p. m." (hora sin cero a la izquierda). */
+export function formatFechaHoraPortada(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/.exec(iso);
+  if (!m) return iso;
+  const hora24 = Number(m[4]);
+  return `${m[3]}/${m[2]}/${m[1]}, ${hora24 % 12 || 12}:${m[5]} ${hora24 < 12 ? "a. m." : "p. m."}`;
+}

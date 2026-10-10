@@ -41,6 +41,7 @@ def _a_usuario_out(usuario: Usuario, rol_nombre: str) -> UsuarioOut:
         nombre_usuario=usuario.NombreUsuario,
         nombre_completo=usuario.NombreCompleto,
         email=usuario.Email,
+        empresa=usuario.Empresa,
         rol=rol_nombre,
         activo=usuario.Activo,
         puede_exportar=usuario.PuedeExportar,
@@ -50,6 +51,12 @@ def _a_usuario_out(usuario: Usuario, rol_nombre: str) -> UsuarioOut:
         acceso_financiero=usuario.AccesoFinanciero,
         acceso_indicadores=usuario.AccesoIndicadores,
     )
+
+
+def _normalizar_empresa(valor: str | None) -> str | None:
+    """Texto libre: sin espacios sobrantes; vacío = sin empresa (NULL)."""
+    valor = (valor or "").strip()
+    return valor or None
 
 
 def _buscar_rol(db: Session, nombre_rol: str) -> Rol:
@@ -98,6 +105,7 @@ def crear_usuario(
         NombreUsuario=payload.nombre_usuario,
         NombreCompleto=payload.nombre_completo,
         Email=payload.email,
+        Empresa=_normalizar_empresa(payload.empresa),
         PasswordHash=hash_password(payload.password),
         RolId=rol.RolId,
         Activo=True,
@@ -140,6 +148,8 @@ def actualizar_usuario(
         usuario.RolId = rol.RolId
     if payload.activo is not None:
         usuario.Activo = payload.activo
+    if "empresa" in payload.model_fields_set:
+        usuario.Empresa = _normalizar_empresa(payload.empresa)
     if payload.puede_exportar is not None:
         usuario.PuedeExportar = payload.puede_exportar
     if payload.acceso_importaciones is not None:

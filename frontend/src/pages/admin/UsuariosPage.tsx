@@ -8,6 +8,28 @@ import { SimpleDataTable } from "../../components/SimpleDataTable";
 import type { Rol } from "../../types/auth";
 import type { UsuarioOut } from "../../types/usuarios";
 
+/** Empresa de la fila: texto libre, se guarda al salir del campo (o con Enter) solo si cambió. */
+function EmpresaCelda({ usuario, onGuardar }: { usuario: UsuarioOut; onGuardar: (empresa: string) => void }) {
+  const [valor, setValor] = useState(usuario.empresa ?? "");
+  useEffect(() => setValor(usuario.empresa ?? ""), [usuario.empresa]);
+  function guardarSiCambio() {
+    if (valor.trim() !== (usuario.empresa ?? "")) onGuardar(valor);
+  }
+  return (
+    <TextInput
+      value={valor}
+      onValueChange={setValor}
+      onBlur={guardarSiCambio}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") e.currentTarget.blur();
+      }}
+      maxLength={150}
+      placeholder="—"
+      className="w-40"
+    />
+  );
+}
+
 export function UsuariosPage() {
   const { sesion } = useAuth();
   // "Administrador de Usuarios" (personal de Agrequima) solo puede crear
@@ -22,6 +44,7 @@ export function UsuariosPage() {
   const [nombreUsuario, setNombreUsuario] = useState("");
   const [password, setPassword] = useState("");
   const [nombreCompleto, setNombreCompleto] = useState("");
+  const [empresa, setEmpresa] = useState("");
   const [rol, setRol] = useState<Rol>("Usuario");
   const [puedeExportar, setPuedeExportar] = useState(false);
   const [accesoImportaciones, setAccesoImportaciones] = useState(true);
@@ -54,6 +77,7 @@ export function UsuariosPage() {
         nombre_usuario: nombreUsuario,
         password,
         nombre_completo: nombreCompleto || undefined,
+        empresa: empresa || undefined,
         rol,
         puede_exportar: puedeExportar,
         acceso_importaciones: accesoImportaciones,
@@ -63,6 +87,7 @@ export function UsuariosPage() {
       setNombreUsuario("");
       setPassword("");
       setNombreCompleto("");
+      setEmpresa("");
       setRol("Usuario");
       setPuedeExportar(false);
       setAccesoImportaciones(true);
@@ -79,6 +104,15 @@ export function UsuariosPage() {
   async function cambiarRol(usuario: UsuarioOut, nuevoRol: Rol) {
     try {
       await actualizarUsuario(usuario.usuario_id, { rol: nuevoRol });
+      cargar();
+    } catch (err) {
+      setError(mensajeError(err));
+    }
+  }
+
+  async function guardarEmpresa(usuario: UsuarioOut, nuevaEmpresa: string) {
+    try {
+      await actualizarUsuario(usuario.usuario_id, { empresa: nuevaEmpresa });
       cargar();
     } catch (err) {
       setError(mensajeError(err));
@@ -182,6 +216,10 @@ export function UsuariosPage() {
             <TextInput value={nombreCompleto} onValueChange={setNombreCompleto} className="w-48" />
           </div>
           <div>
+            <Text className="mb-1 text-xs text-ink-muted">Empresa</Text>
+            <TextInput value={empresa} onValueChange={setEmpresa} maxLength={150} className="w-48" />
+          </div>
+          <div>
             <Text className="mb-1 text-xs text-ink-muted">Rol</Text>
             <Select value={rol} onValueChange={(v) => setRol(v as Rol)} className="w-48">
               <SelectItem value="Usuario">Usuario</SelectItem>
@@ -250,6 +288,10 @@ export function UsuariosPage() {
             columnas={[
               { header: "Usuario", accessor: (r: UsuarioOut) => r.nombre_usuario },
               { header: "Nombre completo", accessor: (r: UsuarioOut) => r.nombre_completo ?? "—" },
+              {
+                header: "Empresa",
+                accessor: (r: UsuarioOut) => <EmpresaCelda usuario={r} onGuardar={(e) => guardarEmpresa(r, e)} />,
+              },
               {
                 header: "Rol",
                 accessor: (r: UsuarioOut) => (

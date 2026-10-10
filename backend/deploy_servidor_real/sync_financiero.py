@@ -432,6 +432,34 @@ def probar(destino: dict, origen: dict, log: logging.Logger, completo: bool = Fa
     return 1 if fallos else 0
 
 
+def _registrar_ultima_ejecucion_ok(destino: dict, filas: int, log: logging.Logger) -> None:
+    """Deja en dbo.SyncEstado (Proceso='Financiero') la fecha y hora de Guatemala de esta corrida
+    EXITOSA, que la pantalla de inicio muestra como "Datos actualizados". Solo se llama cuando todas
+    las vistas salieron bien. Si no se puede escribir (por ejemplo, falta 24_sync_estado.sql) lo deja
+    en el log y NO cambia el resultado de la sincronización."""
+    ahora = (
+        datetime.datetime.now(datetime.timezone.utc)
+        .astimezone(datetime.timezone(datetime.timedelta(hours=-6)))
+        .replace(tzinfo=None, microsecond=0)
+    )
+    try:
+        conn = pyodbc.connect(_cadena_conexion(**destino), timeout=15, autocommit=True)
+        try:
+            conn.cursor().execute(
+                "MERGE dbo.SyncEstado AS t "
+                "USING (SELECT CAST(? AS NVARCHAR(50)) AS Proceso, CAST(? AS DATETIME2(0)) AS Fecha, CAST(? AS INT) AS Filas) AS s "
+                "ON t.Proceso = s.Proceso "
+                "WHEN MATCHED THEN UPDATE SET UltimaEjecucionOk = s.Fecha, Filas = s.Filas "
+                "WHEN NOT MATCHED THEN INSERT (Proceso, UltimaEjecucionOk, Filas) VALUES (s.Proceso, s.Fecha, s.Filas);",
+                "Financiero", ahora, filas,
+            )
+        finally:
+            conn.close()
+        log.info("dbo.SyncEstado actualizado: Financiero, ultima ejecucion OK %s (%d filas).", ahora, filas)
+    except Exception as exc:
+        log.warning("No se pudo actualizar dbo.SyncEstado (la sincronizacion en si termino bien): %s", exc)
+
+
 def main(argv=None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     if sys.stdout is not None and hasattr(sys.stdout, "reconfigure"):
@@ -471,6 +499,8 @@ def main(argv=None) -> int:
     fallidos = [r["objeto"] for r in resultados if r["estado"] != "OK"]
     if fallidos:
         log.error("Fallaron %d objeto(s): %s", len(fallidos), ", ".join(fallidos))
+    if not fallidos and solo is None:
+        _registrar_ultima_ejecucion_ok(destino, sum(r["cargadas"] or 0 for r in resultados), log)
     log.info("=== FIN sincronización Financiero (resultado=%s) ===", "CON ERRORES" if fallidos else "OK")
     return 1 if fallidos else 0
 
