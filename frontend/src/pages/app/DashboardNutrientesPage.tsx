@@ -211,7 +211,7 @@ export function DashboardNutrientesPage() {
             theme="orange"
           />
           <FilterMultiCombobox
-            label="Nombre comercial (agrupado)"
+            label="Fórmulas"
             values={nombreComercial}
             onChange={setNombreComercial}
             options={opciones?.nombres_comerciales ?? []}
