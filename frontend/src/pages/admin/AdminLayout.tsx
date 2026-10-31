@@ -7,6 +7,7 @@ const ITEMS_IMPORTACIONES = [
   { to: "/admin/cargas/nutrientes", label: "Carga de nutrientes" },
   { to: "/admin/nomenclatura/plaguicidas", label: "Nomenclatura plaguicidas" },
   { to: "/admin/nomenclatura/nutrientes", label: "Agrupador nutrientes" },
+  { to: "/admin/homologacion-empresas", label: "Homologación de empresas" },
 ];
 
 const ITEMS_FINANCIERO = [
@@ -73,7 +74,7 @@ export function AdminLayout() {
           </div>
         </aside>
 
-        <div className="flex-1">
+        <div className="min-w-0 flex-1">
           <nav className="flex gap-1 overflow-x-auto border-b border-line bg-surface px-4 py-2 sm:hidden">
             {items.map((item) => (
               <NavLink
