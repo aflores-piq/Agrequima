@@ -275,15 +275,10 @@ export function DashboardPlaguicidasPage() {
 
       {data && (
         <>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <KpiCard label="Total CIF USD" value={formatUSDAbrev(data.kpis.cif_total_usd)} accentColor={ACCENT.tremor} />
             <KpiCard label="Total CIF Quetzales" value={formatQAbrev(data.kpis.cif_total_q)} accentColor={ACCENT.tremor} />
             <KpiCard label="Registros" value={formatNumber(data.kpis.registros)} accentColor={ACCENT.tremor} />
-            <KpiCard
-              label="Ingredientes Activos"
-              value={formatNumber(data.kpis.ingredientes_activos)}
-              accentColor={ACCENT.tremor}
-            />
           </div>
 
           <ChartCard
