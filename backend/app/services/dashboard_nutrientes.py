@@ -266,7 +266,8 @@ def _kpis_nutrientes(ctx: ContextoNutrientes) -> KpisNutrientes:
         func.sum(NutrienteActivo.CIF_dolares),
         func.sum(NutrienteActivo.CIF_Q),
         func.count(NutrienteActivo.nutrienteid),
-        func.count(NutrienteActivo.EmpresaImportadora.distinct()),
+        # Empresa homologada (COALESCE con la original): variantes de la misma empresa cuentan una sola vez.
+        func.count(NutrienteActivo.empresa_efectiva.distinct()),
     ).one()
     return KpisNutrientes(
         cif_total_usd=float(fila[0] or 0),
@@ -358,13 +359,15 @@ def df_top_formulas(ctx: ContextoNutrientes) -> pd.DataFrame:
 
 def df_top_empresas_importadoras(ctx: ContextoNutrientes) -> pd.DataFrame:
     """Top empresas importadoras por CIF -- mismo patrón que
-    df_top_formulas, agrupando por EmpresaImportadora en vez de
+    df_top_formulas, agrupando por la empresa en vez de
     ProductoAgrupado (equivalente de Importacion.importador en
-    Plaguicidas, ver df_top_importadores en dashboard_plaguicidas.py)."""
+    Plaguicidas, ver df_top_importadores en dashboard_plaguicidas.py).
+    La empresa es la homologada (COALESCE(EmpresaHomologada, EmpresaImportadora)),
+    así "A, S.A." y "A, SOCIEDAD ANONIMA" suman en una sola barra."""
     filas = (
-        ctx.base_actual.with_entities(NutrienteActivo.EmpresaImportadora, func.sum(NutrienteActivo.CIF_dolares))
-        .filter(NutrienteActivo.EmpresaImportadora.isnot(None))
-        .group_by(NutrienteActivo.EmpresaImportadora)
+        ctx.base_actual.with_entities(NutrienteActivo.empresa_efectiva, func.sum(NutrienteActivo.CIF_dolares))
+        .filter(NutrienteActivo.empresa_efectiva.isnot(None))
+        .group_by(NutrienteActivo.empresa_efectiva)
         .order_by(func.sum(NutrienteActivo.CIF_dolares).desc())
         .limit(_TOP_N_EMPRESAS)
         .all()
@@ -495,7 +498,7 @@ def df_detalle(ctx: ContextoNutrientes) -> pd.DataFrame:
         [
             (
                 f.AduanadeIngreso, f.No_Licencia, f.No_Registro, f.NombreComercial,
-                f.EmpresaImportadora, f.FechaEmision.isoformat() if f.FechaEmision else None, f.UMedida,
+                f.empresa_efectiva, f.FechaEmision.isoformat() if f.FechaEmision else None, f.UMedida,
             )
             for f in filas
         ],
@@ -557,7 +560,7 @@ def obtener_dashboard_nutrientes(
                 no_licencia=fila.No_Licencia,
                 no_registro=fila.No_Registro,
                 nombre_comercial=fila.NombreComercial,
-                empresa_importadora=fila.EmpresaImportadora,
+                empresa_importadora=fila.empresa_efectiva,
                 fecha_emision=fila.FechaEmision.isoformat() if fila.FechaEmision else None,
                 unidad=fila.UMedida,
             )

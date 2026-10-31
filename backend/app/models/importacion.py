@@ -1,4 +1,5 @@
-from sqlalchemy import DECIMAL, Column, DateTime, Integer, String
+from sqlalchemy import DECIMAL, Column, DateTime, Integer, String, func
+from sqlalchemy.ext.hybrid import hybrid_property
 
 from app.core.db import Base
 
@@ -30,3 +31,15 @@ class Importacion(Base):
     userid = Column(Integer)
     Grupo = Column(String(350))
     CodigoAgrupador = Column(String(20))
+    # Nombre homologado de la empresa (dbo.CatalogoEmpresas, ver script 26): se rellena al cargar y al editar el
+    # catalogo. NULL = empresa todavia sin homologar. El dato original (importador) NO se modifica nunca.
+    EmpresaHomologada = Column(String(400))
+
+    @hybrid_property
+    def importador_efectivo(self):
+        """Empresa que ven los tableros: la homologada y, si no hay, la original."""
+        return self.EmpresaHomologada if self.EmpresaHomologada is not None else self.importador
+
+    @importador_efectivo.expression
+    def importador_efectivo(cls):
+        return func.coalesce(cls.EmpresaHomologada, cls.importador)

@@ -15,6 +15,8 @@ class ResumenCargaPlaguicidas(BaseModel):
     filas_sin_agrupador: int
     nomenclatura_actualizada: bool
     claves_nomenclatura_nuevas: int | None = None
+    # Empresas (distintas) de esta carga cuya clave no estaba en dbo.CatalogoEmpresas: quedan sin homologar
+    empresas_sin_homologar: int = 0
     estado: str
 
 
@@ -28,6 +30,8 @@ class ResumenCargaNutrientes(BaseModel):
     filas_sin_agrupador: int
     agrupador_actualizado: bool
     claves_agrupador_nuevas: int | None = None
+    # Empresas (distintas) de esta carga cuya clave no estaba en dbo.CatalogoEmpresas: quedan sin homologar
+    empresas_sin_homologar: int = 0
     estado: str
 
 

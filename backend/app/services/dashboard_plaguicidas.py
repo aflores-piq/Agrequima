@@ -369,8 +369,10 @@ def df_top_moleculas_kilolitros(ctx: ContextoPlaguicidas) -> pd.DataFrame:
 
 
 def df_top_importadores(ctx: ContextoPlaguicidas) -> pd.DataFrame:
-    """Gráfico 5: top importadores por CIF USD."""
-    return _df_ranking(ctx.base_actual, Importacion.importador, _TOP_N)
+    """Gráfico 5: top importadores por CIF USD. La empresa es la homologada
+    (COALESCE(EmpresaHomologada, importador)): las variantes de una misma
+    empresa suman en una sola barra."""
+    return _df_ranking(ctx.base_actual, Importacion.importador_efectivo, _TOP_N)
 
 
 def _df_resumen(query: Query, columna, cif_total: float, limite: int) -> pd.DataFrame:
@@ -408,7 +410,7 @@ def df_nombres_comerciales(ctx: ContextoPlaguicidas) -> pd.DataFrame:
             Importacion.producto,
             Importacion.Grupo,
             Importacion.aplicacion,
-            Importacion.importador,
+            Importacion.importador_efectivo,
             Importacion.origen,
             func.sum(Importacion.cantidad),
             Importacion.unidad_medida,
@@ -420,7 +422,7 @@ def df_nombres_comerciales(ctx: ContextoPlaguicidas) -> pd.DataFrame:
             Importacion.producto,
             Importacion.Grupo,
             Importacion.aplicacion,
-            Importacion.importador,
+            Importacion.importador_efectivo,
             Importacion.origen,
             Importacion.unidad_medida,
         )
@@ -512,7 +514,7 @@ def df_detalle(ctx: ContextoPlaguicidas) -> pd.DataFrame:
         [
             (
                 f.anio, f.fecha, f.recibointerno, f.serie_sat, f.numero_recibo_sat,
-                f.aplicacion, f.importador, f.producto, f.ingrediente_act,
+                f.aplicacion, f.importador_efectivo, f.producto, f.ingrediente_act,
                 float(f.cantidad) if f.cantidad is not None else None, f.unidad_medida,
                 float(f.cif_USD) if f.cif_USD is not None else None,
                 float(f.cif_Q) if f.cif_Q is not None else None,
@@ -590,7 +592,7 @@ def obtener_dashboard_plaguicidas(
                 serie_sat=fila.serie_sat,
                 numero_recibo_sat=fila.numero_recibo_sat,
                 aplicacion=fila.aplicacion,
-                importador=fila.importador,
+                importador=fila.importador_efectivo,
                 producto=fila.producto,
                 ingrediente_act=fila.ingrediente_act,
                 exportador=fila.exportador,

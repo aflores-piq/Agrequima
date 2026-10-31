@@ -17,6 +17,7 @@ from sqlalchemy import bindparam, text
 from app.core.db import engine
 from app.schemas.cargas import ResumenCargaPlaguicidas
 from app.services.auditoria import registrar_auditoria
+from app.services.empresas import contar_empresas_sin_homologar, max_log_empresas
 from app.services.text_utils import (
     a_texto_id,
     detectar_fila_encabezado,
@@ -310,6 +311,7 @@ def procesar_carga_plaguicidas(
             max_log_id_antes = conn.execute(
                 text("SELECT ISNULL(MAX(LogId), 0) FROM dbo.log_ExcepcionesAgrupador")
             ).scalar()
+            max_empresas_antes = max_log_empresas(conn)
 
         with engine.begin() as conn:
             conn.execute(
@@ -324,6 +326,7 @@ def procesar_carga_plaguicidas(
                 ),
                 {"max_id": max_log_id_antes},
             ).scalar()
+            empresas_sin_homologar = contar_empresas_sin_homologar(conn, max_empresas_antes)
     except Exception as exc:
         logger.exception("Falló la carga de plaguicidas (archivo=%s)", nombre_archivo_importaciones)
         registrar_auditoria(
@@ -345,6 +348,7 @@ def procesar_carga_plaguicidas(
         filas_sin_agrupador=int(filas_sin_agrupador),
         nomenclatura_actualizada=nomenclatura_actualizada,
         claves_nomenclatura_nuevas=claves_nomenclatura_nuevas,
+        empresas_sin_homologar=empresas_sin_homologar,
         estado=estado,
     )
 

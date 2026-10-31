@@ -1,4 +1,5 @@
-from sqlalchemy import Boolean, Column, Date, DateTime, Float, Integer, Numeric, String
+from sqlalchemy import Boolean, Column, Date, DateTime, Float, Integer, Numeric, String, func
+from sqlalchemy.ext.hybrid import hybrid_property
 
 from app.core.db import Base
 
@@ -37,6 +38,17 @@ class Nutriente(Base):
     Excluido = Column(Boolean, nullable=False, default=False)
     fechamod = Column(DateTime)
     userid = Column(Integer)
+    # Nombre homologado de la empresa (dbo.CatalogoEmpresas, ver script 26). NULL = sin homologar.
+    EmpresaHomologada = Column(String(400))
+
+    @hybrid_property
+    def empresa_efectiva(self):
+        """Empresa que ven los tableros: la homologada y, si no hay, la original."""
+        return self.EmpresaHomologada if self.EmpresaHomologada is not None else self.EmpresaImportadora
+
+    @empresa_efectiva.expression
+    def empresa_efectiva(cls):
+        return func.coalesce(cls.EmpresaHomologada, cls.EmpresaImportadora)
 
 
 class NutrienteActivo(Base):
@@ -88,3 +100,13 @@ class NutrienteActivo(Base):
     Excluido = Column(Boolean, nullable=False)
     fechamod = Column(DateTime)
     userid = Column(Integer)
+    EmpresaHomologada = Column(String(400))
+
+    @hybrid_property
+    def empresa_efectiva(self):
+        """Empresa que ven los tableros: la homologada y, si no hay, la original."""
+        return self.EmpresaHomologada if self.EmpresaHomologada is not None else self.EmpresaImportadora
+
+    @empresa_efectiva.expression
+    def empresa_efectiva(cls):
+        return func.coalesce(cls.EmpresaHomologada, cls.EmpresaImportadora)
