@@ -14,6 +14,7 @@ from app.routers import (
     admin_nomenclatura,
     admin_usuarios,
     auth,
+    avisos,
     dashboard,
     sistema,
 )
@@ -48,6 +49,7 @@ app.include_router(admin_empresas.router, prefix="/api")
 app.include_router(admin_nombres_comerciales.router, prefix="/api")
 app.include_router(admin_usuarios.router, prefix="/api")
 app.include_router(admin_bitacora.router, prefix="/api")
+app.include_router(avisos.router, prefix="/api")
 app.include_router(sistema.router, prefix="/api")
 app.include_router(dashboard.router, prefix="/api")
 

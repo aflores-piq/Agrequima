@@ -17,9 +17,9 @@ from sqlalchemy import bindparam, text
 from app.core.db import engine
 from app.schemas.cargas import ResumenCargaPlaguicidas
 from app.services.auditoria import registrar_auditoria
+from app.services.avisos import ORIGEN_PLAGUICIDAS, generar_avisos_carga, tomar_instantanea
 from app.services.empresas import contar_empresas_sin_homologar, max_log_empresas
 from app.services.nombres_comerciales import (
-    max_id_importacion,
     registrar_nombres_sin_homologar,
     sincronizar_nombres_plaguicidas,
 )
@@ -284,7 +284,7 @@ def _filtrar_solo_mes_nuevo(df: pd.DataFrame) -> tuple[pd.DataFrame, int, list[i
     return df[es_mes_nuevo].copy(), filas_ya_cargadas, meses_nuevos
 
 
-def _homologar_nombres_comerciales(id_antes: int) -> int:
+def _homologar_nombres_comerciales(id_antes: int) -> list[str]:
     """Después del EXEC de la carga: rellena NombreComercialHomologado desde el catálogo y registra en
     dbo.log_ExcepcionesNombresComerciales los nombres nuevos (sin catálogo). Si algo falla NO se pierde la carga (ya está
     confirmada): se deja el aviso en el log y la homologación queda para la próxima sincronización del catálogo."""
@@ -294,7 +294,16 @@ def _homologar_nombres_comerciales(id_antes: int) -> int:
             return registrar_nombres_sin_homologar(conn, id_antes)
     except Exception:
         logger.exception("No se pudo homologar los nombres comerciales de la carga (la carga sí quedó registrada)")
-        return 0
+        return []
+
+
+def _generar_avisos(instantanea, nombres_nuevos: list[str]) -> None:
+    """Avisos de la campanita (elemento nuevo, nombres comerciales nuevos). Si falla NO se pierde la carga ya confirmada."""
+    try:
+        with engine.begin() as conn:
+            generar_avisos_carga(conn, instantanea, nombres_nuevos)
+    except Exception:
+        logger.exception("No se pudieron crear los avisos de la carga de plaguicidas (la carga sí quedó registrada)")
 
 
 def procesar_carga_plaguicidas(
@@ -330,7 +339,8 @@ def procesar_carga_plaguicidas(
                 text("SELECT ISNULL(MAX(LogId), 0) FROM dbo.log_ExcepcionesAgrupador")
             ).scalar()
             max_empresas_antes = max_log_empresas(conn)
-            max_id_antes = max_id_importacion(conn)
+            instantanea = tomar_instantanea(conn, ORIGEN_PLAGUICIDAS)
+            max_id_antes = instantanea.id_antes
 
         with engine.begin() as conn:
             conn.execute(
@@ -347,7 +357,9 @@ def procesar_carga_plaguicidas(
             ).scalar()
             empresas_sin_homologar = contar_empresas_sin_homologar(conn, max_empresas_antes)
 
-        nombres_sin_homologar = _homologar_nombres_comerciales(max_id_antes)
+        nombres_nuevos = _homologar_nombres_comerciales(max_id_antes)
+        nombres_sin_homologar = len(nombres_nuevos)
+        _generar_avisos(instantanea, nombres_nuevos)
     except Exception as exc:
         logger.exception("Falló la carga de plaguicidas (archivo=%s)", nombre_archivo_importaciones)
         registrar_auditoria(

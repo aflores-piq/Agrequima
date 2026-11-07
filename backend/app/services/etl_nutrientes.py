@@ -17,6 +17,7 @@ from sqlalchemy import bindparam, text
 from app.core.db import engine
 from app.schemas.cargas import ResumenCargaNutrientes
 from app.services.auditoria import registrar_auditoria
+from app.services.avisos import ORIGEN_NUTRIENTES, generar_avisos_carga, tomar_instantanea
 from app.services.empresas import contar_empresas_sin_homologar, max_log_empresas
 from app.services.text_utils import (
     a_texto_id,
@@ -276,6 +277,15 @@ def _filtrar_solo_mes_nuevo(df: pd.DataFrame) -> tuple[pd.DataFrame, int, list[i
     return df[es_mes_nuevo].copy(), filas_ya_cargadas, meses_nuevos
 
 
+def _generar_avisos(instantanea) -> None:
+    """Avisos de la campanita (elemento nuevo, nombres comerciales nuevos). Si falla NO se pierde la carga ya confirmada."""
+    try:
+        with engine.begin() as conn:
+            generar_avisos_carga(conn, instantanea)
+    except Exception:
+        logger.exception("No se pudieron crear los avisos de la carga de nutrientes (la carga sí quedó registrada)")
+
+
 def procesar_carga_nutrientes(
     contenido_nutrientes: bytes,
     nombre_archivo_nutrientes: str,
@@ -309,6 +319,7 @@ def procesar_carga_nutrientes(
                 text("SELECT ISNULL(MAX(LogId), 0) FROM dbo.log_ExcepcionesAgrupadorNutrientes")
             ).scalar()
             max_empresas_antes = max_log_empresas(conn)
+            instantanea = tomar_instantanea(conn, ORIGEN_NUTRIENTES)
 
         with engine.begin() as conn:
             conn.execute(
@@ -325,6 +336,8 @@ def procesar_carga_nutrientes(
                 {"max_id": max_log_id_antes},
             ).scalar()
             empresas_sin_homologar = contar_empresas_sin_homologar(conn, max_empresas_antes)
+
+        _generar_avisos(instantanea)
     except Exception as exc:
         logger.exception("Falló la carga de nutrientes (archivo=%s)", nombre_archivo_nutrientes)
         registrar_auditoria(

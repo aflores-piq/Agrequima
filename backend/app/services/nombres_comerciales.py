@@ -49,9 +49,9 @@ def max_id_importacion(conn) -> int:
     return int(conn.execute(text("SELECT ISNULL(MAX(importacionplaguicidaid), 0) FROM dbo.Importacion")).scalar() or 0)
 
 
-def registrar_nombres_sin_homologar(conn, id_antes: int) -> int:
+def registrar_nombres_sin_homologar(conn, id_antes: int) -> list[str]:
     """Registra en dbo.log_ExcepcionesNombresComerciales (una fila por nombre) los nombres comerciales de las filas que agregó la
-    carga (id > id_antes) cuya clave no está en el catálogo. Devuelve cuántos nombres nuevos hay."""
+    carga (id > id_antes) cuya clave no está en el catálogo. Devuelve los nombres nuevos (uno por clave), el de más CIF primero."""
     nuevos = conn.execute(text("""
         SELECT n.Nombre, n.Clave, COUNT(*) AS Filas, SUM(CAST(n.Cif AS DECIMAL(19,2))) AS Cif
         FROM (
@@ -79,4 +79,4 @@ def registrar_nombres_sin_homologar(conn, id_antes: int) -> int:
             """),
             {"nombre": d["nombre"], "clave": clave, "filas": d["filas"], "cif": round(d["cif"], 2)},
         )
-    return len(por_clave)
+    return [d["nombre"] for d in sorted(por_clave.values(), key=lambda d: (-d["cif"], d["nombre"]))]

@@ -3,6 +3,7 @@ import pronostiqIcono from "../../assets/pronostiq-icono.png";
 import pronostiqTexto from "../../assets/pronostiq-texto.png";
 import agrequimaLogo from "../../assets/agrequima-logo.png";
 import { AccountMenu } from "./AccountMenu";
+import { CampanaAvisos } from "./CampanaAvisos";
 
 /** Encabezado estándar de PronostiQ (mismo patrón que otros sistemas de
  * Pronostiq, ver docs/legacy/branding/): marca de la plataforma a la
@@ -26,6 +27,7 @@ export function Header({ nav }: { nav?: ReactNode }) {
 
         <div className="flex items-center gap-4">
           <img src={agrequimaLogo} alt="Agrequima" className="h-10 w-auto shrink-0" />
+          <CampanaAvisos />
           <AccountMenu />
         </div>
       </div>
