@@ -17,6 +17,8 @@ class ResumenCargaPlaguicidas(BaseModel):
     claves_nomenclatura_nuevas: int | None = None
     # Empresas (distintas) de esta carga cuya clave no estaba en dbo.CatalogoEmpresas: quedan sin homologar
     empresas_sin_homologar: int = 0
+    # Nombres comerciales (distintos) de esta carga que no estaban en dbo.CatalogoNombresComerciales
+    nombres_sin_homologar: int = 0
     estado: str
 
 

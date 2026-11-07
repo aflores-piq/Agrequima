@@ -107,7 +107,7 @@ def _aplicar_filtros(
         valores = [v for categoria in aplicacion for v in _valores_crudos_para_categoria(db, categoria)]
         query = query.filter(Importacion.aplicacion.in_(valores)) if valores else query.filter(False)
     if producto:
-        query = query.filter(Importacion.producto.in_(producto))
+        query = query.filter(Importacion.producto_efectivo.in_(producto))
     return query
 
 
@@ -129,7 +129,7 @@ def obtener_opciones_filtro_plaguicidas(db: Session) -> OpcionesFiltroPlaguicida
     ingredientes_activos = sorted({g for (g,) in grupos_presentes if g})
     if any(g is None for (g,) in grupos_presentes):
         ingredientes_activos.append(SIN_AGRUPADOR)
-    productos = sorted({p for (p,) in db.query(Importacion.producto).distinct().all() if p})
+    productos = sorted({p for (p,) in db.query(Importacion.producto_efectivo).distinct().all() if p})
     return OpcionesFiltroPlaguicidas(
         anios=anios,
         origenes=origenes,
@@ -407,7 +407,7 @@ def df_nombres_comerciales(ctx: ContextoPlaguicidas) -> pd.DataFrame:
     """Tabla: nombres comerciales, ordenado por CIF USD."""
     filas = (
         ctx.base_actual.with_entities(
-            Importacion.producto,
+            Importacion.producto_efectivo,
             Importacion.Grupo,
             Importacion.aplicacion,
             Importacion.importador_efectivo,
@@ -417,9 +417,9 @@ def df_nombres_comerciales(ctx: ContextoPlaguicidas) -> pd.DataFrame:
             func.sum(Importacion.cif_USD),
             func.sum(Importacion.cif_Q),
         )
-        .filter(Importacion.producto.isnot(None))
+        .filter(Importacion.producto_efectivo.isnot(None))
         .group_by(
-            Importacion.producto,
+            Importacion.producto_efectivo,
             Importacion.Grupo,
             Importacion.aplicacion,
             Importacion.importador_efectivo,
@@ -514,7 +514,7 @@ def df_detalle(ctx: ContextoPlaguicidas) -> pd.DataFrame:
         [
             (
                 f.anio, f.fecha, f.recibointerno, f.serie_sat, f.numero_recibo_sat,
-                f.aplicacion, f.importador_efectivo, f.producto, f.ingrediente_act,
+                f.aplicacion, f.importador_efectivo, f.producto_efectivo, f.ingrediente_act,
                 float(f.cantidad) if f.cantidad is not None else None, f.unidad_medida,
                 float(f.cif_USD) if f.cif_USD is not None else None,
                 float(f.cif_Q) if f.cif_Q is not None else None,
@@ -593,7 +593,7 @@ def obtener_dashboard_plaguicidas(
                 numero_recibo_sat=fila.numero_recibo_sat,
                 aplicacion=fila.aplicacion,
                 importador=fila.importador_efectivo,
-                producto=fila.producto,
+                producto=fila.producto_efectivo,
                 ingrediente_act=fila.ingrediente_act,
                 exportador=fila.exportador,
                 origen=fila.origen,

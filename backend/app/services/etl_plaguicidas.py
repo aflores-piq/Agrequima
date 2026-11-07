@@ -18,6 +18,11 @@ from app.core.db import engine
 from app.schemas.cargas import ResumenCargaPlaguicidas
 from app.services.auditoria import registrar_auditoria
 from app.services.empresas import contar_empresas_sin_homologar, max_log_empresas
+from app.services.nombres_comerciales import (
+    max_id_importacion,
+    registrar_nombres_sin_homologar,
+    sincronizar_nombres_plaguicidas,
+)
 from app.services.text_utils import (
     a_texto_id,
     detectar_fila_encabezado,
@@ -279,6 +284,19 @@ def _filtrar_solo_mes_nuevo(df: pd.DataFrame) -> tuple[pd.DataFrame, int, list[i
     return df[es_mes_nuevo].copy(), filas_ya_cargadas, meses_nuevos
 
 
+def _homologar_nombres_comerciales(id_antes: int) -> int:
+    """Después del EXEC de la carga: rellena NombreComercialHomologado desde el catálogo y registra en
+    dbo.log_ExcepcionesNombresComerciales los nombres nuevos (sin catálogo). Si algo falla NO se pierde la carga (ya está
+    confirmada): se deja el aviso en el log y la homologación queda para la próxima sincronización del catálogo."""
+    try:
+        with engine.begin() as conn:
+            sincronizar_nombres_plaguicidas(conn)
+            return registrar_nombres_sin_homologar(conn, id_antes)
+    except Exception:
+        logger.exception("No se pudo homologar los nombres comerciales de la carga (la carga sí quedó registrada)")
+        return 0
+
+
 def procesar_carga_plaguicidas(
     contenido_importaciones: bytes,
     nombre_archivo_importaciones: str,
@@ -312,6 +330,7 @@ def procesar_carga_plaguicidas(
                 text("SELECT ISNULL(MAX(LogId), 0) FROM dbo.log_ExcepcionesAgrupador")
             ).scalar()
             max_empresas_antes = max_log_empresas(conn)
+            max_id_antes = max_id_importacion(conn)
 
         with engine.begin() as conn:
             conn.execute(
@@ -327,6 +346,8 @@ def procesar_carga_plaguicidas(
                 {"max_id": max_log_id_antes},
             ).scalar()
             empresas_sin_homologar = contar_empresas_sin_homologar(conn, max_empresas_antes)
+
+        nombres_sin_homologar = _homologar_nombres_comerciales(max_id_antes)
     except Exception as exc:
         logger.exception("Falló la carga de plaguicidas (archivo=%s)", nombre_archivo_importaciones)
         registrar_auditoria(
@@ -349,6 +370,7 @@ def procesar_carga_plaguicidas(
         nomenclatura_actualizada=nomenclatura_actualizada,
         claves_nomenclatura_nuevas=claves_nomenclatura_nuevas,
         empresas_sin_homologar=empresas_sin_homologar,
+        nombres_sin_homologar=nombres_sin_homologar,
         estado=estado,
     )
 

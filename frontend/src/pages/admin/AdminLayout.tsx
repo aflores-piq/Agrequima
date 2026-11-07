@@ -8,6 +8,7 @@ const ITEMS_IMPORTACIONES = [
   { to: "/admin/nomenclatura/plaguicidas", label: "Nomenclatura plaguicidas" },
   { to: "/admin/nomenclatura/nutrientes", label: "Agrupador nutrientes" },
   { to: "/admin/homologacion-empresas", label: "Homologación de empresas" },
+  { to: "/admin/homologacion-nombres-comerciales", label: "Homologación de nombres comerciales" },
 ];
 
 const ITEMS_FINANCIERO = [

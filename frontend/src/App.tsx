@@ -20,6 +20,7 @@ import { CargaOtroIngresoPage } from "./pages/admin/CargaOtroIngresoPage";
 import { NomenclaturaPlaguicidasPage } from "./pages/admin/NomenclaturaPlaguicidasPage";
 import { AgrupadorNutrientesPage } from "./pages/admin/AgrupadorNutrientesPage";
 import { HomologacionEmpresasPage } from "./pages/admin/HomologacionEmpresasPage";
+import { HomologacionNombresComercialesPage } from "./pages/admin/HomologacionNombresComercialesPage";
 import { UsuariosPage } from "./pages/admin/UsuariosPage";
 import { BitacoraIngresosPage } from "./pages/admin/BitacoraIngresosPage";
 
@@ -159,6 +160,14 @@ export default function App() {
               element={
                 <RequireRole roles={["Administrador"]}>
                   <HomologacionEmpresasPage />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="homologacion-nombres-comerciales"
+              element={
+                <RequireRole roles={["Administrador"]}>
+                  <HomologacionNombresComercialesPage />
                 </RequireRole>
               }
             />

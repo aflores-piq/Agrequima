@@ -10,6 +10,7 @@ from app.routers import (
     admin_bitacora,
     admin_cargas,
     admin_empresas,
+    admin_nombres_comerciales,
     admin_nomenclatura,
     admin_usuarios,
     auth,
@@ -44,6 +45,7 @@ app.include_router(auth.router, prefix="/api")
 app.include_router(admin_cargas.router, prefix="/api")
 app.include_router(admin_nomenclatura.router, prefix="/api")
 app.include_router(admin_empresas.router, prefix="/api")
+app.include_router(admin_nombres_comerciales.router, prefix="/api")
 app.include_router(admin_usuarios.router, prefix="/api")
 app.include_router(admin_bitacora.router, prefix="/api")
 app.include_router(sistema.router, prefix="/api")

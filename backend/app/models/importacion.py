@@ -34,6 +34,18 @@ class Importacion(Base):
     # Nombre homologado de la empresa (dbo.CatalogoEmpresas, ver script 26): se rellena al cargar y al editar el
     # catalogo. NULL = empresa todavia sin homologar. El dato original (importador) NO se modifica nunca.
     EmpresaHomologada = Column(String(400))
+    # Nombre comercial homologado (dbo.CatalogoNombresComerciales, ver script 27). NULL = todavia sin homologar.
+    # El dato original (producto) NO se modifica nunca.
+    NombreComercialHomologado = Column(String(400))
+
+    @hybrid_property
+    def producto_efectivo(self):
+        """Nombre comercial que ven los tableros: el homologado y, si no hay, el original."""
+        return self.NombreComercialHomologado if self.NombreComercialHomologado is not None else self.producto
+
+    @producto_efectivo.expression
+    def producto_efectivo(cls):
+        return func.coalesce(cls.NombreComercialHomologado, cls.producto)
 
     @hybrid_property
     def importador_efectivo(self):
