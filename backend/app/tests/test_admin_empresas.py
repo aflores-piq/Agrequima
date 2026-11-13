@@ -83,12 +83,23 @@ ENDPOINTS = [
 
 
 @pytest.mark.parametrize("metodo,ruta,cuerpo", ENDPOINTS)
-def test_permisos_solo_administrador(client, usuario_headers, admin_usuarios_headers, metodo, ruta, cuerpo):
+def test_permisos_por_rol(client, usuario_headers, admin_headers, admin_usuarios_headers, metodo, ruta, cuerpo):
+    """Administrador y Administrador de Usuarios (el administrador del cliente) entran; Usuario 403; sin sesión 401."""
     kw = {"json": cuerpo} if cuerpo is not None else {}
     llamar = getattr(client, metodo)
     assert llamar(BASE + ruta, headers=usuario_headers, **kw).status_code == 403
-    assert llamar(BASE + ruta, headers=admin_usuarios_headers, **kw).status_code == 403     # "Administrador de Usuarios" tampoco
     assert llamar(BASE + ruta, **kw).status_code == 401
+    for headers in (admin_headers, admin_usuarios_headers):
+        codigo = llamar(BASE + ruta, headers=headers, **kw).status_code
+        assert codigo not in (401, 403), (metodo, ruta, codigo)
+        if metodo == "get":
+            assert codigo == 200
+
+
+def test_administrador_de_usuarios_ve_la_lista_igual_que_el_administrador(client, admin_headers, admin_usuarios_headers):
+    a = client.get(f"{BASE}/grupos", headers=admin_headers, params={"tamano_pagina": 5})
+    b = client.get(f"{BASE}/grupos", headers=admin_usuarios_headers, params={"tamano_pagina": 5})
+    assert a.status_code == b.status_code == 200 and a.json()["total"] == b.json()["total"]
 
 
 def test_sin_acceso_a_importaciones_es_403(client, usuario_sin_importaciones_headers):

@@ -158,7 +158,7 @@ export default function App() {
             <Route
               path="homologacion-empresas"
               element={
-                <RequireRole roles={["Administrador"]}>
+                <RequireRole roles={["Administrador", "Administrador de Usuarios"]}>
                   <HomologacionEmpresasPage />
                 </RequireRole>
               }
@@ -166,7 +166,7 @@ export default function App() {
             <Route
               path="homologacion-nombres-comerciales"
               element={
-                <RequireRole roles={["Administrador"]}>
+                <RequireRole roles={["Administrador", "Administrador de Usuarios"]}>
                   <HomologacionNombresComercialesPage />
                 </RequireRole>
               }

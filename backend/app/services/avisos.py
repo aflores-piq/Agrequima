@@ -27,6 +27,8 @@ TIPO_NOMBRES_NUEVOS = "Importaciones.NombresSinHomologar"
 PREFIJO_IMPORTACIONES = "Importaciones."
 DESTINO_TODOS = "Todos"
 DESTINO_ADMINISTRADOR = "Administrador"
+# Roles que reciben los avisos con Destino 'Administrador': el administrador general y el del cliente (Administrador de Usuarios)
+ROLES_ADMINISTRACION = ("Administrador", "Administrador de Usuarios")
 MAX_AVISOS_INDIVIDUALES = 20
 MAX_NOMBRES_EN_MENSAJE = 5
 
@@ -156,9 +158,9 @@ def _nombres_nuevos_nutrientes(conn, ins: InstantaneaCarga) -> list[str]:
 # ---------------------------------------------------------------------------------------------
 
 def _filtro_visibles(db: Session, usuario_id: int, rol: str) -> tuple[str, dict]:
-    """Condición SQL de los avisos que ve este usuario: Administrador ve 'Todos' y 'Administrador'; los demás solo 'Todos'. Quien
+    """Condición SQL de los avisos que ve este usuario: los roles de administración (Administrador y Administrador de Usuarios) ven 'Todos' y 'Administrador'; Usuario solo 'Todos'. Quien
     no tiene acceso a Importaciones no ve los avisos de ese módulo (no debe deducir que existe)."""
-    destinos = [DESTINO_TODOS, DESTINO_ADMINISTRADOR] if rol == "Administrador" else [DESTINO_TODOS]
+    destinos = [DESTINO_TODOS, DESTINO_ADMINISTRADOR] if rol in ROLES_ADMINISTRACION else [DESTINO_TODOS]
     cond = "a.Destino IN :destinos"
     acceso = db.query(Usuario.AccesoImportaciones).filter(Usuario.UsuarioId == usuario_id).scalar()
     if not acceso:

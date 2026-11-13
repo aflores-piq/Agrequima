@@ -1,7 +1,7 @@
 """Avisos (campanita): lista de avisos del usuario y marcado de LEÍDO por usuario.
 
-Solo exige sesión: cada usuario ve los avisos que le corresponden por su rol ('Todos' para todos; 'Administrador' solo para el rol
-Administrador) y marca LEÍDO por su cuenta (dbo.AvisosLeidos); marcar uno no lo marca para los demás. Ver services/avisos.py."""
+Solo exige sesión: cada usuario ve los avisos que le corresponden por su rol ('Todos' para todos; 'Administrador' solo para los roles
+Administrador y Administrador de Usuarios) y marca LEÍDO por su cuenta (dbo.AvisosLeidos); marcar uno no lo marca para los demás. Ver services/avisos.py."""
 
 from datetime import datetime
 

@@ -56,8 +56,10 @@ def test_visibilidad_por_rol(client, limpio, admin_headers, usuario_headers, adm
     assert _crear("Todos", "Para todos", "t1") and _crear("Administrador", "Solo administrador", "a1")
     admin = _lista(client, admin_headers)
     assert {a["referencia"] for a in _mios(admin)} == {"t1", "a1"}
-    for headers in (usuario_headers, admin_usuarios_headers):               # Usuario y Administrador de Usuarios: solo 'Todos'
-        assert {a["referencia"] for a in _mios(_lista(client, headers))} == {"t1"}
+    # Administrador de Usuarios (administrador del cliente): 'Todos' y 'Administrador', igual que el Administrador
+    assert {a["referencia"] for a in _mios(_lista(client, admin_usuarios_headers))} == {"t1", "a1"}
+    # Usuario normal: solo 'Todos'
+    assert {a["referencia"] for a in _mios(_lista(client, usuario_headers))} == {"t1"}
     assert {a["referencia"] for a in _mios(_lista(client, usuario_sin_importaciones_headers))} == {"t1"}
     # El conteo de no leídos coincide con la lista
     for headers in (admin_headers, usuario_headers):
@@ -100,10 +102,14 @@ def test_leido_es_independiente_por_usuario(client, limpio, admin_headers, usuar
         assert conn.execute(text("SELECT COUNT(*) FROM dbo.AvisosLeidos WHERE AvisoId = :a"), {"a": aid}).scalar() == 1
 
 
-def test_usuario_no_puede_marcar_aviso_del_administrador_ni_inexistente(client, limpio, admin_headers, usuario_headers):
+def test_usuario_no_puede_marcar_aviso_del_administrador_ni_inexistente(client, limpio, admin_headers, usuario_headers, admin_usuarios_headers):
     _crear("Administrador", "Solo admin", "a2")
     aid = _mios(_lista(client, admin_headers), "a2")[0]["aviso_id"]
     assert client.post(f"/api/avisos/{aid}/leido", headers=usuario_headers).status_code == 404
+    # el Administrador de Usuarios sí lo recibe y lo marca por su cuenta (el del Administrador sigue sin leer)
+    assert client.post(f"/api/avisos/{aid}/leido", headers=admin_usuarios_headers).status_code == 200
+    assert not _mios(_lista(client, admin_usuarios_headers), "a2")
+    assert _mios(_lista(client, admin_headers), "a2")[0]["leido"] is False
     assert client.post("/api/avisos/999999999/leido", headers=usuario_headers).status_code == 404
     assert client.post(f"/api/avisos/{aid}/leido", headers=admin_headers).status_code == 200
 
@@ -121,6 +127,16 @@ def test_leer_todos_solo_afecta_a_ese_usuario(client, limpio, admin_headers, usu
     assert _lista(client, admin_headers)["avisos"] == []
     # leer todos otra vez no marca nada
     assert client.post("/api/avisos/leer-todos", headers=admin_headers).json()["marcados"] == 0
+
+
+def test_leer_todos_del_administrador_de_usuarios_incluye_los_del_administrador(client, limpio, admin_headers, admin_usuarios_headers):
+    _crear("Todos", "Uno", "y1")
+    _crear("Administrador", "Dos", "y2")
+    assert {a["referencia"] for a in _mios(_lista(client, admin_usuarios_headers))} == {"y1", "y2"}
+    r = client.post("/api/avisos/leer-todos", headers=admin_usuarios_headers)
+    assert r.status_code == 200 and r.json()["marcados"] >= 2 and r.json()["no_leidos"] == 0
+    assert _lista(client, admin_usuarios_headers)["avisos"] == []
+    assert {a["referencia"] for a in _mios(_lista(client, admin_headers))} == {"y1", "y2"}      # el Administrador sigue con los suyos sin leer
 
 
 def test_no_se_duplica_el_mismo_aviso(limpio):

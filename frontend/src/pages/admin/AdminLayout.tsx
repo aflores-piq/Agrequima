@@ -16,11 +16,16 @@ const ITEMS_FINANCIERO = [
   { to: "/admin/cargas/otros-ingresos", label: "Carga de Otros Ingresos" },
 ];
 
-// "Administrador de Usuarios" (personal de Agrequima) solo ve/usa la
-// pantalla de Usuarios dentro de Administración — nada de Carga/
-// Nomenclatura, ni por menú ni (ver App.tsx) por URL directa. Sí tiene
-// acceso a los dashboards (/app), igual que un Usuario — ver el enlace
-// "Ver dashboards →" más abajo, sin condición de rol.
+// "Administrador de Usuarios" (administrador del cliente) ve Usuarios y
+// Bitácora, más las dos pantallas de homologación (empresas y nombres
+// comerciales) si tiene acceso a Importaciones — nada de Carga/
+// Nomenclatura/Agrupador, ni por menú ni (ver App.tsx) por URL directa.
+// Sí tiene acceso a los dashboards (/app), igual que un Usuario — ver el
+// enlace "Ver dashboards →" más abajo, sin condición de rol.
+const ITEMS_HOMOLOGACION = [
+  { to: "/admin/homologacion-empresas", label: "Homologación de empresas" },
+  { to: "/admin/homologacion-nombres-comerciales", label: "Homologación de nombres comerciales" },
+];
 const ITEMS_ADMINISTRADOR_USUARIOS = [
   { to: "/admin/usuarios", label: "Usuarios" },
   { to: "/admin/bitacora-ingresos", label: "Bitácora de ingresos" },
@@ -34,7 +39,7 @@ export function AdminLayout() {
   // en deps.py) -- esto solo evita mostrar un formulario que terminaría
   // en 403 al enviarlo.
   const items = esAdministradorDeUsuarios
-    ? ITEMS_ADMINISTRADOR_USUARIOS
+    ? [...(sesion?.accesoImportaciones ? ITEMS_HOMOLOGACION : []), ...ITEMS_ADMINISTRADOR_USUARIOS]
     : [
         ...(sesion?.accesoImportaciones ? ITEMS_IMPORTACIONES : []),
         ...(sesion?.accesoFinanciero ? ITEMS_FINANCIERO : []),

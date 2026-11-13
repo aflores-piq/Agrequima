@@ -27,7 +27,7 @@ from app.services import homologacion_empresas as svc
 router = APIRouter(
     prefix="/admin/empresas",
     tags=["admin-empresas"],
-    dependencies=[Depends(require_role("Administrador")), Depends(require_acceso_importaciones)],
+    dependencies=[Depends(require_role("Administrador", "Administrador de Usuarios")), Depends(require_acceso_importaciones)],
 )
 
 

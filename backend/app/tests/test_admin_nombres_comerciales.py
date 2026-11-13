@@ -109,17 +109,24 @@ ENDPOINTS = [
 
 @pytest.mark.parametrize("base", [P, N])
 @pytest.mark.parametrize("metodo,ruta,cuerpo", ENDPOINTS)
-def test_permisos_solo_administrador(client, usuario_headers, admin_usuarios_headers, base, metodo, ruta, cuerpo):
+def test_permisos_por_rol(client, usuario_headers, admin_headers, admin_usuarios_headers, base, metodo, ruta, cuerpo):
+    """Administrador y Administrador de Usuarios entran; Usuario 403; sin sesión 401."""
     kw = {"json": cuerpo} if cuerpo is not None else {}
     llamar = getattr(client, metodo)
     assert llamar(base + ruta, headers=usuario_headers, **kw).status_code == 403
-    assert llamar(base + ruta, headers=admin_usuarios_headers, **kw).status_code == 403
     assert llamar(base + ruta, **kw).status_code == 401
+    for headers in (admin_headers, admin_usuarios_headers):
+        codigo = llamar(base + ruta, headers=headers, **kw).status_code
+        assert codigo not in (401, 403), (metodo, ruta, codigo)
+        if metodo == "get":
+            assert codigo == 200
 
 
-def test_excel_requiere_administrador_y_tipo_valido(client, usuario_headers, admin_headers):
+def test_excel_requiere_administrador_y_tipo_valido(client, usuario_headers, admin_headers, admin_usuarios_headers):
     archivo = {"archivo": ("x.xlsx", _excel([("A", "B")]), "application/octet-stream")}
     assert client.post(P + "/excel", headers=usuario_headers, files=archivo).status_code == 403
+    r = client.post(P + "/excel", headers=admin_usuarios_headers, files=archivo, params={"aplicar": False})
+    assert r.status_code == 200 and r.json()["aplicado"] is False                      # el administrador del cliente puede usarlo
     assert client.post(P + "/excel", files=archivo).status_code == 401
     assert client.get("/api/admin/nombres-comerciales/otracosa/grupos", headers=admin_headers).status_code == 404
     r = client.post(P + "/excel", headers=admin_headers, files={"archivo": ("x.csv", b"a,b", "text/csv")})

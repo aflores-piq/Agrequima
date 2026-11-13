@@ -29,7 +29,7 @@ from app.services.homologacion_empresas import ErrorHomologacion
 router = APIRouter(
     prefix="/admin/nombres-comerciales/{tipo}",
     tags=["admin-nombres-comerciales"],
-    dependencies=[Depends(require_role("Administrador")), Depends(require_acceso_importaciones)],
+    dependencies=[Depends(require_role("Administrador", "Administrador de Usuarios")), Depends(require_acceso_importaciones)],
 )
 
 TAMANO_MAX_EXCEL = 10 * 1024 * 1024
