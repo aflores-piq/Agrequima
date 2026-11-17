@@ -311,14 +311,20 @@ BEGIN
     );
     PRINT 'Tabla dbo.log_ExcepcionesEmpresas creada.';
 END
+-- La columna nueva se crea con la collation de la columna ORIGINAL (no con la por defecto de la base): si no, COALESCE(homologada, original)
+-- da el error 446/468 de conflicto de collation (ver script 29 y app/core/collation.py).
 IF COL_LENGTH('dbo.Importacion', 'EmpresaHomologada') IS NULL
 BEGIN
-    ALTER TABLE dbo.Importacion ADD EmpresaHomologada NVARCHAR(400) NULL;
+    DECLARE @colImp26 SYSNAME = ISNULL((SELECT collation_name FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Importacion') AND name = 'importador'),
+                                       CAST(DATABASEPROPERTYEX(DB_NAME(), 'Collation') AS SYSNAME));
+    EXEC (N'ALTER TABLE dbo.Importacion ADD EmpresaHomologada NVARCHAR(400) COLLATE ' + @colImp26 + N' NULL');
     PRINT 'Columna dbo.Importacion.EmpresaHomologada agregada.';
 END
 IF COL_LENGTH('dbo.Nutrientes', 'EmpresaHomologada') IS NULL
 BEGIN
-    ALTER TABLE dbo.Nutrientes ADD EmpresaHomologada NVARCHAR(400) NULL;
+    DECLARE @colNut26 SYSNAME = ISNULL((SELECT collation_name FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Nutrientes') AND name = 'EmpresaImportadora'),
+                                       CAST(DATABASEPROPERTYEX(DB_NAME(), 'Collation') AS SYSNAME));
+    EXEC (N'ALTER TABLE dbo.Nutrientes ADD EmpresaHomologada NVARCHAR(400) COLLATE ' + @colNut26 + N' NULL');
     PRINT 'Columna dbo.Nutrientes.EmpresaHomologada agregada.';
 END
 GO
@@ -561,11 +567,39 @@ BEGIN
     EXEC (N'
     SELECT ''Plaguicidas'' AS tabla,
            (SELECT COUNT(DISTINCT CAST(importador AS NVARCHAR(400)) COLLATE Latin1_General_BIN2) FROM dbo.Importacion WHERE importador IS NOT NULL) AS empresas_distintas_original,
-           (SELECT COUNT(DISTINCT COALESCE(EmpresaHomologada, CAST(importador AS NVARCHAR(400))) COLLATE Latin1_General_BIN2) FROM dbo.Importacion WHERE importador IS NOT NULL) AS empresas_distintas_homologadas
+           (SELECT COUNT(DISTINCT COALESCE(EmpresaHomologada COLLATE Modern_Spanish_CI_AS, CAST(importador AS NVARCHAR(400)) COLLATE Modern_Spanish_CI_AS) COLLATE Latin1_General_BIN2) FROM dbo.Importacion WHERE importador IS NOT NULL) AS empresas_distintas_homologadas
     UNION ALL
     SELECT ''Nutrientes (vista activa)'',
            (SELECT COUNT(DISTINCT CAST(EmpresaImportadora AS NVARCHAR(400)) COLLATE Latin1_General_BIN2) FROM dbo.vw_NutrientesActivos WHERE EmpresaImportadora IS NOT NULL),
-           (SELECT COUNT(DISTINCT COALESCE(EmpresaHomologada, CAST(EmpresaImportadora AS NVARCHAR(400))) COLLATE Latin1_General_BIN2) FROM dbo.vw_NutrientesActivos WHERE EmpresaImportadora IS NOT NULL)');
+           (SELECT COUNT(DISTINCT COALESCE(EmpresaHomologada COLLATE Modern_Spanish_CI_AS, CAST(EmpresaImportadora AS NVARCHAR(400)) COLLATE Modern_Spanish_CI_AS) COLLATE Latin1_General_BIN2) FROM dbo.vw_NutrientesActivos WHERE EmpresaImportadora IS NOT NULL)');
     SELECT COUNT(*) AS claves_en_catalogo, SUM(CAST(Confirmada AS INT)) AS confirmadas FROM dbo.CatalogoEmpresas;
 END
+GO
+
+-- ---------------------------------------------------------------------
+-- LOTE 11: PRUEBA DE HUMO de los dashboards (solo lectura; si hay conflicto de collation, FALLA aqui)
+-- ---------------------------------------------------------------------
+-- >>> PRUEBA DE HUMO EMPRESAS
+SET NOCOUNT ON;
+SELECT p.prueba, p.valor, 'OK' AS estado
+FROM (
+    SELECT 'Nutrientes - KPI empresas: COUNT(DISTINCT COALESCE(...))' AS prueba,
+           CAST(COUNT(DISTINCT COALESCE(EmpresaHomologada COLLATE Modern_Spanish_CI_AS, EmpresaImportadora COLLATE Modern_Spanish_CI_AS)) AS BIGINT) AS valor
+    FROM dbo.vw_NutrientesActivos
+    UNION ALL
+    SELECT 'Nutrientes - Top empresas importadoras: GROUP BY COALESCE(...)', CAST(COUNT(*) AS BIGINT)
+    FROM (SELECT TOP 10 COALESCE(EmpresaHomologada COLLATE Modern_Spanish_CI_AS, EmpresaImportadora COLLATE Modern_Spanish_CI_AS) AS empresa, SUM(CIF_dolares) AS cif
+          FROM dbo.vw_NutrientesActivos
+          WHERE COALESCE(EmpresaHomologada COLLATE Modern_Spanish_CI_AS, EmpresaImportadora COLLATE Modern_Spanish_CI_AS) IS NOT NULL
+          GROUP BY COALESCE(EmpresaHomologada COLLATE Modern_Spanish_CI_AS, EmpresaImportadora COLLATE Modern_Spanish_CI_AS)
+          ORDER BY SUM(CIF_dolares) DESC) t
+    UNION ALL
+    SELECT 'Plaguicidas - Top importadores: GROUP BY COALESCE(...)', CAST(COUNT(*) AS BIGINT)
+    FROM (SELECT TOP 10 COALESCE(EmpresaHomologada COLLATE Modern_Spanish_CI_AS, importador COLLATE Modern_Spanish_CI_AS) AS empresa, SUM(cif_USD) AS cif
+          FROM dbo.Importacion
+          WHERE COALESCE(EmpresaHomologada COLLATE Modern_Spanish_CI_AS, importador COLLATE Modern_Spanish_CI_AS) IS NOT NULL
+          GROUP BY COALESCE(EmpresaHomologada COLLATE Modern_Spanish_CI_AS, importador COLLATE Modern_Spanish_CI_AS)
+          ORDER BY SUM(cif_USD) DESC) t
+) p;
+-- <<< PRUEBA DE HUMO EMPRESAS
 GO

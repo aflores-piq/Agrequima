@@ -212,7 +212,10 @@ BEGIN
 END
 IF COL_LENGTH('dbo.Importacion', 'NombreComercialHomologado') IS NULL
 BEGIN
-    ALTER TABLE dbo.Importacion ADD NombreComercialHomologado NVARCHAR(400) NULL;
+    -- Con la collation de la columna ORIGINAL (producto), no la por defecto de la base (ver script 29 y app/core/collation.py)
+    DECLARE @colProd27 SYSNAME = ISNULL((SELECT collation_name FROM sys.columns WHERE object_id = OBJECT_ID('dbo.Importacion') AND name = 'producto'),
+                                        CAST(DATABASEPROPERTYEX(DB_NAME(), 'Collation') AS SYSNAME));
+    EXEC (N'ALTER TABLE dbo.Importacion ADD NombreComercialHomologado NVARCHAR(400) COLLATE ' + @colProd27 + N' NULL');
     PRINT 'Columna dbo.Importacion.NombreComercialHomologado agregada.';
 END
 IF COL_LENGTH('dbo.CatalogoAgrupadorNutrientes', 'Confirmada') IS NULL
@@ -303,8 +306,27 @@ ELSE IF OBJECT_ID('dbo.CatalogoNombresComerciales', 'U') IS NOT NULL
 BEGIN
     EXEC (N'
     SELECT COUNT(DISTINCT CAST(producto AS NVARCHAR(400)) COLLATE Latin1_General_BIN2) AS nombres_distintos_original,
-           COUNT(DISTINCT COALESCE(NombreComercialHomologado, CAST(producto AS NVARCHAR(400))) COLLATE Latin1_General_BIN2) AS nombres_distintos_homologados
+           COUNT(DISTINCT COALESCE(NombreComercialHomologado COLLATE Modern_Spanish_CI_AS, CAST(producto AS NVARCHAR(400)) COLLATE Modern_Spanish_CI_AS) COLLATE Latin1_General_BIN2) AS nombres_distintos_homologados
     FROM dbo.Importacion WHERE producto IS NOT NULL');
     SELECT COUNT(*) AS claves_en_catalogo, SUM(CAST(Confirmada AS INT)) AS confirmadas FROM dbo.CatalogoNombresComerciales;
 END
+GO
+
+-- ---------------------------------------------------------------------
+-- LOTE 8: PRUEBA DE HUMO de los dashboards (solo lectura; si hay conflicto de collation, FALLA aqui)
+-- ---------------------------------------------------------------------
+-- >>> PRUEBA DE HUMO NOMBRES
+SET NOCOUNT ON;
+SELECT p.prueba, p.valor, 'OK' AS estado
+FROM (
+    SELECT 'Plaguicidas - Nombres comerciales: DISTINCT COALESCE(...)' AS prueba,
+           CAST(COUNT(DISTINCT COALESCE(NombreComercialHomologado COLLATE Modern_Spanish_CI_AS, producto COLLATE Modern_Spanish_CI_AS)) AS BIGINT) AS valor
+    FROM dbo.Importacion
+    UNION ALL
+    SELECT 'Plaguicidas - Detalle: ORDER BY COALESCE(...)', CAST(COUNT(*) AS BIGINT)
+    FROM (SELECT TOP 20 COALESCE(NombreComercialHomologado COLLATE Modern_Spanish_CI_AS, producto COLLATE Modern_Spanish_CI_AS) AS producto_efectivo
+          FROM dbo.Importacion
+          ORDER BY COALESCE(NombreComercialHomologado COLLATE Modern_Spanish_CI_AS, producto COLLATE Modern_Spanish_CI_AS)) t
+) p;
+-- <<< PRUEBA DE HUMO NOMBRES
 GO

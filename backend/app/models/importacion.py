@@ -1,6 +1,7 @@
-from sqlalchemy import DECIMAL, Column, DateTime, Integer, String, func
+from sqlalchemy import DECIMAL, Column, DateTime, Integer, String
 from sqlalchemy.ext.hybrid import hybrid_property
 
+from app.core.collation import coalesce_homologado
 from app.core.db import Base
 
 
@@ -45,7 +46,7 @@ class Importacion(Base):
 
     @producto_efectivo.expression
     def producto_efectivo(cls):
-        return func.coalesce(cls.NombreComercialHomologado, cls.producto)
+        return coalesce_homologado(cls.NombreComercialHomologado, cls.producto)
 
     @hybrid_property
     def importador_efectivo(self):
@@ -54,4 +55,4 @@ class Importacion(Base):
 
     @importador_efectivo.expression
     def importador_efectivo(cls):
-        return func.coalesce(cls.EmpresaHomologada, cls.importador)
+        return coalesce_homologado(cls.EmpresaHomologada, cls.importador)

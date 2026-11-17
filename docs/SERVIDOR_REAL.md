@@ -206,3 +206,24 @@ C:\Pronostiq\Agrequima-pronostiq\logs\stderr.log
 
 `stderr.log` es el primer lugar para mirar ante un error o un reinicio
 inesperado del servicio.
+
+## Collation de las columnas (error 446/468 en los dashboards)
+
+En el servidor real la base `PIQ_IA` tiene la collation por defecto `SQL_Latin1_General_CP1_CI_AS`, pero las columnas
+**originales** de los datos (`Importacion.importador`, `Importacion.producto`, `Nutrientes.NombreComercial`,
+`Nutrientes.EmpresaImportadora`, ...) están en `Modern_Spanish_CI_AS`. Las tablas y columnas que agregaron los scripts
+22 a 28 quedaron con la collation por defecto. En la base de desarrollo todo está en `Modern_Spanish_CI_AS`, por eso un
+conflicto no se ve en local.
+
+Reglas:
+
+- Toda expresión que mezcle una columna **homologada** (`EmpresaHomologada`, `NombreComercialHomologado`) con una
+  **original** pasa por `backend/app/core/collation.py` (`coalesce_homologado`): `COLLATE Modern_Spanish_CI_AS` explícito
+  en los dos lados (nunca `DATABASE_DEFAULT`). Esa es la collation de las columnas originales.
+- El script `29_alinear_collation_homologadas.sql` alinea las columnas homologadas con la collation de su columna
+  original (los datos no cambian) y rehace los procedimientos `usp_ActualizarNomenclatura` y
+  `usp_ActualizarAgrupadorNutrientes` con `COLLATE` explícito (las tablas `stg_*` las recrea cada carga con la collation por
+  defecto de la base). Es idempotente: si las collations ya coinciden, no hace nada.
+- Los scripts 26 y 27 crean ahora las columnas homologadas con la collation de la columna original, y los scripts 26, 27 y 29
+  terminan con una **prueba de humo** de las consultas de los dashboards (`prueba_humo_dashboards.sql`, solo lectura).
+- Para probar en local con la situación del servidor: `PIQ_TEST_DB=<copia con collations mezcladas> pytest`.

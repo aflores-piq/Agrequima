@@ -1,6 +1,7 @@
-from sqlalchemy import Boolean, Column, Date, DateTime, Float, Integer, Numeric, String, func
+from sqlalchemy import Boolean, Column, Date, DateTime, Float, Integer, Numeric, String
 from sqlalchemy.ext.hybrid import hybrid_property
 
+from app.core.collation import coalesce_homologado
 from app.core.db import Base
 
 
@@ -48,7 +49,7 @@ class Nutriente(Base):
 
     @empresa_efectiva.expression
     def empresa_efectiva(cls):
-        return func.coalesce(cls.EmpresaHomologada, cls.EmpresaImportadora)
+        return coalesce_homologado(cls.EmpresaHomologada, cls.EmpresaImportadora)
 
 
 class NutrienteActivo(Base):
@@ -109,4 +110,4 @@ class NutrienteActivo(Base):
 
     @empresa_efectiva.expression
     def empresa_efectiva(cls):
-        return func.coalesce(cls.EmpresaHomologada, cls.EmpresaImportadora)
+        return coalesce_homologado(cls.EmpresaHomologada, cls.EmpresaImportadora)

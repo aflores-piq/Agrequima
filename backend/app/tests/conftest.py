@@ -9,7 +9,7 @@ importarse.
 
 import os
 
-os.environ["DB_NAME"] = "Agrequima_Test"
+os.environ["DB_NAME"] = os.environ.get("PIQ_TEST_DB", "Agrequima_Test")  # PIQ_TEST_DB: base de prueba alternativa (p. ej. con collations mezcladas)
 
 import bcrypt
 import pytest
