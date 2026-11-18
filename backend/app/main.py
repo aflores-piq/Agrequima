@@ -16,6 +16,7 @@ from app.routers import (
     auth,
     avisos,
     dashboard,
+    dashboard_indicadores,
     sistema,
 )
 
@@ -52,6 +53,7 @@ app.include_router(admin_bitacora.router, prefix="/api")
 app.include_router(avisos.router, prefix="/api")
 app.include_router(sistema.router, prefix="/api")
 app.include_router(dashboard.router, prefix="/api")
+app.include_router(dashboard_indicadores.router, prefix="/api")
 
 
 @app.get("/health")

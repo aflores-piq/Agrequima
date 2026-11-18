@@ -107,6 +107,14 @@ const MENU_IMPORTACIONES: NodoMenu = {
   ],
 };
 
+// Entrada al módulo Indicadores (marco propio en /app/indicadores, ver indicadores/IndicadoresLayout.tsx): solo para
+// usuarios con acceso_indicadores.
+const MENU_INDICADORES: NodoMenu = {
+  id: "indicadores",
+  titulo: "Indicadores",
+  hijos: [{ id: "ind-resumen-general", titulo: "Resumen General", href: "/app/indicadores/resumen-general" }],
+};
+
 // Color de acento distinto por sistema (opción "A + C" del diagnóstico
 // de menú): Importaciones conserva el sky que ya tenía (sin cambio
 // visual para quien ya lo conocía); Financiero pasa a ámbar, para que
@@ -127,6 +135,12 @@ const TEMA_IMPORTACIONES: TemaSistema = {
   activo: "bg-sky-500/20 text-sky-300",
   inactivo: "text-sky-400 hover:bg-white/5 hover:text-sky-300",
   deshabilitado: "text-sky-400/40",
+};
+
+const TEMA_INDICADORES: TemaSistema = {
+  activo: "bg-violet-500/20 text-violet-300",
+  inactivo: "text-violet-400 hover:bg-white/5 hover:text-violet-300",
+  deshabilitado: "text-violet-400/40",
 };
 
 function estaActivo(location: ReturnType<typeof useLocation>, href: string): boolean {
@@ -256,6 +270,7 @@ export function Sidebar() {
   const sistemas = [
     { nodo: MENU_FINANCIERO, encabezado: "Dashboard Financiero", icono: "💰", tema: TEMA_FINANCIERO, visible: !!sesion?.accesoFinanciero },
     { nodo: MENU_IMPORTACIONES, encabezado: "Dashboard Importaciones", icono: "📦", tema: TEMA_IMPORTACIONES, visible: !!sesion?.accesoImportaciones },
+    { nodo: MENU_INDICADORES, encabezado: "Dashboard Indicadores", icono: "📈", tema: TEMA_INDICADORES, visible: !!sesion?.accesoIndicadores },
   ].filter((s) => s.visible);
 
   // Set inicial de secciones abiertas: SOLO el sistema y la(s)

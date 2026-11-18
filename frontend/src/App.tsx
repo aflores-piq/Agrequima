@@ -12,6 +12,8 @@ import { DashboardOtrosInformesPage } from "./pages/app/DashboardOtrosInformesPa
 import { DashboardPresupuestosPage } from "./pages/app/DashboardPresupuestosPage";
 import { DashboardImportacionesFinancieroPage } from "./pages/app/DashboardImportacionesFinancieroPage";
 import { DashboardOtroIngresoPage } from "./pages/app/DashboardOtroIngresoPage";
+import { IndicadoresLayout } from "./indicadores/IndicadoresLayout";
+import { ResumenGeneralPage } from "./indicadores/ResumenGeneralPage";
 import { AdminLayout } from "./pages/admin/AdminLayout";
 import { CargaPlaguicidasPage } from "./pages/admin/CargaPlaguicidasPage";
 import { CargaNutrientesPage } from "./pages/admin/CargaNutrientesPage";
@@ -109,6 +111,23 @@ export default function App() {
                 </RequireModulo>
               }
             />
+          </Route>
+
+          {/* Indicadores tiene su propio marco (barra lateral, barra superior y Copiloto solo para Administrador);
+              va aparte de /app para no tocar el AppLayout de Importaciones/Financiero. */}
+          <Route
+            path="/app/indicadores"
+            element={
+              <RequireRole roles={["Administrador", "Usuario", "Administrador de Usuarios"]}>
+                <RequireModulo modulo="indicadores">
+                  <IndicadoresLayout />
+                </RequireModulo>
+              </RequireRole>
+            }
+          >
+            <Route index element={<Navigate to="resumen-general" replace />} />
+            <Route path="resumen-general" element={<ResumenGeneralPage />} />
+            <Route path="*" element={<Navigate to="resumen-general" replace />} />
           </Route>
 
           <Route

@@ -106,7 +106,6 @@ def require_acceso_indicadores(
     usuario: UsuarioToken = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> UsuarioToken:
-    """Todavía sin endpoints propios (Indicadores no tiene pantallas) --
-    lista para usarse en cuanto ese proyecto arranque."""
+    """Protege los endpoints de Indicadores (/api/dashboard/indicadores/...)."""
     _verificar_acceso_modulo(db, usuario, Usuario.AccesoIndicadores)
     return usuario

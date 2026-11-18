@@ -23,10 +23,14 @@ export function InicioPage() {
       .then((res) => setActualizado(res.ultima_actualizacion))
       .catch(() => setActualizado(null));
   }, []);
-  if (!sesion?.accesoFinanciero && !sesion?.accesoImportaciones) {
+  if (!sesion?.accesoFinanciero && !sesion?.accesoImportaciones && !sesion?.accesoIndicadores) {
     return <p className="p-6 text-sm text-ink-muted">No tiene acceso a ningún módulo.</p>;
   }
-  const informe = sesion.accesoFinanciero ? "Informe Financiero" : "Informe de Importaciones";
+  const informe = sesion.accesoFinanciero
+    ? "Informe Financiero"
+    : sesion.accesoImportaciones
+      ? "Informe de Importaciones"
+      : "Indicadores";
   const nombre = sesion.nombreCompleto || sesion.nombreUsuario;
 
   return (
